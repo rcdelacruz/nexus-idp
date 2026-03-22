@@ -19,6 +19,8 @@ A white-label Internal Developer Platform built on [Backstage](https://backstage
 - [Custom Plugins](#custom-plugins)
 - [Local Development](#local-development)
 - [Production Deployment](#production-deployment)
+- [Container Registry Setup](#container-registry-setup)
+- [FinOps AWS Setup](#finops-aws-setup)
 - [Environment Variables](#environment-variables)
 - [Tenant Configuration](#tenant-configuration)
 - [Common Operations](#common-operations)
@@ -237,7 +239,153 @@ postgresql:
   enabled: false
 ```
 
+
 ---
+
+## Container Registry Setup
+
+Nexus IDP requires a container registry to store the Docker image. Choose one of the following options.
+
+### Option A: Local Registry (self-hosted)
+
+Useful for air-gapped or on-premise Kubernetes clusters.
+
+```bash
+# Run a local registry on your host
+docker run -d -p 5000:5000 --restart=always --name registry registry:2
+```
+
+Configure your cluster to allow insecure access to the local registry. For Talos Linux, add this to your machine config patch:
+
+```yaml
+machine:
+  registries:
+    mirrors:
+      "<your-host-ip>:5000":
+        endpoints:
+          - "http://<your-host-ip>:5000"
+    config:
+      "<your-host-ip>:5000":
+        tls:
+          insecureSkipVerify: true
+```
+
+Then set your registry in the deploy script:
+
+```bash
+REGISTRY=<your-host-ip>:5000/nexus-idp ./scripts/deploy.sh
+```
+
+### Option B: GitHub Container Registry (GHCR)
+
+```bash
+echo <your-pat> | docker login ghcr.io -u <your-github-username> --password-stdin
+REGISTRY=ghcr.io/<your-github-username>/nexus-idp ./scripts/deploy.sh
+```
+
+### Option C: Docker Hub
+
+```bash
+docker login
+REGISTRY=<your-dockerhub-username>/nexus-idp ./scripts/deploy.sh
+```
+
+---
+
+## FinOps AWS Setup
+
+The FinOps plugin supports multiple AWS accounts. Each account needs read-only access to Cost Explorer, Budgets, EC2, RDS, ELB, S3, and CloudWatch.
+
+### 1. IAM Policy
+
+Create an IAM policy with the following permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ce:GetCostAndUsage",
+        "ce:GetCostForecast",
+        "ce:GetRightsizingRecommendation",
+        "budgets:ViewBudget",
+        "budgets:DescribeBudgets",
+        "ec2:DescribeInstances",
+        "ec2:DescribeRegions",
+        "rds:DescribeDBInstances",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:DescribeTargetHealth",
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+### 2. Create IAM Users
+
+Create one IAM user per AWS account and attach the policy above. Generate access keys for each user.
+
+### 3. Add to Kubernetes Secret
+
+```bash
+kubectl patch secret backstage-secrets -n backstage --type=merge -p "{
+  "stringData": {
+    "AWS_ACCESS_KEY_ID_ACCOUNT1": "<access-key>",
+    "AWS_SECRET_ACCESS_KEY_ACCOUNT1": "<secret-key>",
+    "AWS_ACCESS_KEY_ID_ACCOUNT2": "<access-key>",
+    "AWS_SECRET_ACCESS_KEY_ACCOUNT2": "<secret-key>"
+  }
+}"
+```
+
+The account ID suffix must match the uid=0(root) gid=0(root) groups=0(root) field in  uppercased:
+
+```yaml
+finops:
+  aws:
+    accounts:
+      - id: account1       # → env var suffix: _ACCOUNT1
+        name: Production
+      - id: account2       # → env var suffix: _ACCOUNT2
+        name: Staging
+```
+
+### 4. For Local Development
+
+Use named profiles in :
+
+```ini
+[account1]
+aws_access_key_id = <key>
+aws_secret_access_key = <secret>
+
+[account2]
+aws_access_key_id = <key>
+aws_secret_access_key = <secret>
+```
+
+Then set profiles in :
+
+```yaml
+finops:
+  aws:
+    accounts:
+      - id: account1
+        name: Production
+        profile: account1
+      - id: account2
+        name: Staging
+        profile: account2
+```
 
 ## Environment Variables
 
