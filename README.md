@@ -438,6 +438,8 @@ REGISTRY=<your-registry>/nexus-idp ./scripts/deploy.sh
 ```
 
 ### Add a User
+
+Regular user (read + create access):
 ```yaml
 apiVersion: backstage.io/v1alpha1
 kind: User
@@ -447,8 +449,23 @@ spec:
   profile:
     email: firstname.lastname@your-company.com
     displayName: Firstname Lastname
-  memberOf: [backend-team]   # add backstage-admins for admin access
+  memberOf: [backend-team]
 ```
+
+Admin user (full access + delete):
+```yaml
+  memberOf: [backend-team, backstage-admins]
+```
+
+User in multiple teams — use a list:
+```yaml
+  memberOf:
+    - backend-team
+    - frontend-team
+    - platform-team
+```
+
+> `memberOf` is a YAML list — use either inline `[team-a, team-b]` or multi-line format. Add `backstage-admins` for admin access.
 
 ### View Logs
 ```bash
