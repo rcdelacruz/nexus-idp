@@ -1,0 +1,13 @@
+{
+  "name": "backstage-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Utility scripts for Backstage deployment",
+  "scripts": {
+    "migrate": "node run-migrations.js"
+  },
+  "dependencies": {
+    "knex": "^3.0.0",
+    "pg": "^8.11.3"
+  }
+}

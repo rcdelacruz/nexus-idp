@@ -1,0 +1,40 @@
+.git
+.github
+.yarn/cache
+.yarn/install-state.gz
+node_modules
+packages/*/node_modules
+*.local.yaml
+
+# Build artifacts
+dist/
+dist-types/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+.secrets/
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

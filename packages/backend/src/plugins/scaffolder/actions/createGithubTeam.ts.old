@@ -1,0 +1,72 @@
+import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
+import { Octokit } from '@octokit/rest';
+
+export const createGithubTeamAction = () => {
+  return createTemplateAction({
+    id: 'github:create-team',
+    schema: {
+      input: {
+        required: ['org', 'teamName', 'description', 'permission'],
+        type: 'object',
+        properties: {
+          org: {
+            type: 'string',
+            title: 'Organization',
+            description: 'GitHub organization name',
+          },
+          teamName: {
+            type: 'string',
+            title: 'Team Name',
+            description: 'Name of the team to create',
+          },
+          description: {
+            type: 'string',
+            title: 'Description',
+            description: 'Team description',
+          },
+          permission: {
+            type: 'string',
+            title: 'Permission Level',
+            description: 'Permission level for the team',
+          },
+        },
+      },
+    },
+    async handler(ctx) {
+      const { org, teamName, description, permission } = ctx.input as {
+        org: string;
+        teamName: string;
+        description: string;
+        permission: 'pull' | 'push' | undefined;
+      };
+
+      ctx.logger.info(`Starting team creation for ${teamName} in ${org}`);
+
+      const token = process.env.GITHUB_TOKEN;
+      ctx.logger.info(`Token exists: ${Boolean(token)}`);
+
+      const octokit = new Octokit({ auth: token });
+
+      try {
+        // Create the team
+        
+        await octokit.teams.create({
+          org,
+          name: teamName,
+          description,
+          permission: permission as 'pull' | 'push' | undefined,
+        });
+
+        ctx.logger.info(`Created team ${teamName} in ${org}`);
+        return;
+      } catch (error) {
+        if (error instanceof Error) {
+          ctx.logger.error(`Failed to create team: ${error.message}`);
+        } else {
+          ctx.logger.error('Failed to create team: Unknown error');
+        }
+        throw error;
+      }
+    },
+  });
+};

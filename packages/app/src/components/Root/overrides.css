@@ -1,0 +1,1635 @@
+/*
+ * Vercel Geist design system overrides
+ * Exact tokens from vercel.com/geist
+ *
+ * Dark mode:  class="theme-dark" on <html>
+ * Light mode: class="theme-light" on <html>
+ * Default:    dark
+ */
+
+/* ==========================================================
+   @backstage/ui (--bui-*) token remapping → Geist design system
+   ========================================================== */
+
+/* Fonts & radius — always */
+:root {
+  --bui-font-regular: "Geist", "Helvetica Neue", Arial, sans-serif;
+  --bui-font-monospace: "Geist Mono", "Fira Code", "Courier New", monospace;
+  --bui-font-weight-regular: 400;
+  --bui-font-weight-bold: 600;
+  --bui-radius-1: 2px;
+  --bui-radius-2: 4px;
+  --bui-radius-3: 6px;
+  --bui-radius-4: 8px;
+  --bui-radius-5: 12px;
+}
+
+/* Dark mode bui tokens */
+html.theme-dark,
+body[data-theme-mode='dark'] {
+  --bui-bg-app:               #000000;
+  --bui-bg-neutral-1:         #0a0a0a;
+  --bui-bg-neutral-1-hover:   #1a1a1a;
+  --bui-bg-neutral-1-pressed: #1f1f1f;
+  --bui-bg-neutral-2:         #1a1a1a;
+  --bui-bg-neutral-2-hover:   #1f1f1f;
+  --bui-bg-neutral-2-pressed: #2e2e2e;
+  --bui-bg-neutral-3:         #1f1f1f;
+  --bui-bg-neutral-3-hover:   #2e2e2e;
+  --bui-bg-neutral-3-pressed: #454545;
+  --bui-bg-neutral-4:         #2e2e2e;
+  --bui-bg-neutral-4-hover:   #454545;
+  --bui-bg-solid:             #ededed;
+  --bui-bg-solid-hover:       #ffffff;
+  --bui-bg-solid-pressed:     #d4d4d4;
+  --bui-fg-primary:           #ededed;
+  --bui-fg-secondary:         #a1a1a1;
+  --bui-fg-disabled:          #454545;
+  --bui-fg-solid:             #000000;
+  --bui-border-1:             #2e2e2e;
+  --bui-border-2:             #454545;
+  --bui-ring:                 #3291ff;
+  --bui-scrollbar:            rgba(46,46,46,0.5);
+  --bui-scrollbar-thumb:      #454545;
+  --bui-shadow:               none;
+}
+
+/* Light mode bui tokens */
+html.theme-light,
+body[data-theme-mode='light'] {
+  --bui-bg-app:               #fafafa;
+  --bui-bg-neutral-1:         #ffffff;
+  --bui-bg-neutral-1-hover:   #f2f2f2;
+  --bui-bg-neutral-1-pressed: #e9e9e9;
+  --bui-bg-neutral-2:         #f2f2f2;
+  --bui-bg-neutral-2-hover:   #ebebeb;
+  --bui-bg-neutral-2-pressed: #e2e2e2;
+  --bui-bg-neutral-3:         #ebebeb;
+  --bui-bg-neutral-3-hover:   #e2e2e2;
+  --bui-bg-neutral-3-pressed: #d5d5d5;
+  --bui-bg-neutral-4:         #ebebeb;
+  --bui-bg-neutral-4-hover:   #e2e2e2;
+  --bui-bg-solid:             #171717;
+  --bui-bg-solid-hover:       #383838;
+  --bui-bg-solid-pressed:     #0a0a0a;
+  --bui-fg-primary:           #171717;
+  --bui-fg-secondary:         #4d4d4d;
+  --bui-fg-disabled:          #c9c9c9;
+  --bui-fg-solid:             #ffffff;
+  --bui-border-1:             #ebebeb;
+  --bui-border-2:             #c9c9c9;
+  --bui-ring:                 #0070f3;
+  --bui-scrollbar:            rgba(200,200,200,0.5);
+  --bui-scrollbar-thumb:      #c9c9c9;
+  --bui-shadow:               0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* ==========================================================
+   CSS CUSTOM PROPERTIES — Geist design tokens
+   ========================================================== */
+:root {
+  /* Fonts */
+  --font-sans:  "Geist", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:  "Geist Mono", "Fira Code", "Courier New", monospace;
+
+  /* Geist spacing */
+  --space:    4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+
+  /* Radius */
+  --radius:       6px;
+  --radius-md:    8px;
+  --radius-lg:    12px;
+  --radius-full:  9999px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --duration: 0.15s;
+}
+
+/* Dark mode tokens (default) */
+html, html.theme-dark, body[data-theme-mode='dark'] {
+  --ds-background-100: #0a0a0a;
+  --ds-background-200: #000000;
+
+  --ds-gray-100: #1a1a1a;
+  --ds-gray-200: #1f1f1f;
+  --ds-gray-300: #292929;
+  --ds-gray-400: #2e2e2e;
+  --ds-gray-500: #454545;
+  --ds-gray-600: #878787;
+  --ds-gray-700: #8f8f8f;
+  --ds-gray-900: #a1a1a1;
+  --ds-gray-1000: #ededed;
+
+  --ds-gray-alpha-100: #ffffff0f;
+  --ds-gray-alpha-200: #ffffff17;
+  --ds-gray-alpha-300: #ffffff21;
+  --ds-gray-alpha-400: #ffffff24;
+  --ds-gray-alpha-500: #ffffff3d;
+
+  --fg-primary:   #ededed;
+  --fg-secondary: #a1a1a1;
+  --fg-tertiary:  #878787;
+  --fg-disabled:  #454545;
+
+  --border:       #2e2e2e;
+  --border-hover: #454545;
+
+  --surface:       #1a1a1a;
+  --surface-hover: #1f1f1f;
+
+  --blue: #3291ff;
+  --blue-dark: #0070f3;
+}
+
+/* Light mode tokens */
+html.theme-light, body[data-theme-mode='light'] {
+  --ds-background-100: #ffffff;
+  --ds-background-200: #fafafa;
+
+  --ds-gray-100: #f2f2f2;
+  --ds-gray-200: #ebebeb;
+  --ds-gray-300: #e2e2e2;
+  --ds-gray-400: #ebebeb;
+  --ds-gray-500: #c9c9c9;
+  --ds-gray-600: #878787;
+  --ds-gray-700: #8f8f8f;
+  --ds-gray-900: #4d4d4d;
+  --ds-gray-1000: #171717;
+
+  --ds-gray-alpha-100: #0000000d;
+  --ds-gray-alpha-200: #00000015;
+  --ds-gray-alpha-300: #0000001a;
+  --ds-gray-alpha-400: #00000014;
+  --ds-gray-alpha-500: #00000036;
+
+  --fg-primary:   #171717;
+  --fg-secondary: #4d4d4d;
+  --fg-tertiary:  #8f8f8f;
+  --fg-disabled:  #c9c9c9;
+
+  --border:       #ebebeb;
+  --border-hover: #c9c9c9;
+
+  --surface:       #ffffff;
+  --surface-hover: #fafafa;
+
+  --blue: #0070f3;
+  --blue-dark: #0060df;
+}
+
+
+/* ==========================================================
+   BASE
+   ========================================================== */
+html {
+  font-size: 18px;
+}
+
+html, body, #root {
+  background: var(--ds-background-200) !important;
+  color: var(--fg-primary);
+  margin: 0;
+  padding: 0;
+}
+
+
+*, *::before, *::after {
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+code, pre, kbd, samp, tt {
+  font-family: var(--font-mono) !important;
+}
+
+/* ==========================================================
+   SCROLLBAR
+   ========================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-gray-400) transparent;
+}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ds-gray-400); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ds-gray-500); }
+
+/* ==========================================================
+   SIDEBAR — buttons (element-based, stable in production)
+   ========================================================== */
+/* Sidebar buttons — no background chrome */
+[class*="BackstageSidebar-drawer"] button,
+[class*="BackstageSidebar-drawerPaper"] button {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ==========================================================
+   PAPER / CARDS
+   ========================================================== */
+.MuiPaper-root {
+  background: var(--surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+  color: var(--fg-primary) !important;
+}
+
+/* MUI Card — InfoCard, AboutCard, all entity page cards */
+.MuiCard-root {
+  background: var(--ds-background-100) !important;
+  background-image: none !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: none !important;
+}
+
+.MuiCardHeader-root {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: transparent !important;
+}
+
+.MuiCardHeader-title {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--fg-primary) !important;
+  line-height: 1.4 !important;
+}
+
+.MuiCardHeader-subheader {
+  font-size: 0.8125rem !important;
+  color: var(--fg-tertiary) !important;
+  letter-spacing: -0.006em !important;
+  margin-top: 2px !important;
+}
+
+.MuiCardContent-root {
+  padding: 16px !important;
+  color: var(--fg-primary) !important;
+}
+
+.MuiCardContent-root:last-child {
+  padding-bottom: 16px !important;
+}
+
+.MuiCardActions-root {
+  padding: 8px 16px !important;
+  border-top: 1px solid var(--border) !important;
+}
+
+/* ==========================================================
+   BUTTONS — Geist spec
+   ========================================================== */
+.MuiButton-root {
+  font-family: var(--font-sans) !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  letter-spacing: -0.006em !important;
+  text-transform: none !important;
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 16px !important;
+  transition: background var(--duration) ease, border-color var(--duration) ease, color var(--duration) ease, transform var(--duration) ease !important;
+}
+
+.MuiButton-root:hover { box-shadow: none !important; }
+.MuiButton-root:active { transform: translateY(1px) !important; }
+
+/* Disable ripple */
+.MuiTouchRipple-root { display: none !important; }
+
+/* Primary (filled) — Geist: ds-gray-1000 bg */
+.MuiButton-containedPrimary {
+  background: var(--ds-gray-1000) !important;
+  color: var(--ds-background-200) !important;
+  border: none !important;
+}
+.MuiButton-containedPrimary:hover {
+  background: var(--ds-gray-700) !important;
+}
+
+html.theme-light .MuiButton-containedPrimary,
+body[data-theme-mode='light'] .MuiButton-containedPrimary {
+  background: #171717 !important;
+  color: #ffffff !important;
+}
+html.theme-light .MuiButton-containedPrimary:hover,
+body[data-theme-mode='light'] .MuiButton-containedPrimary:hover {
+  background: #383838 !important;
+}
+
+/* Secondary (outlined) — Geist: box-shadow border */
+.MuiButton-outlined,
+.MuiButton-outlinedPrimary {
+  background: transparent !important;
+  color: var(--fg-primary) !important;
+  border: none !important;
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+}
+.MuiButton-outlined:hover,
+.MuiButton-outlinedPrimary:hover {
+  background: var(--ds-gray-alpha-100) !important;
+  box-shadow: 0 0 0 1px var(--border-hover) inset !important;
+}
+
+/* Tertiary (text) */
+.MuiButton-text {
+  color: var(--fg-secondary) !important;
+  background: transparent !important;
+}
+.MuiButton-text:hover {
+  background: var(--ds-gray-alpha-100) !important;
+  color: var(--fg-primary) !important;
+}
+
+/* ==========================================================
+   CHIPS
+   ========================================================== */
+.MuiChip-root {
+  font-family: var(--font-sans) !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  border-radius: 4px !important;
+  height: 22px !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--fg-secondary) !important;
+}
+
+/* ==========================================================
+   TABLES
+   ========================================================== */
+.MuiTableCell-root {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  letter-spacing: -0.006em !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--fg-primary) !important;
+  padding: 16px 20px !important;
+  line-height: 1.5 !important;
+}
+
+.MuiTableCell-head {
+  background: var(--ds-background-100) !important;
+  color: var(--fg-secondary) !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 12px 20px !important;
+}
+
+.MuiTableRow-root:hover > td {
+  background: var(--ds-gray-alpha-100) !important;
+}
+
+/* ==========================================================
+   INPUTS
+   ========================================================== */
+.MuiOutlinedInput-root {
+  border-radius: var(--radius) !important;
+  background: var(--ds-background-100) !important;
+  font-size: 0.875rem !important;
+  min-height: 40px !important;
+  color: var(--fg-primary) !important;
+}
+
+/* Autocomplete — allow chips to wrap, clip overflow */
+.MuiAutocomplete-inputRoot.MuiOutlinedInput-root {
+  height: auto !important;
+  flex-wrap: wrap !important;
+  overflow: hidden !important;
+  padding: 4px 8px !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.MuiOutlinedInput-notchedOutline {
+  border-color: var(--border) !important;
+  border-width: 1px !important;
+}
+
+.MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: var(--border-hover) !important;
+}
+
+.MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: var(--blue) !important;
+  border-width: 1px !important;
+}
+
+.MuiOutlinedInput-root.Mui-focused {
+  box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.15) !important;
+}
+
+html.theme-light .MuiOutlinedInput-root.Mui-focused,
+body[data-theme-mode='light'] .MuiOutlinedInput-root.Mui-focused {
+  box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.12) !important;
+}
+
+.MuiInputBase-input::placeholder {
+  color: var(--fg-tertiary) !important;
+  opacity: 1 !important;
+}
+
+/* ==========================================================
+   TABS
+   ========================================================== */
+.MuiTab-root {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.006em !important;
+  text-transform: none !important;
+  min-width: unset !important;
+  padding: 10px 16px !important;
+  color: var(--fg-tertiary) !important;
+  opacity: 1 !important;
+}
+
+.MuiTab-root.Mui-selected { color: var(--fg-primary) !important; }
+.MuiTabs-indicator { background: var(--fg-primary) !important; height: 1px !important; }
+.MuiTabs-root { border-bottom: 1px solid var(--border) !important; }
+
+/* ==========================================================
+   DIVIDERS
+   ========================================================== */
+.MuiDivider-root {
+  background: var(--border) !important;
+  border-color: var(--border) !important;
+}
+
+/* ==========================================================
+   DIALOGS
+   ========================================================== */
+.MuiDialog-paper {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6) !important;
+}
+html.theme-light .MuiDialog-paper,
+body[data-theme-mode='light'] .MuiDialog-paper {
+  box-shadow: 0 24px 64px rgba(0,0,0,0.12) !important;
+}
+
+/* ==========================================================
+   TOOLTIPS
+   ========================================================== */
+.MuiTooltip-tooltip {
+  font-family: var(--font-sans) !important;
+  font-size: 0.75rem !important;
+  background: var(--ds-gray-1000) !important;
+  color: var(--ds-background-200) !important;
+  border-radius: var(--radius) !important;
+  padding: 5px 10px !important;
+}
+html.theme-light .MuiTooltip-tooltip,
+body[data-theme-mode='light'] .MuiTooltip-tooltip {
+  background: #171717 !important;
+  color: #ffffff !important;
+}
+
+/* ==========================================================
+   MENUS / POPOVERS
+   ========================================================== */
+.MuiMenu-paper,
+.MuiPopover-paper {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+}
+html.theme-light .MuiMenu-paper,
+html.theme-light .MuiPopover-paper,
+body[data-theme-mode='light'] .MuiMenu-paper,
+body[data-theme-mode='light'] .MuiPopover-paper {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1) !important;
+}
+
+.MuiMenuItem-root {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  color: var(--fg-primary) !important;
+  padding: 8px 12px !important;
+  min-height: 36px !important;
+  border-radius: 4px !important;
+  margin: 2px 4px !important;
+}
+.MuiMenuItem-root:hover { background: var(--ds-gray-alpha-100) !important; }
+
+/* ==========================================================
+   TYPOGRAPHY
+   ========================================================== */
+.MuiTypography-h1, .MuiTypography-h2, .MuiTypography-h3,
+.MuiTypography-h4, .MuiTypography-h5, .MuiTypography-h6 {
+  color: var(--fg-primary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.MuiTypography-body1 { color: var(--fg-primary) !important; }
+.MuiTypography-body2 { color: var(--fg-secondary) !important; }
+.MuiTypography-caption { color: var(--fg-tertiary) !important; }
+
+/* ==========================================================
+   ACCORDION (Filter panels)
+   ========================================================== */
+.MuiAccordion-root {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.MuiAccordion-root::before { display: none !important; }
+.MuiAccordionSummary-root {
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  color: var(--fg-secondary) !important;
+  min-height: 36px !important;
+  padding: 0 8px !important;
+}
+.MuiAccordionSummary-content { margin: 8px 0 !important; }
+.MuiAccordionDetails-root {
+  padding: 4px 8px 12px !important;
+  font-size: 0.875rem !important;
+  color: var(--fg-primary) !important;
+}
+
+/* ==========================================================
+   PROGRESS
+   ========================================================== */
+.MuiLinearProgress-root {
+  background: var(--border) !important;
+  border-radius: 99px !important;
+  height: 2px !important;
+}
+.MuiLinearProgress-bar {
+  border-radius: 99px !important;
+  background: var(--blue) !important;
+}
+
+/* ==========================================================
+   STEPPER (Scaffolder wizard)
+   ========================================================== */
+.MuiStepper-root {
+  background: transparent !important;
+  padding: 16px 0 !important;
+}
+.MuiStepContent-root {
+  border-left: 1px solid var(--border) !important;
+  margin-left: 11px !important;
+  padding: 8px 16px !important;
+}
+.MuiStepLabel-label {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--fg-secondary) !important;
+}
+.MuiStepLabel-label.MuiStepLabel-active {
+  color: var(--fg-primary) !important;
+  font-weight: 600 !important;
+}
+.MuiStepLabel-label.MuiStepLabel-completed {
+  color: var(--fg-secondary) !important;
+}
+.MuiStepIcon-root {
+  color: var(--ds-gray-400) !important;
+}
+.MuiStepIcon-root.MuiStepIcon-active {
+  color: var(--blue) !important;
+}
+.MuiStepIcon-root.MuiStepIcon-completed {
+  color: var(--blue) !important;
+}
+.MuiStepIcon-text {
+  fill: var(--fg-primary) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.625rem !important;
+}
+.MuiStepConnector-line {
+  border-color: var(--border) !important;
+}
+
+/* ==========================================================
+   DRAWER (mobile filter)
+   ========================================================== */
+.MuiDrawer-paper {
+  background: var(--surface) !important;
+  border-right: 1px solid var(--border) !important;
+  box-shadow: none !important;
+}
+
+/* ==========================================================
+   LINK COLORS
+   ========================================================== */
+.MuiLink-root { color: var(--blue) !important; }
+.MuiLink-root:hover { color: var(--blue-dark) !important; }
+
+/* ==========================================================
+   SELECTION
+   ========================================================== */
+::selection { background: rgba(0, 112, 243, 0.2); }
+
+/* ==========================================================
+   ENTITY PAGES — About card subheader icon links (element-based, stable)
+   ========================================================== */
+.MuiCardHeader-subheader nav {
+  justify-content: space-evenly !important;
+  gap: 8px !important;
+  column-gap: 8px !important;
+  row-gap: 8px !important;
+  grid-gap: 8px !important;
+  margin: 4px 0 !important;
+}
+
+/* ==========================================================
+   ENTITY PAGES — MUI Alert (warning / error / info banners)
+   EntityOrphanWarning, EntityProcessingErrorsPanel, etc.
+   ========================================================== */
+.MuiAlert-root {
+  border-radius: var(--radius) !important;
+  font-size: 0.875rem !important;
+  font-family: var(--font-sans) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+.MuiAlert-standardWarning {
+  background: rgba(245, 166, 35, 0.06) !important;
+  border-color: rgba(245, 166, 35, 0.35) !important;
+  color: #f5a623 !important;
+}
+.MuiAlert-standardWarning .MuiAlert-icon { color: #f5a623 !important; }
+
+.MuiAlert-standardError {
+  background: rgba(255, 80, 80, 0.06) !important;
+  border-color: rgba(255, 80, 80, 0.35) !important;
+  color: #ff5050 !important;
+}
+.MuiAlert-standardError .MuiAlert-icon { color: #ff5050 !important; }
+
+.MuiAlert-standardInfo {
+  background: rgba(50, 145, 255, 0.06) !important;
+  border-color: rgba(50, 145, 255, 0.35) !important;
+  color: var(--blue) !important;
+}
+.MuiAlert-standardInfo .MuiAlert-icon { color: var(--blue) !important; }
+
+.MuiAlert-standardSuccess {
+  background: rgba(80, 227, 194, 0.06) !important;
+  border-color: rgba(80, 227, 194, 0.35) !important;
+  color: #50e3c2 !important;
+}
+.MuiAlert-standardSuccess .MuiAlert-icon { color: #50e3c2 !important; }
+
+.MuiAlertTitle-root {
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  margin-bottom: 4px !important;
+}
+
+/* ==========================================================
+   ENTITY PAGES — Grid card spacing (MUI stable class names)
+   ========================================================== */
+.MuiGrid-spacing-xs-3 > .MuiGrid-item {
+  padding: 8px !important;
+}
+
+/* ==========================================================
+   ENTITY PAGES — Links / icon grid (LinksGridList → ImageList)
+   ImageList sets gap via inline styles (margin on root, padding on items).
+   !important overrides inline styles.
+   ========================================================== */
+.MuiImageList-root {
+  margin: 0 !important;
+}
+
+.MuiImageListItem-root {
+  padding: 4px 0 !important;
+  height: auto !important;
+}
+
+/* ==========================================================
+   CATALOG — Filter sidebar (UserListPicker)
+   ========================================================== */
+[class*="CatalogReactUserListPicker-root"] {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+[class*="CatalogReactUserListPicker-title"] {
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--fg-tertiary) !important;
+  padding: 12px 8px 4px !important;
+  margin: 0 !important;
+}
+
+[class*="CatalogReactUserListPicker-menuItem"] {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.006em !important;
+  color: var(--fg-secondary) !important;
+  border-radius: 6px !important;
+  margin: 1px 0 !important;
+  min-height: 34px !important;
+  padding: 0 8px !important;
+}
+
+[class*="CatalogReactUserListPicker-menuItem"]:hover {
+  background: var(--ds-gray-alpha-100) !important;
+  color: var(--fg-primary) !important;
+}
+
+[class*="CatalogReactUserListPicker-menuItem"].Mui-selected,
+[class*="CatalogReactUserListPicker-menuItem"][class*="selected"] {
+  background: var(--ds-gray-alpha-100) !important;
+  color: var(--fg-primary) !important;
+}
+
+[class*="CatalogReactUserListPicker-listIcon"] {
+  color: inherit !important;
+  min-width: 28px !important;
+}
+
+/* ==========================================================
+   CATALOG — Filter checkboxes (Owner, Tag, etc.)
+   ========================================================== */
+.MuiCheckbox-root {
+  color: var(--border-hover) !important;
+  padding: 4px 8px !important;
+}
+
+.MuiCheckbox-root.Mui-checked {
+  color: var(--fg-primary) !important;
+}
+
+.MuiFormControlLabel-label {
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.006em !important;
+  color: var(--fg-secondary) !important;
+}
+
+[class*="CatalogReactEntityOwnerPicker-root"],
+[class*="CatalogReactEntityAutocompletePicker-root"],
+[class*="CatalogReactEntityLifecyclePicker-input"],
+[class*="CatalogReactEntityNamespacePicker-input"],
+[class*="CatalogReactEntityTagPicker-input"] {
+  padding: 0 4px !important;
+}
+
+/* ==========================================================
+   CATALOG — Search toolbar
+   ========================================================== */
+[class*="CatalogReactEntitySearchBar-searchToolbar"] {
+  background: transparent !important;
+  padding: 0 0 12px !important;
+}
+
+[class*="CatalogReactEntitySearchBar-input"] {
+  font-size: 0.875rem !important;
+}
+
+/* ==========================================================
+   CATALOG — Table toolbar (title row)
+   ========================================================== */
+[class*="PluginCatalogTableToolbar-root"] {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 12px 16px !important;
+  min-height: 52px !important;
+}
+
+[class*="PluginCatalogTableToolbar-text"] {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--fg-secondary) !important;
+  letter-spacing: -0.006em !important;
+}
+
+/* ==========================================================
+   CATALOG — Entity display name & links
+   ========================================================== */
+[class*="CatalogReactEntityDisplayName-root"] {
+  color: var(--fg-primary) !important;
+  font-weight: 500 !important;
+}
+
+
+/* ==========================================================
+   CATALOG — Lifecycle / type chips (colored badges)
+   ========================================================== */
+.MuiChip-colorPrimary {
+  background: var(--ds-gray-200) !important;
+  color: var(--fg-primary) !important;
+  border-color: var(--border) !important;
+}
+
+/* Production lifecycle — green tint */
+.MuiChip-root[data-lifecycle="production"] {
+  background: rgba(80, 227, 194, 0.1) !important;
+  border-color: rgba(80, 227, 194, 0.3) !important;
+  color: #50e3c2 !important;
+}
+
+/* Experimental — amber tint */
+.MuiChip-root[data-lifecycle="experimental"] {
+  background: rgba(245, 166, 35, 0.1) !important;
+  border-color: rgba(245, 166, 35, 0.3) !important;
+  color: #f5a623 !important;
+}
+
+/* Deprecated — red tint */
+.MuiChip-root[data-lifecycle="deprecated"] {
+  background: rgba(255, 80, 80, 0.1) !important;
+  border-color: rgba(255, 80, 80, 0.3) !important;
+  color: #ff5050 !important;
+}
+
+/* ==========================================================
+   CATALOG — Filter layout container
+   ========================================================== */
+/* Left filter column wrapper */
+[class*="CatalogFilterLayout"] > [class*="MuiGrid-item"]:first-child {
+  border-right: 1px solid var(--border);
+  padding-right: 16px !important;
+}
+
+/* Catalog page overall content area */
+[class*="CatalogPage"] {
+  background: var(--ds-background-200) !important;
+}
+
+/* ==========================================================
+   CATALOG — Select (KindPicker dropdown)
+   ========================================================== */
+.MuiSelect-root,
+.MuiSelect-select {
+  font-size: 0.875rem !important;
+  color: var(--fg-primary) !important;
+  background: var(--ds-background-100) !important;
+}
+
+.MuiSelect-icon {
+  color: var(--fg-tertiary) !important;
+}
+
+.MuiInputLabel-root,
+.MuiFormLabel-root {
+  font-size: 0.8125rem !important;
+  color: var(--fg-tertiary) !important;
+  letter-spacing: -0.006em !important;
+}
+
+.MuiInputLabel-shrink,
+.MuiFormLabel-root.Mui-focused {
+  color: var(--blue) !important;
+}
+
+/* ==========================================================
+   CATALOG — Favorite star button
+   ========================================================== */
+[aria-label="Add to favorites"],
+[aria-label="Remove from favorites"] {
+  color: var(--fg-disabled) !important;
+}
+
+[aria-label="Remove from favorites"] {
+  color: #f5a623 !important;
+}
+
+/* ==========================================================
+   CATALOG GRAPH — ToggleButton (Filters toggle)
+   ========================================================== */
+.MuiToggleButton-root {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.006em !important;
+  text-transform: none !important;
+  border-radius: var(--radius) !important;
+  border: none !important;
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+  color: var(--fg-secondary) !important;
+  background: transparent !important;
+  height: 40px !important;
+  padding: 0 16px !important;
+}
+
+.MuiToggleButton-root:hover {
+  background: var(--ds-gray-alpha-100) !important;
+  color: var(--fg-primary) !important;
+}
+
+.MuiToggleButton-root.Mui-selected {
+  background: var(--ds-gray-200) !important;
+  color: var(--fg-primary) !important;
+  box-shadow: 0 0 0 1px var(--border-hover) inset !important;
+}
+
+/* ==========================================================
+   CATALOG GRAPH — Graph canvas
+   SVG has fixed id="dependency-graph" — target directly.
+   ========================================================== */
+
+/* Node rects — default */
+#dependency-graph rect {
+  fill: var(--ds-gray-300) !important;
+  stroke: var(--border-hover) !important;
+  stroke-width: 1 !important;
+}
+
+/* Primary node (focused/root entity) */
+#dependency-graph rect.primary {
+  fill: var(--blue-dark) !important;
+  stroke: var(--blue) !important;
+}
+
+/* Secondary node */
+#dependency-graph rect.secondary {
+  fill: var(--ds-gray-500) !important;
+  stroke: var(--border-hover) !important;
+}
+
+/* Node text labels */
+#dependency-graph text {
+  fill: var(--fg-primary) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+}
+
+#dependency-graph text.primary {
+  fill: #ffffff !important;
+}
+
+/* Edge paths */
+#dependency-graph path[marker-end] {
+  stroke: var(--border-hover) !important;
+}
+
+#dependency-graph path[marker-end]:hover {
+  filter: drop-shadow(0 0 4px var(--blue)) !important;
+}
+
+/* Arrow marker heads */
+#dependency-graph marker path {
+  fill: var(--border-hover) !important;
+  stroke: var(--border-hover) !important;
+}
+
+/* ==========================================================
+   CATALOG GRAPH — Filter panel labels
+   ========================================================== */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiTypography-subtitle2,
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiFormLabel-root {
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--fg-tertiary) !important;
+}
+
+/* ==========================================================
+   MUI SWITCH
+   ========================================================== */
+.MuiSwitch-root {
+  padding: 8px !important;
+}
+
+.MuiSwitch-track {
+  background: var(--border-hover) !important;
+  border-radius: 99px !important;
+  opacity: 1 !important;
+}
+
+.MuiSwitch-thumb {
+  background: var(--fg-tertiary) !important;
+  box-shadow: none !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.MuiSwitch-switchBase {
+  color: var(--fg-tertiary) !important;
+  padding: 10px !important;
+}
+
+.MuiSwitch-switchBase.Mui-checked {
+  color: var(--fg-primary) !important;
+}
+
+.MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track {
+  background: var(--blue) !important;
+  opacity: 1 !important;
+}
+
+.MuiSwitch-switchBase.Mui-checked .MuiSwitch-thumb {
+  background: #ffffff !important;
+}
+
+/* ==========================================================
+   MUI AUTOCOMPLETE (SelectedKinds, SelectedRelations filters)
+   ========================================================== */
+.MuiAutocomplete-popper .MuiPaper-root {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+}
+
+.MuiAutocomplete-listbox {
+  padding: 4px !important;
+}
+
+.MuiAutocomplete-option {
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  color: var(--fg-primary) !important;
+  border-radius: 4px !important;
+  padding: 6px 10px !important;
+  min-height: 36px !important;
+}
+
+.MuiAutocomplete-option:hover,
+.MuiAutocomplete-option[data-focus="true"] {
+  background: var(--ds-gray-alpha-100) !important;
+}
+
+.MuiAutocomplete-option[aria-selected="true"] {
+  background: var(--ds-gray-200) !important;
+}
+
+.MuiAutocomplete-tag {
+  background: var(--ds-gray-200) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--fg-primary) !important;
+  font-size: 0.75rem !important;
+  height: 22px !important;
+  border-radius: 4px !important;
+}
+
+.MuiAutocomplete-inputRoot {
+  height: auto !important;
+  min-height: 40px !important;
+  padding: 4px 8px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.MuiAutocomplete-endAdornment .MuiIconButton-root {
+  color: var(--fg-tertiary) !important;
+  padding: 4px !important;
+  height: auto !important;
+  min-height: unset !important;
+}
+
+/* ==========================================================
+   CATALOG GRAPH — Filter labels (Typography variant="button")
+   ========================================================== */
+.MuiTypography-button {
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--fg-tertiary) !important;
+}
+
+/* ==========================================================
+   CATALOG GRAPH — Filter panel width containment
+   The filter div is a flex child of the Graph Grid container.
+   min-width:0 prevents it from expanding beyond its flex-basis (2/12).
+   ========================================================== */
+
+/* The filter Grid item itself — must not grow beyond its flex allocation */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Direct children (Box wrappers per filter widget) */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] > * {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+/* MuiAutocomplete-root gets JSS maxWidth:300 but no width — anchor it.
+   Target both the parent-scoped rule and the specific filter class names. */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiAutocomplete-root {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Target the formControl class directly on the Autocomplete root elements
+   (the className prop receives this JSS class — overrides maxWidth:300) */
+[class*="PluginCatalogGraphSelectedKindsFilter-formControl"],
+[class*="PluginCatalogGraphSelectedRelationsFilter-formControl"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* FormControl: block-level flex to fill Autocomplete-root width */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiFormControl-root {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* InputRoot: chips must wrap, not overflow */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiAutocomplete-inputRoot {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  flex-wrap: wrap !important;
+  height: auto !important;
+}
+
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] > *:last-child {
+  border-bottom: none;
+}
+
+/* ==========================================================
+   CATALOG GRAPH — Autocomplete option label styling
+   (Layout/overflow is handled by GlobalStyleOverrides.tsx
+    which injects after JSS to win the cascade)
+   ========================================================== */
+.MuiAutocomplete-option .MuiFormControlLabel-label {
+  font-size: 0.8125rem !important;
+  color: var(--fg-primary) !important;
+}
+
+.MuiAutocomplete-listbox {
+  padding: 4px !important;
+}
+
+
+/* ==========================================================
+   ENTITY PAGES — BottomLink (deep link footer on InfoCards)
+   ========================================================== */
+
+/* ==========================================================
+   ENTITY PAGES — IconButton in card header action area
+   ========================================================== */
+.MuiCardHeader-action {
+  margin: 0 !important;
+  align-self: center !important;
+}
+
+.MuiCardHeader-action .MuiIconButton-root {
+  color: var(--fg-tertiary) !important;
+  padding: 6px !important;
+  border-radius: var(--radius) !important;
+}
+
+.MuiCardHeader-action .MuiIconButton-root:hover {
+  background: var(--ds-gray-alpha-100) !important;
+  color: var(--fg-secondary) !important;
+}
+
+/* ==========================================================
+   ENTITY PAGES — EntityLinksCard icon links (IconLink component)
+   Renders as ImageList > ImageListItem > Box[flex] > Icon + Link
+   ========================================================== */
+.MuiImageListItem-root {
+  display: flex !important;
+  align-items: center !important;
+}
+
+.MuiImageListItem-root svg {
+  font-size: 1rem !important;
+  color: var(--fg-secondary) !important;
+  flex-shrink: 0 !important;
+}
+
+.MuiImageListItem-root a {
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.006em !important;
+  color: var(--fg-primary) !important;
+  text-decoration: none !important;
+}
+
+.MuiImageListItem-root a:hover {
+  color: var(--blue) !important;
+  text-decoration: underline !important;
+}
+
+/* ==========================================================
+   ENTITY PAGES — Org plugin cards (UserProfile, GroupProfile, Members)
+   PluginOrgUserProfileCard dialog min-height reset
+   ========================================================== */
+[class*="PluginOrgUserProfileCard-dialogPaper"] {
+  min-height: unset !important;
+}
+
+/* Members list avatar size */
+.MuiListItemAvatar-root {
+  min-width: 40px !important;
+}
+
+.MuiAvatar-root {
+  background: var(--ds-gray-200) !important;
+  color: var(--fg-secondary) !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* Small avatars in list items (members card, etc.) */
+.MuiListItemAvatar-root .MuiAvatar-root {
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 0.75rem !important;
+}
+
+/* ==========================================================
+   ENTITY PAGES — List items (EntityMembersListCard, etc.)
+   ========================================================== */
+.MuiListItem-root {
+  padding: 6px 16px !important;
+}
+
+.MuiListItemText-primary {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.006em !important;
+  color: var(--fg-primary) !important;
+}
+
+.MuiListItemText-secondary {
+  font-size: 0.75rem !important;
+  letter-spacing: -0.006em !important;
+  color: var(--fg-tertiary) !important;
+}
+
+/* ==========================================================
+   TECHDOCS — MkDocs content is in Shadow DOM
+   ========================================================== */
+
+/* ==========================================================
+   TECHDOCS — MkDocs content is in Shadow DOM (can't be styled
+   from here). The reader chrome (header, labels) is covered above.
+   ========================================================== */
+
+/* ==========================================================
+   API DOCS — SwaggerUI dark mode overrides
+   swagger-ui-react/swagger-ui.css ships a white-themed UI.
+   These selectors override the static CSS to match Geist dark.
+   ========================================================== */
+.swagger-ui,
+.swagger-ui .wrapper,
+.swagger-ui .opblock-tag,
+.swagger-ui .opblock,
+.swagger-ui .model-box,
+.swagger-ui section.models {
+  background: transparent !important;
+}
+
+.swagger-ui .opblock {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+  margin-bottom: 8px !important;
+}
+
+.swagger-ui .opblock .opblock-summary {
+  border-radius: var(--radius) !important;
+  padding: 8px 12px !important;
+}
+
+.swagger-ui .opblock .opblock-section-header {
+  background: var(--ds-background-100) !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 8px 12px !important;
+  box-shadow: none !important;
+}
+
+.swagger-ui .opblock .opblock-section-header h4,
+.swagger-ui .opblock-tag,
+.swagger-ui .opblock-tag small,
+.swagger-ui .opblock-summary-description,
+.swagger-ui .opblock-summary-path,
+.swagger-ui .parameter__name,
+.swagger-ui .parameter__type,
+.swagger-ui .parameter__in,
+.swagger-ui label,
+.swagger-ui table thead tr th,
+.swagger-ui table thead tr td,
+.swagger-ui .response-col_status,
+.swagger-ui .info .title,
+.swagger-ui .info p,
+.swagger-ui .info li {
+  color: var(--fg-primary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.swagger-ui .opblock-summary-path {
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.swagger-ui .response-col_description,
+.swagger-ui .prop-format,
+.swagger-ui table tbody tr td {
+  color: var(--fg-secondary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.swagger-ui .model,
+.swagger-ui .model-title,
+.swagger-ui .model span,
+.swagger-ui .model .brace-open,
+.swagger-ui .model .brace-close {
+  color: var(--fg-secondary) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 0.8125rem !important;
+}
+
+.swagger-ui input,
+.swagger-ui select,
+.swagger-ui textarea {
+  background: var(--ds-background-100) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  color: var(--fg-primary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.swagger-ui .btn {
+  border: 1px solid var(--border) !important;
+  background: transparent !important;
+  color: var(--fg-primary) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.8125rem !important;
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+}
+
+.swagger-ui .btn:hover {
+  background: var(--ds-gray-alpha-100) !important;
+  border-color: var(--border-hover) !important;
+}
+
+.swagger-ui .btn.execute {
+  background: var(--blue-dark) !important;
+  border-color: var(--blue-dark) !important;
+  color: #ffffff !important;
+}
+
+.swagger-ui .highlight-code,
+.swagger-ui .microlight {
+  background: var(--ds-gray-100) !important;
+  border-radius: var(--radius) !important;
+  padding: 12px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 0.8125rem !important;
+  color: var(--fg-primary) !important;
+}
+
+.swagger-ui .scheme-container {
+  background: var(--ds-background-200) !important;
+  box-shadow: none !important;
+  padding: 12px 0 !important;
+}
+
+.swagger-ui section.models {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.swagger-ui section.models h4 {
+  color: var(--fg-primary) !important;
+  font-family: var(--font-sans) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.swagger-ui .model-container {
+  background: var(--ds-background-100) !important;
+  border-radius: var(--radius) !important;
+  margin: 4px 0 !important;
+}
+
+html.theme-light .swagger-ui .opblock-get { border-color: #0070f3 !important; }
+html.theme-light .swagger-ui .opblock-post { border-color: #079669 !important; }
+html.theme-light .swagger-ui .opblock-put { border-color: #d97706 !important; }
+html.theme-light .swagger-ui .opblock-delete { border-color: #dc2626 !important; }
+
+/* ==========================================================
+   SETTINGS PAGE
+   ========================================================== */
+
+/* ToggleButtonGroup — segmented control (theme picker) */
+.MuiToggleButtonGroup-root {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  overflow: hidden !important;
+  background: var(--ds-background-100) !important;
+}
+
+/* Buttons inside a group lose individual box-shadow; borders are on the group */
+.MuiToggleButtonGroup-grouped.MuiToggleButton-root {
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+  border-left: 1px solid var(--border) !important;
+  height: 32px !important;
+  padding: 0 12px !important;
+}
+
+.MuiToggleButtonGroup-grouped.MuiToggleButton-root:first-child {
+  border-left: none !important;
+}
+
+.MuiToggleButtonGroup-grouped.MuiToggleButton-root.Mui-selected {
+  background: var(--ds-gray-300) !important;
+  color: var(--fg-primary) !important;
+  box-shadow: none !important;
+}
+
+/* Profile card avatar — let JSS dynamic size win, only theme the colors */
+/* (.MuiAvatar-root background/color/border already handled globally above) */
+
+/* Identity card code/monospace text */
+[class*="UserSettingsIdentityCard"] code,
+[class*="UserSettingsIdentityCard"] .MuiTypography-root {
+  font-family: var(--font-sans) !important;
+}
+
+/* Settings page tabs alignment */
+[class*="BackstageRoutedTabs"] .MuiTab-root,
+.MuiTabs-root .MuiTab-root {
+  font-family: var(--font-sans) !important;
+}
+
+/* ==========================================================
+   DIALOGS — content text, title, actions
+   ========================================================== */
+.MuiDialogTitle-root {
+  font-family: var(--font-sans) !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--fg-primary) !important;
+  padding: 20px 24px 12px !important;
+}
+
+.MuiDialogContent-root {
+  padding: 8px 24px 16px !important;
+}
+
+.MuiDialogContentText-root {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  color: var(--fg-secondary) !important;
+  line-height: 1.5 !important;
+}
+
+.MuiDialogActions-root {
+  padding: 12px 24px 20px !important;
+  border-top: 1px solid var(--border) !important;
+  gap: 8px !important;
+}
+
+/* ==========================================================
+   CODE / PRE — global (used in dialog code blocks, etc.)
+   ========================================================== */
+code {
+  font-family: var(--font-mono) !important;
+  font-size: 0.8125rem !important;
+  background: var(--ds-gray-100) !important;
+  color: var(--fg-primary) !important;
+  border-radius: var(--radius) !important;
+  padding: 1px 5px !important;
+}
+
+pre {
+  font-family: var(--font-mono) !important;
+  font-size: 0.8125rem !important;
+  background: var(--ds-gray-100) !important;
+  color: var(--fg-primary) !important;
+  border-radius: var(--radius) !important;
+  padding: 10px 12px !important;
+  margin: 0 !important;
+  overflow-x: auto !important;
+}
+
+pre code {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* ==========================================================
+   RADIO BUTTON
+   ========================================================== */
+.MuiRadio-root {
+  color: var(--fg-secondary) !important;
+  padding: 6px !important;
+}
+
+.MuiRadio-root.Mui-checked {
+  color: var(--blue) !important;
+}
+
+.MuiFormControlLabel-label {
+  font-family: var(--font-sans) !important;
+  font-size: 0.875rem !important;
+  color: var(--fg-primary) !important;
+}
+
+/* ==========================================================
+   BUTTON — MUI contained/outlined/text
+   ========================================================== */
+.MuiButton-root {
+  font-family: var(--font-sans) !important;
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.006em !important;
+  text-transform: none !important;
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+}
+
+.MuiButton-root:hover {
+  box-shadow: none !important;
+}
+
+.MuiButton-text {
+  color: var(--fg-primary) !important;
+  background: transparent !important;
+}
+
+.MuiButton-text:hover {
+  background: var(--ds-gray-alpha-100) !important;
+}
+
+.MuiButton-outlined {
+  border: 1px solid var(--border) !important;
+  color: var(--fg-primary) !important;
+  background: transparent !important;
+}
+
+.MuiButton-outlined:hover {
+  border-color: var(--border-hover) !important;
+  background: var(--ds-gray-alpha-100) !important;
+}
+
+.MuiButton-contained {
+  background: var(--ds-gray-1000) !important;
+  color: var(--ds-background-200) !important;
+  border: 1px solid transparent !important;
+}
+
+.MuiButton-contained:hover {
+  background: var(--fg-secondary) !important;
+}
+
+.MuiButton-contained.Mui-disabled,
+.MuiButton-contained:disabled {
+  background: var(--ds-gray-400) !important;
+  color: var(--fg-disabled) !important;
+}
+
+.MuiButton-containedPrimary {
+  background: var(--blue-dark) !important;
+  color: #ffffff !important;
+}
+
+.MuiButton-containedPrimary:hover {
+  background: var(--blue) !important;
+}
+
+.MuiButton-containedSecondary {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.MuiButton-containedSecondary:hover {
+  background: #ef4444 !important;
+}

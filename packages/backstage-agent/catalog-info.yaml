@@ -1,0 +1,22 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage-agent
+  title: Backstage Agent CLI
+  description: CLI tool for provisioning local development resources via Backstage
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - cli
+    - agent
+    - local-provisioning
+    - docker
+    - training
+spec:
+  type: tool
+  lifecycle: production
+  owner: devops-team
+  system: internal-developer-platform
+  dependsOn:
+    - component:default/backstage-portal

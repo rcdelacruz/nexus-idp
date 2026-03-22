@@ -1,0 +1,9 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: example-org-root
+  description: Root location for your organization catalog
+spec:
+  targets:
+    - ./org/groups.yaml
+    - ./org/users.yaml

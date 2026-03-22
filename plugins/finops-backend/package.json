@@ -1,0 +1,56 @@
+{
+  "name": "@stratpoint/plugin-finops-backend",
+  "version": "0.1.0",
+  "main": "dist/index.cjs.js",
+  "types": "dist/index.d.ts",
+  "license": "Apache-2.0",
+  "private": true,
+  "publishConfig": {
+    "access": "public",
+    "main": "dist/index.cjs.js",
+    "types": "dist/index.d.ts"
+  },
+  "backstage": {
+    "role": "backend-plugin",
+    "pluginId": "finops",
+    "pluginPackages": [
+      "@stratpoint/plugin-finops-backend"
+    ]
+  },
+  "scripts": {
+    "start": "backstage-cli package start",
+    "build": "backstage-cli package build",
+    "lint": "backstage-cli package lint",
+    "test": "backstage-cli package test",
+    "clean": "backstage-cli package clean",
+    "prepack": "backstage-cli package prepack",
+    "postpack": "backstage-cli package postpack"
+  },
+  "dependencies": {
+    "@aws-sdk/client-budgets": "^3.0.0",
+    "@aws-sdk/client-cloudwatch": "^3.0.0",
+    "@aws-sdk/client-cost-explorer": "^3.0.0",
+    "@aws-sdk/client-ec2": "^3.0.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.0.0",
+    "@aws-sdk/client-rds": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-sts": "^3.0.0",
+    "@aws-sdk/credential-providers": "^3.0.0",
+    "@backstage/backend-common": "^0.25.0",
+    "@backstage/backend-plugin-api": "^1.8.0",
+    "@backstage/config": "^1.3.6",
+    "@backstage/errors": "^1.2.7",
+    "@backstage/plugin-auth-node": "^0.6.14",
+    "@types/express": "*",
+    "express": "^4.21.2",
+    "express-promise-router": "^4.1.0"
+  },
+  "devDependencies": {
+    "@backstage/backend-test-utils": "^1.11.1",
+    "@backstage/cli": "^0.36.0",
+    "@types/node": "^22.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

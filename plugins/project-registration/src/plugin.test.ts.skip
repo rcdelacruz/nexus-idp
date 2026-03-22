@@ -1,0 +1,7 @@
+import { projectRegistrationPlugin } from './plugin';
+
+describe('project-registration', () => {
+  it('should export plugin', () => {
+    expect(projectRegistrationPlugin).toBeDefined();
+  });
+});

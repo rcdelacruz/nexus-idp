@@ -1,0 +1,290 @@
+# =============================================================================
+# BACKSTAGE PRODUCTION DOCKER COMPOSE FOR COOLIFY
+# =============================================================================
+# This file deploys the complete Backstage stack:
+# - Backstage application (frontend + backend)
+# - PostgreSQL database
+# - Redis cache
+#
+# Usage in Coolify:
+# 1. Set Docker Compose file path to: docker-compose.coolify.yml
+# 2. Add environment variables in Coolify UI (see .env.coolify.example)
+# 3. Deploy
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # BACKSTAGE APPLICATION
+  # ---------------------------------------------------------------------------
+  backstage:
+    build:
+      context: .
+      dockerfile: build/prod/Dockerfile.coolify
+    image: backstage-app:latest
+    container_name: backstage-app
+    restart: unless-stopped
+
+    # Port mapping
+    ports:
+      - "7007:7007"
+
+    # Environment variables (set these in Coolify UI)
+    environment:
+      # Application URLs
+      - APP_BASE_URL=${APP_BASE_URL:-https://portal.stratpoint.io}
+      - SESSION_DOMAIN=${SESSION_DOMAIN:-stratpoint.io}
+
+      # Backend configuration
+      - BACKEND_SECRET=${BACKEND_SECRET}
+      - NODE_ENV=production
+      - PORT=7007
+
+      # Database connection (use unique service name to avoid DNS conflict with coolify-db)
+      - POSTGRES_HOST=backstage-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-backstage}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-backstage}
+
+      # Cache configuration (internal service name)
+      - CACHE_STORE=redis
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme}@redis:6379
+
+      # Google OAuth
+      - AUTH_GOOGLE_CLIENT_ID=${AUTH_GOOGLE_CLIENT_ID}
+      - AUTH_GOOGLE_CLIENT_SECRET=${AUTH_GOOGLE_CLIENT_SECRET}
+
+      # GitHub integration
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+
+      # Optional: GitLab
+      - GITLAB_TOKEN=${GITLAB_TOKEN:-}
+      - GITLAB.COM_TOKEN=${GITLAB_COM_TOKEN:-}
+
+      # Optional: Kubernetes
+      - KUBERNETES_SERVICE_ACCOUNT_TOKEN=${KUBERNETES_SERVICE_ACCOUNT_TOKEN:-}
+
+      # Optional: ArgoCD
+      - ARGOCD_AUTH_TOKEN=${ARGOCD_AUTH_TOKEN:-}
+
+    # Wait for database and Redis to be ready
+    depends_on:
+      backstage-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:7007/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Resource limits (adjust based on your server)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+    # Networks - use both Coolify (for Traefik) and UUID network (for DB/Redis)
+    networks:
+      - coolify
+      - oog80ks04wwggo8ogkooo44s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # POSTGRESQL DATABASE
+  # ---------------------------------------------------------------------------
+  backstage-postgres:
+    image: postgres:13.17-alpine
+    restart: unless-stopped
+
+    # Environment variables
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-backstage}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-backstage}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+
+    # Persistent volume for database
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-backstage}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Networks (internal only, not exposed)
+    networks:
+      - oog80ks04wwggo8ogkooo44s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # REDIS CACHE
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: backstage-redis
+    restart: unless-stopped
+
+    # Redis password authentication
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme} --maxmemory 512mb --maxmemory-policy allkeys-lru
+
+    # Persistent volume for Redis data
+    volumes:
+      - redis-data:/data
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Networks (internal only, not exposed)
+    networks:
+      - oog80ks04wwggo8ogkooo44s
+
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  # PostgreSQL persistent storage (Coolify managed)
+  postgres-data:
+
+  # Redis persistent storage (Coolify managed)
+  redis-data:
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  # Use Coolify's managed network (external) for Traefik routing
+  coolify:
+    external: true
+    name: coolify
+
+  # UUID-specific network for internal service communication (DB, Redis)
+  # This isolates our services from other Coolify deployments (e.g., coolify-db)
+  oog80ks04wwggo8ogkooo44s:
+    external: true
+    name: oog80ks04wwggo8ogkooo44s
+
+# =============================================================================
+# NOTES FOR COOLIFY DEPLOYMENT
+# =============================================================================
+# 1. In Coolify UI:
+#    - Set Docker Compose file path: docker-compose.coolify.yml
+#    - Enable "Use Custom Compose File"
+#
+# 2. Required Environment Variables (add in Coolify UI):
+#    - BACKEND_SECRET (generate with: node -p 'require("crypto").randomBytes(32).toString("hex")')
+#    - POSTGRES_PASSWORD (strong password, 24+ chars)
+#    - REDIS_PASSWORD (strong password, 24+ chars)
+#    - AUTH_GOOGLE_CLIENT_ID
+#    - AUTH_GOOGLE_CLIENT_SECRET
+#    - GITHUB_TOKEN
+#
+# 3. Optional Environment Variables:
+#    - APP_BASE_URL (default: https://portal.stratpoint.io)
+#    - SESSION_DOMAIN (default: stratpoint.io)
+#    - POSTGRES_USER (default: backstage)
+#    - POSTGRES_DB (default: backstage)
+#    - GITLAB_TOKEN
+#    - KUBERNETES_SERVICE_ACCOUNT_TOKEN
+#    - ARGOCD_AUTH_TOKEN
+#
+# 4. Domain Configuration:
+#    - Set domain in Coolify: portal.stratpoint.io (or your domain)
+#    - Coolify will automatically handle SSL/TLS with Let's Encrypt
+#    - Port 7007 will be mapped to 443 (HTTPS)
+#
+# 5. Volumes:
+#    - Coolify will create persistent volumes automatically
+#    - Database data: /var/lib/docker/volumes/backstage_postgres-data
+#    - Redis data: /var/lib/docker/volumes/backstage_redis-data
+#
+# 6. Health Checks:
+#    - All services have health checks configured
+#    - Backstage starts after PostgreSQL and Redis are healthy
+#
+# 7. Resource Limits:
+#    - Backstage: 2-4GB RAM, 1-2 CPUs
+#    - PostgreSQL: 512MB-2GB RAM, 0.5-1 CPU
+#    - Redis: 256MB-512MB RAM, 0.25-0.5 CPU
+#    - Adjust based on your Coolify server resources
+#
+# 8. Logging:
+#    - Logs are limited to 10MB per file, max 3 files
+#    - View logs in Coolify UI: Application → Logs
+#
+# 9. Security:
+#    - All services run with no-new-privileges
+#    - Database and Redis are internal-only (not exposed publicly)
+#    - Only Backstage port 7007 is exposed (mapped to 443 by Coolify)
+#
+# 10. Backup Strategy:
+#     - Database: docker exec backstage-postgres pg_dump -U backstage backstage > backup.sql
+#     - Schedule automated backups in Coolify or via cron
+#     - Store backups off-server (S3, Backblaze, etc.)
+# =============================================================================

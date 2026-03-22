@@ -1,0 +1,147 @@
+app:
+  title: Nexus IDP
+  baseUrl: ${APP_BASE_URL}
+  env: production
+
+organization:
+  name: ${ORGANIZATION_NAME}
+
+backend:
+  logging:
+    level: info
+  auth:
+    keys:
+      - secret: ${BACKEND_SECRET}
+    session:
+      secure: true
+      sameSite: lax
+      domain: ${SESSION_DOMAIN}
+  baseUrl: ${APP_BASE_URL}
+  reading:
+    allow:
+      - host: github.com
+      - host: gitlab.com
+  listen:
+    port: ${PORT}
+    host: '0.0.0.0'
+  csp:
+    connect-src:
+      - "'self'"
+      - 'http:'
+      - 'https:'
+      - 'https://accounts.google.com'
+      - 'https://www.googleapis.com'
+    script-src:
+      - "'self'"
+      - "'unsafe-inline'"
+      - "'unsafe-eval'"
+      - 'https://accounts.google.com'
+      - 'https://apis.google.com'
+    style-src:
+      - "'self'"
+      - "'unsafe-inline'"
+      - 'https://fonts.googleapis.com'
+      - 'https://accounts.google.com'
+    img-src:
+      - "'self'"
+      - 'data:'
+      - 'https:'
+      - 'https://accounts.google.com'
+    worker-src: ["'self'", 'blob:']
+    font-src:
+      - "'self'"
+      - 'https://fonts.gstatic.com'
+      - 'data:'
+    frame-src:
+      - "'self'"
+      - 'https://accounts.google.com'
+      - '${APP_BASE_URL}'
+    default-src: ["'self'"]
+  cors:
+    origin: '${APP_BASE_URL}'
+    methods: [GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS]
+    credentials: true
+    allowedHeaders:
+      - Authorization
+      - Content-Type
+      - X-Requested-With
+    exposedHeaders:
+      - Set-Cookie
+  proxy:
+    trustProxy: true
+  database:
+    client: pg
+    connection:
+      host: ${POSTGRES_HOST}
+      port: ${POSTGRES_PORT:-5432}
+      user: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+      database: ${POSTGRES_DB}
+      ssl: false
+  cache:
+    store: ${CACHE_STORE:-memory}
+    connection: ${REDIS_URL}
+
+techdocs:
+  builder: 'local'
+  generator:
+    runIn: 'local'
+  publisher:
+    type: 'local'
+    local:
+      publishDir: 'generated/docs'
+
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+  gitlab: []
+
+auth:
+  environment: production
+  providers:
+    github: null
+    google:
+      production:
+        clientId: ${AUTH_GOOGLE_CLIENT_ID}
+        clientSecret: ${AUTH_GOOGLE_CLIENT_SECRET}
+        callbackUrl: ${APP_BASE_URL}/api/auth/google/handler/frame
+        allowedDomains:
+          - ${AUTH_GOOGLE_ALLOWED_DOMAINS}
+        customHeaders:
+          X-Requested-With: XMLHttpRequest
+
+catalog:
+  locations:
+    # Your organization catalog
+    - type: file
+      target: ./example-org/catalog-info.yaml
+      rules:
+        - allow: [Location, Component, System, API, Resource, Group, User]
+
+    # Backstage Agent CLI component
+    - type: file
+      target: ./packages/backstage-agent/catalog-info.yaml
+      rules:
+        - allow: [Component]
+
+    # Uncomment to load templates from GitHub:
+    # - type: url
+    #   target: https://github.com/<your-org>/backstage-templates/blob/main/catalog-info.yaml
+    #   rules:
+    #     - allow: [Template, Location, Component, System, Domain, Group]
+
+permission:
+  enabled: true
+
+localProvisioner:
+  enabled: true
+  sseHeartbeatInterval: 30
+  taskRetentionDays: 30
+  supportedResources:
+    - kafka
+    - postgres
+    - redis
+    - mongodb
+  agent:
+    minimumVersion: '1.0.0'

@@ -1,0 +1,43 @@
+---
+# Replace this with your organization's team structure
+# See: https://backstage.io/docs/features/software-catalog/descriptor-format#kind-group
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: engineering-dept
+  description: Engineering Department
+spec:
+  type: department
+  children:
+    - backend-team
+    - frontend-team
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: backstage-admins
+  description: Nexus IDP Administrators — full access
+spec:
+  type: team
+  parent: engineering-dept
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: backend-team
+  description: Backend Engineering Team
+spec:
+  type: team
+  parent: engineering-dept
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: frontend-team
+  description: Frontend Engineering Team
+spec:
+  type: team
+  parent: engineering-dept
+  children: []

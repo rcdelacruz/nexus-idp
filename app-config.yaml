@@ -1,0 +1,144 @@
+app:
+  title: Nexus IDP
+  baseUrl: 'http://localhost:3000'
+
+organization:
+  name: ${ORGANIZATION_NAME}
+
+backend:
+  logging:
+    level: debug
+  auth:
+    keys:
+      - secret: ${BACKEND_SECRET}
+  baseUrl: 'http://localhost:7007'
+  reading:
+    allow:
+      - host: github.com
+      - host: gitlab.com
+  listen:
+    port: 7007
+    host: '0.0.0.0'
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+    script-src: ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
+    style-src: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com']
+    worker-src: ["'self'", 'blob:']
+    font-src: ["'self'", 'https://fonts.gstatic.com']
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  cache:
+    store: redis
+    connection: ${REDIS_URL}
+  database:
+    client: pg
+    connection:
+      host: ${POSTGRES_HOST}
+      port: ${POSTGRES_PORT}
+      user: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+      database: ${POSTGRES_DB}
+
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+  # gitlab:
+  #   - host: gitlab.com
+  #     token: ${GITLAB_TOKEN}
+  #     apiBaseUrl: https://gitlab.com/api/v4
+
+techdocs:
+  builder: 'local'
+  generator:
+    runIn: 'docker'
+  publisher:
+    type: 'local'
+    local:
+      publishDir: 'generated/docs'
+  reading:
+    allow:
+      - host: github.com
+
+auth:
+  environment: development
+  providers:
+    github:
+      development:
+        clientId: ${AUTH_GITHUB_CLIENT_ID}
+        clientSecret: ${AUTH_GITHUB_CLIENT_SECRET}
+        callbackUrl: ${AUTH_GITHUB_CALLBACK_URL}
+        signIn:
+          enabled: true
+    google:
+      development:
+        clientId: ${AUTH_GOOGLE_CLIENT_ID}
+        clientSecret: ${AUTH_GOOGLE_CLIENT_SECRET}
+        signIn:
+          resolvers:
+            - resolver: emailMatchingUserEntityProfileEmail
+
+scaffolder:
+  github:
+    token: ${GITHUB_TOKEN}
+    visibility: private
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+  rules:
+    - allow: [Component, System, API, Resource, Location, Group, User]
+  locations:
+    # Your organization catalog — copy example-org/ and customize
+    - type: file
+      target: ../../example-org/catalog-info.yaml
+      rules:
+        - allow: [Location, Component, System, API, Resource, Group, User]
+
+    # Uncomment to load templates from a GitHub repo:
+    # - type: url
+    #   target: https://github.com/<your-org>/backstage-templates/blob/main/catalog-info.yaml
+    #   rules:
+    #     - allow: [Template, Location]
+
+permission:
+  enabled: true
+
+# Local Provisioner Configuration
+localProvisioner:
+  enabled: true
+  sseHeartbeatInterval: 30
+  taskRetentionDays: 30
+  supportedResources:
+    - kafka
+    - postgres
+    - redis
+    - mongodb
+  agent:
+    minimumVersion: '1.0.0'
+
+# Engineering Docs — configure your GitHub sources here
+engineeringDocs:
+  sources:
+    - id: engineering-hub
+      label: Engineering Hub
+      description: Engineering standards, guides, and golden paths
+      repoOwner: ${GITHUB_ORG}
+      repoName: engineering-hub
+      branch: main
+      contentBase: docs
+
+# FinOps — configure your AWS accounts here
+finops:
+  aws:
+    region: ${AWS_REGION:-us-east-1}
+    idleThresholdDays: 180
+    cacheTtlSeconds: 86400
+    accounts:
+      - id: account1
+        name: Account 1
+        profile: aws-profile-1
+      # Add more accounts as needed

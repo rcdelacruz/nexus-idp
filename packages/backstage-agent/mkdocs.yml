@@ -1,0 +1,7 @@
+site_name: Backstage Agent
+site_description: CLI tool for provisioning local development resources via Backstage
+nav:
+  - Home: index.md
+  - Authentication: AUTHENTICATION.md
+plugins:
+  - techdocs-core

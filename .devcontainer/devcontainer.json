@@ -1,0 +1,67 @@
+{
+  "name": "Backstage Development",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "userEnvProbe": "loginInteractiveShell",
+  "remoteUser": "node",
+  "updateRemoteUserUID": true,
+  // "postCreateCommand": "cd src/backstage && yarn install",
+  // "postStartCommand": "sleep 10 && cd src/backstage && yarn dev",
+  "postCreateCommand": "corepack enable && yarn set version 4.4.1",
+  "initializeCommand": "echo \"export DOCKER_HOST=\" >> ~/.bashrc",
+  "runServices": [
+    "dev",
+    "db",
+    "redis"
+  ],
+  "waitFor": "onCreateCommand",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vsliveshare.vsliveshare",
+        "eamodio.gitlens",
+        "ms-azuretools.vscode-docker",
+        "saoudrizwan.claude-dev",
+        "mikestead.dotenv",
+        "streetsidesoftware.code-spell-checker",
+        "yzhang.markdown-all-in-one",
+        "GraphQL.vscode-graphql",
+        "ms-vscode.vscode-typescript-next"
+      ],
+      "settings": {
+        "remote.containers.environmentVariables": {
+          "DOCKER_HOST": "unix:///var/run/docker.sock"
+        },
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": true
+        },
+        "files.exclude": {
+          "**/.git": true,
+          "**/.DS_Store": true,
+          "**/node_modules": true,
+          "**/dist": true
+        },
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-from-docker:1.5.0": {
+      "dockerDashComposeVersion": "v3"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "forwardPorts": [
+    3000,
+    7007,
+    5432
+  ]
+}

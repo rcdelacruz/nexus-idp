@@ -1,0 +1,148 @@
+/*
+ * Catalog graph page overrides.
+ * Imported in index.tsx after overrides.css.
+ *
+ * SPECIFICITY STRATEGY:
+ * JSS generates class names like ".MuiAutocomplete-inputRoot" (0,1,0 specificity).
+ * We use !important throughout AND higher specificity where possible to guarantee wins.
+ */
+
+/* ── Graph nodes ── */
+#dependency-graph rect { fill: #292929; stroke: #454545; stroke-width: 1; }
+#dependency-graph rect.primary { fill: #0060df; stroke: #3291ff; }
+#dependency-graph rect.secondary { fill: #454545; stroke: #454545; }
+#dependency-graph text { fill: #ededed; font-size: 13px; }
+#dependency-graph text.primary { fill: #ffffff; }
+#dependency-graph path[marker-end] { stroke: #454545; }
+#dependency-graph marker path { fill: #454545; stroke: #454545; }
+
+/* ── Toggle button ── */
+.MuiToggleButton-root {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  border-radius: 6px !important;
+  border: none !important;
+  box-shadow: 0 0 0 1px #2e2e2e inset !important;
+  color: #878787 !important;
+  background: transparent !important;
+  height: 40px !important;
+  padding: 0 16px !important;
+}
+.MuiToggleButton-root:hover { background: #ffffff17 !important; color: #ededed !important; }
+.MuiToggleButton-root.Mui-selected {
+  background: #1f1f1f !important;
+  color: #ededed !important;
+  box-shadow: 0 0 0 1px #454545 inset !important;
+}
+
+/* ── Switch ── */
+.MuiSwitch-track { background-color: #454545 !important; opacity: 1 !important; }
+.MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track { background-color: #0070f3 !important; opacity: 1 !important; }
+.MuiSwitch-switchBase.Mui-checked .MuiSwitch-thumb { color: #ffffff !important; }
+
+/* ── Filter panel container ── */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/*
+ * Each filter section is a direct div child (Box pb={1} pt={1}).
+ * Clipping here ensures chips never visually bleed into an adjacent section,
+ * regardless of whether the inputRoot CSS is winning.
+ */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] > div {
+  overflow: hidden !important;
+}
+
+/*
+ * CRITICAL FIX: MuiFormControl-root and MuiInputBase-root are display:inline-flex
+ * with no explicit width. They auto-size to max-content (all chips in one row),
+ * overflowing the narrow filter column. flex-wrap:wrap never triggers unless we
+ * constrain the width. width:100% forces them to fill the column, causing chips
+ * to wrap to new lines instead of overflowing horizontally.
+ */
+/* FormControl: change from inline-flex to flex (block-level) so it fills column width */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiFormControl-root {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+/* InputBase: fill FormControl width */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiAutocomplete-inputRoot {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* ── Autocomplete: selected chips wrap inside the input ── */
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiAutocomplete-inputRoot {
+  height: auto !important;
+  min-height: 36px !important;
+  flex-wrap: wrap !important;
+  overflow: hidden !important;
+  padding: 4px 8px !important;
+  align-items: center !important;
+}
+
+/* ── Popup paper ── */
+.MuiAutocomplete-paper {
+  background: #1a1a1a !important;
+  border: 1px solid #2e2e2e !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  max-width: 300px !important;
+}
+
+.MuiAutocomplete-listbox {
+  padding: 4px !important;
+  overflow-x: hidden !important;
+}
+
+/* ── Option rows ── */
+.MuiAutocomplete-option {
+  display: flex !important;
+  align-items: center !important;
+  overflow: hidden !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 2px 8px !important;
+}
+
+.MuiAutocomplete-option .MuiFormControlLabel-root {
+  display: flex !important;
+  align-items: center !important;
+  overflow: hidden !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  flex: 1 1 0% !important;
+}
+
+/*
+ * The label is a <span> — display:inline by default.
+ * text-overflow:ellipsis ONLY works on block-level elements.
+ * display:block is the critical fix here.
+ */
+.MuiAutocomplete-option .MuiFormControlLabel-label {
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  font-size: 0.8125rem !important;
+  color: #ededed !important;
+}
+
+.MuiAutocomplete-option[data-focus="true"] { background: #ffffff17 !important; }
+
+/* ── MUI Select menu items ── */
+.MuiMenuItem-root {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}

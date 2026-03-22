@@ -1,0 +1,29 @@
+[
+  {
+    "id": "8d57582c-d49c-47d7-9fe9-45636d3b3df6",
+    "username": "ronaldo.delacruz",
+    "firstName": "Ronald",
+    "lastName": "Dela Cruz",
+    "email": "ronaldo.delacruz@stratpoint.com",
+    "groups": [],
+    "roles": {
+      "realmMappings": [
+        {
+          "name": "create-realm"
+        },
+        {
+          "name": "default-roles-master"
+        },
+        {
+          "name": "offline_access"
+        },
+        {
+          "name": "admin"
+        },
+        {
+          "name": "uma_authorization"
+        }
+      ]
+    }
+  }
+]

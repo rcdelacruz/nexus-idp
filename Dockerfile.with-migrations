@@ -1,0 +1,72 @@
+# Build from the working base image and add migration runner
+FROM 192.168.2.101:5000/backstage:1.46.1
+
+USER root
+
+# Fix /app directory permissions (base image has it as root:root 700)
+RUN chmod 755 /app
+
+# Create scripts directory with correct ownership
+RUN mkdir -p /app/scripts && chown node:node /app/scripts
+
+# Copy migration runner script and package.json
+COPY --chown=node:node scripts/run-migrations.js scripts/package.json /app/scripts/
+
+# Copy migration files (JavaScript versions only)
+RUN mkdir -p /app/plugins/local-provisioner-backend/dist/database/migrations
+COPY --chown=node:node plugins/local-provisioner-backend/src/database/migrations/*.js /app/plugins/local-provisioner-backend/dist/database/migrations/
+
+# Install migration dependencies using npm (simpler for standalone script)
+# Run as node user to ensure correct permissions
+USER node
+RUN cd /app/scripts && \
+    npm install --production --no-package-lock && \
+    npm cache clean --force && \
+    cd /app
+
+USER root
+
+# Copy updated backend bundle with fixed router
+COPY --chown=node:node packages/backend/dist/bundle.tar.gz /app/
+RUN cd /app && tar xzf bundle.tar.gz && rm bundle.tar.gz
+
+# Create node_modules symlinks for new workspace plugins not in the base image
+RUN mkdir -p /app/node_modules/@stratpoint /app/node_modules/@internal && \
+    ln -sf /app/plugins/finops-backend /app/node_modules/@stratpoint/plugin-finops-backend && \
+    ln -sf /app/plugins/engineering-docs-backend /app/node_modules/@stratpoint/plugin-engineering-docs-backend && \
+    ln -sf /app/plugins/engineering-docs /app/node_modules/@internal/plugin-engineering-docs && \
+    ln -sf /app/plugins/finops /app/node_modules/@internal/plugin-finops
+
+# Install new plugin dependencies that are not in the base image
+USER root
+RUN mkdir -p /tmp/newdeps && \
+    cd /tmp/newdeps && \
+    npm install --no-package-lock \
+        @aws-sdk/client-budgets \
+        @aws-sdk/client-cloudwatch \
+        @aws-sdk/client-cost-explorer \
+        @aws-sdk/client-ec2 \
+        @aws-sdk/client-elastic-load-balancing-v2 \
+        @aws-sdk/client-rds \
+        @aws-sdk/client-s3 \
+        @aws-sdk/client-sts \
+        @aws-sdk/credential-providers \
+        @mdx-js/mdx \
+        remark-gfm && \
+    cp -rn node_modules/. /app/node_modules/ && \
+    rm -rf /tmp/newdeps
+
+# Fix permissions after tar extraction (tar preserves original 700 permissions from build)
+RUN chmod 755 /app && \
+    chown -R node:node /app/scripts
+
+USER node
+
+# Copy updated config files with OAuth fix
+COPY --chown=node:node app-config.yaml /app/
+COPY --chown=node:node app-config.production.yaml /app/
+
+# Copy stratpoint organization catalog (CRITICAL for user authentication)
+COPY --chown=node:node stratpoint /app/stratpoint
+
+CMD ["node", "packages/backend", "--config", "app-config.yaml", "--config", "app-config.production.yaml"]

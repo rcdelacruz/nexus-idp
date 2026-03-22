@@ -1,0 +1,26 @@
+---
+# Replace with your actual users
+# Tip: add backstage-admins to memberOf for admin access
+# See: https://backstage.io/docs/features/software-catalog/descriptor-format#kind-user
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: admin.user
+spec:
+  profile:
+    email: admin@your-company.com
+    displayName: Admin User
+  memberOf:
+    - backstage-admins
+    - backend-team
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: example.user
+spec:
+  profile:
+    email: example@your-company.com
+    displayName: Example User
+  memberOf:
+    - backend-team
