@@ -1,5 +1,12 @@
 # Nexus IDP
 
+![Release](https://img.shields.io/github/v/release/rcdelacruz/nexus-idp?style=flat-square&color=blue)
+![Backstage](https://img.shields.io/badge/Backstage-1.49.1-purple?style=flat-square)
+![Node](https://img.shields.io/badge/Node.js-20.x%20%7C%2022.x-green?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-ready-326CE5?style=flat-square&logo=kubernetes&logoColor=white)
+
 A white-label Internal Developer Platform built on [Backstage](https://backstage.io). Nexus IDP provides a production-ready IDP with custom plugins for FinOps, Engineering Docs, Local Provisioning, and more — ready to deploy for any organization.
 
 **Version:** 1.49.1 | **Node.js:** 20.x or 22.x | **Package manager:** Yarn 4.12.0 (Berry PnP)
