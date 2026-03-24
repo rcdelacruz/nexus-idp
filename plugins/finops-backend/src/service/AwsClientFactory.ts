@@ -7,6 +7,7 @@ import { BudgetsClient } from '@aws-sdk/client-budgets';
 import { STSClient } from '@aws-sdk/client-sts';
 import { ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { S3Client } from '@aws-sdk/client-s3';
+import { CloudFrontClient } from '@aws-sdk/client-cloudfront';
 import { AwsCredentialIdentityProvider } from '@aws-sdk/types';
 
 export class AwsClientFactory {
@@ -67,5 +68,10 @@ export class AwsClientFactory {
 
   s3(region = this.defaultRegion) {
     return new S3Client({ region, credentials: this.credentials });
+  }
+
+  cloudfront() {
+    // CloudFront is a global service — always us-east-1
+    return new CloudFrontClient({ region: 'us-east-1', credentials: this.credentials });
   }
 }

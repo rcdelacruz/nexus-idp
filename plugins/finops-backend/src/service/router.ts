@@ -6,7 +6,6 @@ import { Config } from '@backstage/config';
 import { AwsClientFactory } from './AwsClientFactory';
 import { CostService } from './CostService';
 import { ResourceService } from './ResourceService';
-import { CloudWatchService } from './CloudWatchService';
 import { createHealthRoutes } from '../api/healthRoutes';
 import { createCostRoutes } from '../api/costRoutes';
 import { createBudgetRoutes } from '../api/budgetRoutes';
@@ -35,7 +34,6 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
 
   const finopsConfig = config.getOptionalConfig('finops');
   const cacheTtlSeconds = finopsConfig?.getOptionalNumber('aws.cacheTtlSeconds') ?? 300;
-  const idleThresholdDays = finopsConfig?.getOptionalNumber('aws.idleThresholdDays') ?? 180;
   const defaultRegion = finopsConfig?.getOptionalString('aws.region') ?? 'us-east-1';
 
   // Build per-account service instances
@@ -50,8 +48,7 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
   for (const account of accountConfigs) {
     const factory = new AwsClientFactory(account.profile, defaultRegion, account.id);
     const costService = new CostService(factory, logger, cache, metadataStore, cacheTtlSeconds, account.id);
-    const cloudwatchService = new CloudWatchService(factory, logger, idleThresholdDays);
-    const resourceService = new ResourceService(factory, cloudwatchService, logger);
+    const resourceService = new ResourceService(factory, logger, cache, cacheTtlSeconds * 1000, account.id);
     accountServices.set(account.id, { costService, resourceService });
     logger.info(`FinOps: registered account "${account.name}" (${account.id}) with profile "${account.profile}"`);
   }

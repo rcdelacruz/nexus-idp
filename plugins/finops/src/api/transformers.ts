@@ -49,6 +49,8 @@ export function transformUnusedResource(b: BackendUnusedResource): UnusedResourc
     totalRequests: b.total_requests,
     idleDays: b.idle_days,
     tags: b.tags,
+    isWebsite: b.is_website,
+    cdnDistributionIds: b.cdn_distribution_ids,
   };
 }
 

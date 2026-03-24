@@ -53,7 +53,7 @@ export class CostService {
   }
 
   async getLastFetchedAt(): Promise<string | null> {
-    return this.metadataStore.get('last_fetched_at');
+    return this.metadataStore.get(`${this.cachePrefix}last_fetched_at`);
   }
 
   private async cachedCall<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -65,7 +65,7 @@ export class CostService {
     }
     const data = await fn();
     await this.cache.set(prefixedKey, data as any, { ttl: this.cacheTtlSeconds * 1000 });
-    await this.metadataStore.set('last_fetched_at', new Date().toISOString());
+    await this.metadataStore.set(`${this.cachePrefix}last_fetched_at`, new Date().toISOString());
     return data;
   }
 

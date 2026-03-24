@@ -15,15 +15,17 @@ export const finopsApiRef = createApiRef<FinOpsApi>({
 
 export interface FinOpsApi {
   getAccounts(): Promise<AwsAccount[]>;
+  getActiveRegions(accountId?: string): Promise<string[]>;
   getAccountInfo(accountId?: string): Promise<AccountInfo & { lastFetchedAt: string | null }>;
   getMonthlyCostTrend(months?: number, accountId?: string): Promise<MonthlyCostEntry[]>;
   getCostByService(start: string, end: string, accountId?: string): Promise<ServiceCostEntry[]>;
   getCostByTag(tagKey: string, start: string, end: string, accountId?: string): Promise<TagCostEntry[]>;
   getBudgets(accountId?: string): Promise<Budget[]>;
-  getUnusedResources(region: string, thresholdDays?: number, accountId?: string): Promise<UnusedResourcesData>;
+  getUnusedResources(region?: string, thresholdDays?: number, accountId?: string): Promise<UnusedResourcesData>;
   deleteResource(resourceType: string, resourceId: string, region: string, force?: boolean, accountId?: string): Promise<void>;
   bulkDeleteResources(resources: { type: string; id: string; region: string }[], accountId?: string): Promise<{ deleted: number; failed: number }>;
-  checkDependencies(resourceType: string, resourceId: string, region: string, accountId?: string): Promise<{ blockers: string[]; warnings: string[]; safe: boolean }>;
+  checkDependencies(resourceType: string, resourceId: string, region: string, accountId?: string): Promise<{ blockers: string[]; warnings: string[]; info: string[]; safe: boolean }>;
+  saveResourceTags(resourceType: string, resourceId: string, region: string, tags: Record<string, string>, accountId?: string): Promise<void>;
   getRightsizingRecommendations(accountId?: string): Promise<RightsizingRecommendation[]>;
   getSavingsPlansCoverage(accountId?: string): Promise<CoverageData>;
   getReservedInstanceCoverage(accountId?: string): Promise<CoverageData>;
@@ -65,6 +67,12 @@ export class FinOpsClient implements FinOpsApi {
     return data.accounts;
   }
 
+  async getActiveRegions(accountId?: string): Promise<string[]> {
+    const q = accountId ? `?account=${encodeURIComponent(accountId)}` : '';
+    const data = await this.fetch<{ regions: string[] }>(`/resources/regions${q}`);
+    return data.regions;
+  }
+
   async getAccountInfo(accountId?: string): Promise<AccountInfo & { lastFetchedAt: string | null }> {
     const data = await this.fetch<any>(`/cost/account?_=1${this.acct(accountId)}`);
     return { ...transformAccountInfo(data), lastFetchedAt: data.last_fetched_at ?? null };
@@ -90,7 +98,7 @@ export class FinOpsClient implements FinOpsApi {
     return data.budgets.map(transformBudget);
   }
 
-  async getUnusedResources(region: string, thresholdDays?: number, accountId?: string): Promise<UnusedResourcesData> {
+  async getUnusedResources(region = 'all', thresholdDays?: number, accountId?: string): Promise<UnusedResourcesData> {
     const params = new URLSearchParams({ region });
     if (thresholdDays) params.set('thresholdDays', String(thresholdDays));
     if (accountId) params.set('account', accountId);
@@ -103,7 +111,8 @@ export class FinOpsClient implements FinOpsApi {
       eip: data.eip.map(transformUnusedResource),
       s3: (data.s3 ?? []).map(transformUnusedResource),
       'vpc-endpoint': (data['vpc-endpoint'] ?? []).map(transformUnusedResource),
-      region: data.region,
+      regions: data.regions ?? [region],
+      timedOutRegions: data.timed_out_regions ?? [],
     };
   }
 
@@ -139,7 +148,16 @@ export class FinOpsClient implements FinOpsApi {
     return transformCoverage(data);
   }
 
-  async checkDependencies(resourceType: string, resourceId: string, region: string, accountId?: string): Promise<{ blockers: string[]; warnings: string[]; safe: boolean }> {
+  async saveResourceTags(resourceType: string, resourceId: string, region: string, tags: Record<string, string>, accountId?: string): Promise<void> {
+    const params = new URLSearchParams({ region });
+    if (accountId) params.set('account', accountId);
+    await this.fetch(`/resources/${resourceType}/${encodeURIComponent(resourceId)}/tags?${params}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tags }),
+    });
+  }
+
+  async checkDependencies(resourceType: string, resourceId: string, region: string, accountId?: string): Promise<{ blockers: string[]; warnings: string[]; info: string[]; safe: boolean }> {
     const params = new URLSearchParams({ region });
     if (accountId) params.set('account', accountId);
     return this.fetch(`/resources/${resourceType}/${encodeURIComponent(resourceId)}/dependencies?${params}`);

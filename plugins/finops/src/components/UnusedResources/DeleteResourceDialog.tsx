@@ -7,12 +7,14 @@ import {
 import ErrorOutlineIcon from '@material-ui/icons/ErrorOutline';
 import WarningIcon from '@material-ui/icons/Warning';
 import CheckCircleOutlineIcon from '@material-ui/icons/CheckCircleOutline';
+import InfoOutlinedIcon from '@material-ui/icons/InfoOutlined';
 import { useApi } from '@backstage/core-plugin-api';
 import { finopsApiRef } from '../../api/FinOpsClient';
 import { UnusedResource } from '../../api/types';
 
 interface Props {
   resource: UnusedResource | null;
+  accountId: string;
   onConfirm: (force: boolean) => void;
   onCancel: () => void;
   deleting: boolean;
@@ -21,10 +23,11 @@ interface Props {
 interface DependencyResult {
   blockers: string[];
   warnings: string[];
+  info: string[];
   safe: boolean;
 }
 
-export const DeleteResourceDialog = ({ resource, onConfirm, onCancel, deleting }: Props) => {
+export const DeleteResourceDialog = ({ resource, accountId, onConfirm, onCancel, deleting }: Props) => {
   const api = useApi(finopsApiRef);
   const [deps, setDeps] = useState<DependencyResult | null>(null);
   const [checking, setChecking] = useState(false);
@@ -34,9 +37,9 @@ export const DeleteResourceDialog = ({ resource, onConfirm, onCancel, deleting }
     if (!resource) { setDeps(null); return; }
     setChecking(true);
     setDeps(null);
-    api.checkDependencies(resource.resourceType, resource.resourceId, resource.region)
+    api.checkDependencies(resource.resourceType, resource.resourceId, resource.region, accountId)
       .then(d => { setDeps(d); setChecking(false); })
-      .catch(() => { setDeps({ blockers: [], warnings: ['Could not check dependencies.'], safe: true }); setChecking(false); });
+      .catch(() => { setDeps({ blockers: [], warnings: ['Could not check dependencies.'], info: [], safe: true }); setChecking(false); });
   }, [resource, api]);
 
   if (!resource) return null;
@@ -112,6 +115,21 @@ export const DeleteResourceDialog = ({ resource, onConfirm, onCancel, deleting }
                   </List>
                 </Box>
               )}
+
+              {(deps.info ?? []).length > 0 && (
+                <Box mt={deps.warnings.length > 0 ? 1 : 0}>
+                  <List dense disablePadding>
+                    {deps.info.map((note, i) => (
+                      <ListItem key={i} disableGutters>
+                        <ListItemIcon style={{ minWidth: 28 }}>
+                          <InfoOutlinedIcon fontSize="small" style={{ color: '#1976d2' }} />
+                        </ListItemIcon>
+                        <ListItemText primary={<Typography variant="body2" style={{ color: '#1976d2' }}>{note}</Typography>} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
             </>
           )}
         </Box>
@@ -128,7 +146,9 @@ export const DeleteResourceDialog = ({ resource, onConfirm, onCancel, deleting }
               }
               label={
                 <Typography variant="body2">
-                  Force delete — proceed despite blockers
+                  {resource.resourceType === 's3'
+                    ? 'Force delete — permanently delete ALL objects in this bucket, then delete the bucket'
+                    : 'Force delete — proceed despite blockers'}
                 </Typography>
               }
             />

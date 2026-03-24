@@ -44,6 +44,8 @@ export interface BackendUnusedResource {
   total_requests?: number;
   idle_days?: number;
   tags: Record<string, string>;
+  is_website?: boolean;
+  cdn_distribution_ids?: string[];
 }
 
 export interface BackendRightsizingRecommendation {
@@ -119,6 +121,8 @@ export interface UnusedResource {
   totalRequests?: number;
   idleDays?: number;
   tags: Record<string, string>;
+  isWebsite?: boolean;
+  cdnDistributionIds?: string[];
 }
 
 export interface UnusedResourcesData {
@@ -129,7 +133,8 @@ export interface UnusedResourcesData {
   eip: UnusedResource[];
   s3: UnusedResource[];
   'vpc-endpoint': UnusedResource[];
-  region: string;
+  regions: string[];
+  timedOutRegions: string[];
 }
 
 export interface RightsizingRecommendation {
