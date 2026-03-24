@@ -21,7 +21,7 @@ export const BudgetTrackingTab = ({ refreshKey, accountId }: { refreshKey: numbe
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (_budgetCache?.refreshKey === refreshKey && _budgetCache?.accountId === accountId) return;
+    if (_budgetCache?.refreshKey === refreshKey && _budgetCache?.accountId === accountId) { setLoading(false); return; }
     let mounted = true;
     setLoading(true);
     api.getBudgets(accountId)

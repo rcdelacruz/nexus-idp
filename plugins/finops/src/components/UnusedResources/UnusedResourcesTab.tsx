@@ -147,7 +147,7 @@ interface ResourceTableProps {
 
 type SortKey = 'resourceId' | 'region' | 'state' | 'launchTime' | 'idleDays';
 
-const ResourceTable = ({ rows, type, accountId, awsAccountNumber, accessPortalUrl, roleName, selected, onToggle, onSelectAll, onDelete, onEditTags, busy, mixed }: ResourceTableProps) => {
+const ResourceTable = ({ rows, type, awsAccountNumber, accessPortalUrl, roleName, selected, onToggle, onSelectAll, onDelete, onEditTags, busy, mixed }: ResourceTableProps) => {
   const [sortBy, setSortBy] = useState<SortKey>('idleDays');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -301,6 +301,14 @@ const ResourceTable = ({ rows, type, accountId, awsAccountNumber, accessPortalUr
   );
 };
 
+interface UnusedCache {
+  accountId: string;
+  region: string;
+  thresholdDays: number;
+  data: UnusedResourcesData;
+}
+let _unusedCache: UnusedCache | null = null;
+
 export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
   const api = useApi(finopsApiRef);
   const config = useApi(configApiRef);
@@ -323,6 +331,17 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
       .catch(() => { setActiveRegions([]); setRegionsLoading(false); });
   }, [api, accountId]);
   const [data, setData] = useState<UnusedResourcesData | null>(null);
+
+  // Restore last scan from module-level cache when accountId stabilizes (survives theme switch remounts)
+  React.useEffect(() => {
+    if (data || !accountId) return;
+    const c = _unusedCache;
+    if (c && c.accountId === accountId) {
+      setRegion(c.region);
+      setThresholdDays(c.thresholdDays);
+      setData(c.data);
+    }
+  }, [accountId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<UnusedResource | null>(null);
@@ -341,7 +360,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
     setError(null);
     setSelected(new Set());
     api.getUnusedResources(region === 'all' ? undefined : region, thresholdDays, accountId)
-      .then(d => { setData(d); setLoading(false); })
+      .then(d => { _unusedCache = { accountId, region, thresholdDays, data: d }; setData(d); setLoading(false); })
       .catch(err => { setError(err.message); setLoading(false); });
   }, [api, region, thresholdDays, accountId]);
 
@@ -379,6 +398,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
     setDeleting(true);
     try {
       await api.deleteResource(toDelete.resourceType, toDelete.resourceId, toDelete.region, force, accountId);
+      _unusedCache = null;
       setToDelete(null);
       load();
     } catch (err: any) {

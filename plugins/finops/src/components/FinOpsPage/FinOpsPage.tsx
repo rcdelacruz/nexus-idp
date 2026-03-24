@@ -11,6 +11,7 @@ import { UnusedResourcesTab } from '../UnusedResources/UnusedResourcesTab';
 import { RecommendationsTab } from '../Recommendations/RecommendationsTab';
 
 const SK_ACCOUNT = 'finops_accountId';
+const SK_TAB = 'finops_tab';
 const skRefresh = (id: string) => `finops_refreshKey_${id}`;
 const skFetchedAt = (id: string) => `finops_fetchedAt_${id}`;
 
@@ -34,12 +35,20 @@ const setStoredFetchedAt = (id: string, ts: string | null) => {
 };
 
 export const FinOpsPage = () => {
-  const [tab, setTab] = useState(0);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
-  const [accounts, setAccounts] = useState<AwsAccount[]>([]);
+  const [tab, setTab] = useState<number>(() => {
+    try { return parseInt(sessionStorage.getItem(SK_TAB) ?? '0', 10); } catch { return 0; }
+  });
   const [accountId, setAccountId] = useState<string>(getStoredAccount);
+  const [refreshKey, setRefreshKey] = useState<number>(() => {
+    const id = getStoredAccount();
+    return id ? getStoredRefreshKey(id) : 0;
+  });
+  const [refreshing, setRefreshing] = useState(false);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(() => {
+    const id = getStoredAccount();
+    return id ? getStoredFetchedAt(id) : null;
+  });
+  const [accounts, setAccounts] = useState<AwsAccount[]>([]);
   const finopsApi = useApi(finopsApiRef);
 
   useEffect(() => {
@@ -124,7 +133,7 @@ export const FinOpsPage = () => {
       <Content>
         <Tabs
           value={tab}
-          onChange={(_e, v) => setTab(v)}
+          onChange={(_e, v) => { setTab(v); try { sessionStorage.setItem(SK_TAB, String(v)); } catch {} }}
           indicatorColor="primary"
           textColor="primary"
           style={{ marginBottom: 24, borderBottom: '1px solid #2e2e2e' }}

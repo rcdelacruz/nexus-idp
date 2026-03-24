@@ -43,7 +43,7 @@ export const CostOverviewTab = ({ refreshKey, accountId, onFetchedAt }: { refres
   const [tagData, setTagData] = useState<Record<string, TagCostEntry[]>>(cached?.tagData ?? {});
 
   useEffect(() => {
-    if (_costCache?.refreshKey === refreshKey && _costCache?.accountId === accountId) return;
+    if (_costCache?.refreshKey === refreshKey && _costCache?.accountId === accountId) { setLoading(false); return; }
     let mounted = true;
     const { start, end } = lastNMonths(1);
     setLoading(true);

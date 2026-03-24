@@ -74,7 +74,7 @@ export const RecommendationsTab = ({ refreshKey, accountId }: { refreshKey: numb
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (_recsCache?.refreshKey === refreshKey && _recsCache?.accountId === accountId) return;
+    if (_recsCache?.refreshKey === refreshKey && _recsCache?.accountId === accountId) { setLoading(false); return; }
     let mounted = true;
     setLoading(true);
     Promise.all([
