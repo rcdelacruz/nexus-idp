@@ -105,23 +105,25 @@ const SafetyBadge = ({ resource }: { resource: UnusedResource }) => {
 };
 
 
-const REQUIRED_TAGS = ['team', 'owner', 'environment'];
+const REQUIRED_TAGS = ['team', 'owner', 'environment', 'project'];
 
 const getMissingTags = (tags: Record<string, string>) =>
   REQUIRED_TAGS.filter(k => !Object.keys(tags).some(t => t.toLowerCase() === k));
 
+const SHOW_TAG_KEYS = ['team', 'owner', 'environment', 'project', 'name'];
+
 const TagsDetail = ({ tags }: { tags: Record<string, string> }) => {
-  const relevant = ['Owner', 'owner', 'Environment', 'env', 'Team', 'team', 'Project', 'project']
-    .map(k => ({ k, v: tags[k] }))
-    .filter(e => e.v);
+  const relevant = Object.entries(tags)
+    .filter(([k]) => SHOW_TAG_KEYS.includes(k.toLowerCase()))
+    .map(([k, v]) => ({ k, v }));
   const missing = getMissingTags(tags);
   return (
-    <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
+    <Box display="flex" style={{ gap: 3, flexWrap: 'wrap', maxWidth: 160 }}>
       {relevant.map(({ k, v }) => (
-        <Chip key={k} size="small" label={`${k}: ${v}`} style={{ fontSize: 10, height: 18 }} />
+        <Chip key={k} size="small" title={`${k}: ${v}`} label={v} style={{ fontSize: 10, height: 16, maxWidth: 120 }} />
       ))}
       {missing.map(k => (
-        <Chip key={k} size="small" label={`no ${k}`} style={{ fontSize: 10, height: 18, background: '#ffebee', color: '#c62828' }} />
+        <Chip key={k} size="small" label={`!${k}`} style={{ fontSize: 10, height: 16, background: '#ffebee', color: '#c62828' }} />
       ))}
     </Box>
   );
@@ -233,7 +235,7 @@ const ResourceTable = ({ rows, type, accountId, awsAccountNumber, accessPortalUr
             <TableCell>
               <Typography variant="body2" style={{ fontFamily: 'monospace' }}>{r.region}</Typography>
             </TableCell>
-            <TableCell><TagsDetail tags={r.tags} /></TableCell>
+            <TableCell style={{ maxWidth: 170 }}><TagsDetail tags={r.tags} /></TableCell>
             {!mixed && (type === 'ec2' || type === 'rds' || type === 'elb') && (
               <TableCell>
                 <Typography variant="body2">{r.instanceType ?? '—'}</Typography>
@@ -578,6 +580,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
       })}
 
       <EditTagsDialog
+        key={toEditTags?.resourceId ?? 'none'}
         resource={toEditTags}
         accountId={accountId}
         onSaved={handleTagsSaved}

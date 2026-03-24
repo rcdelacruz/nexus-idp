@@ -14,7 +14,7 @@ interface Props {
   onCancel: () => void;
 }
 
-const REQUIRED_TAGS = ['team', 'owner', 'environment'];
+const REQUIRED_TAGS = ['team', 'owner', 'environment', 'project'];
 
 export const EditTagsDialog = ({ resource, accountId, onSaved, onCancel }: Props) => {
   const api = useApi(finopsApiRef);

@@ -29,6 +29,7 @@ import {
   DescribeLoadBalancersCommand,
   DeleteLoadBalancerCommand,
   AddTagsCommand as AddELBTagsCommand,
+  DescribeTagsCommand as DescribeELBTagsCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { PutBucketTaggingCommand, GetBucketTaggingCommand } from '@aws-sdk/client-s3';
 import { LoggerService, CacheService } from '@backstage/backend-plugin-api';
@@ -313,20 +314,31 @@ export class ResourceService {
   async getUnusedELB(region: string, thresholdDays?: number): Promise<UnusedResourceEntry[]> {
     const client = this.factory.elb(region);
     const res = await client.send(new DescribeLoadBalancersCommand({}));
+    const lbs = (res.LoadBalancers ?? []).filter(lb => this.isOlderThan(lb.CreatedTime, thresholdDays));
 
-    return (res.LoadBalancers ?? [])
-      .filter(lb => this.isOlderThan(lb.CreatedTime, thresholdDays))
-      .map(lb => ({
-        resource_type: 'elb' as const,
-        resource_id: lb.LoadBalancerArn ?? '',
-        resource_name: lb.LoadBalancerName,
-        region,
-        instance_type: lb.Type,
-        launch_time: lb.CreatedTime?.toISOString(),
-        state: lb.State?.Code,
-        idle_days: this.ageInDays(lb.CreatedTime),
-        tags: {},
-      }));
+    // DescribeLoadBalancers does not include tags — fetch separately in batches of 20
+    const arns = lbs.map(lb => lb.LoadBalancerArn ?? '').filter(Boolean);
+    const tagMap = new Map<string, Record<string, string>>();
+    for (let i = 0; i < arns.length; i += 20) {
+      try {
+        const tagRes = await client.send(new DescribeELBTagsCommand({ ResourceArns: arns.slice(i, i + 20) }));
+        for (const desc of tagRes.TagDescriptions ?? []) {
+          tagMap.set(desc.ResourceArn ?? '', Object.fromEntries((desc.Tags ?? []).map(t => [t.Key!, t.Value!])));
+        }
+      } catch { /* ignore */ }
+    }
+
+    return lbs.map(lb => ({
+      resource_type: 'elb' as const,
+      resource_id: lb.LoadBalancerArn ?? '',
+      resource_name: lb.LoadBalancerName,
+      region,
+      instance_type: lb.Type,
+      launch_time: lb.CreatedTime?.toISOString(),
+      state: lb.State?.Code,
+      idle_days: this.ageInDays(lb.CreatedTime),
+      tags: tagMap.get(lb.LoadBalancerArn ?? '') ?? {},
+    }));
   }
 
   async getUnusedEIPs(region: string): Promise<UnusedResourceEntry[]> {
@@ -448,6 +460,7 @@ export class ResourceService {
           // leave as unknown
         }
         let isEmpty: boolean | undefined;
+        let tags: Record<string, string> = {};
         if (bucketRegion === region) {
           try {
             await client.send(new GetBucketWebsiteCommand({ Bucket: name }));
@@ -462,13 +475,19 @@ export class ResourceService {
           } catch {
             // AccessDenied or other — leave undefined
           }
+          try {
+            const tagRes = await client.send(new GetBucketTaggingCommand({ Bucket: name }));
+            tags = Object.fromEntries((tagRes.TagSet ?? []).map(t => [t.Key!, t.Value!]));
+          } catch {
+            // NoSuchTagSet → bucket has no tags
+          }
         }
-        return { bucket, bucketRegion, isWebsite, isEmpty };
+        return { bucket, bucketRegion, isWebsite, isEmpty, tags };
       }),
     );
     const inRegion = results.filter(r => r.bucketRegion === region);
 
-    return inRegion.map(({ bucket, isWebsite, isEmpty }) => ({
+    return inRegion.map(({ bucket, isWebsite, isEmpty, tags }) => ({
       resource_type: 's3' as const,
       resource_id: bucket.Name ?? '',
       resource_name: bucket.Name,
@@ -476,7 +495,7 @@ export class ResourceService {
       launch_time: bucket.CreationDate?.toISOString(),
       state: isEmpty === true ? 'empty' : isEmpty === false ? 'has-objects' : 'unknown',
       idle_days: this.ageInDays(bucket.CreationDate),
-      tags: {},
+      tags,
       is_website: isWebsite || undefined,
       cdn_distribution_ids: cfDistMap.has(bucket.Name ?? '') ? cfDistMap.get(bucket.Name ?? '') : undefined,
     }));
