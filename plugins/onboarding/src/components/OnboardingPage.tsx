@@ -452,16 +452,18 @@ export const OnboardingPage = () => {
     );
   }
 
-  // "Registered" = user has a team in DB, OR catalog says they're not new, OR session flag set.
-  // isTeamAssigned is undefined while loading — never treat that as registered (prevents false-positive).
-  const isDbRegistered = isTeamAssigned === true;
-  const isFullyRegistered = isRegistered || (!identity.isNewUser) || isDbRegistered;
-  // Show form once DB check confirms user has no team (covers: not in DB, or in DB without teams).
-  const needsRegistration = identity.isNewUser && isTeamAssigned === false && !isRegistered;
+  // The user_management DB is the single source of truth for registration.
+  // Admins bypass the check (they don't need to self-register).
+  // Catalog team membership (isNewUser) is intentionally NOT used — users can be in the
+  // catalog with teams but have teams=[] in the DB (created via GitHub link before registering).
+  const isDbRegistered = isTeamAssigned === true || identity.isAdmin;
+  const isFullyRegistered = isRegistered || isDbRegistered;
+  // Show form when: not admin AND DB confirms no team (not in DB, or in DB without teams).
+  const needsRegistration = !identity.isAdmin && isTeamAssigned === false && !isRegistered;
 
   const githubDone = ghStatus === 'verified';
-  // Show spinner while DB check is still in flight for new unregistered users.
-  const registrationChecking = identity.isNewUser && isTeamAssigned === undefined && !isRegistered;
+  // Show spinner while DB check is in flight (for non-admins without a session flag).
+  const registrationChecking = !identity.isAdmin && isTeamAssigned === undefined && !isRegistered;
 
   const steps: Step[] = [
     {
