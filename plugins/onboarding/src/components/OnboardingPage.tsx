@@ -188,7 +188,7 @@ const GitHubConnectButton = () => {
 const RegistrationForm = ({ identity, onRegistered }: RegistrationFormProps) => {
   const api = useApi(userManagementApiRef);
   const config = useApi(configApiRef);
-  const orgDomain = config.getString('organization.domain');
+  const orgDomain = config.getOptionalString('organization.domain') ?? 'your-organization.com';
   const c = useColors();
   const [team, setTeam] = useState('');
   const [displayName, setDisplayName] = useState(identity.displayName);
@@ -385,7 +385,7 @@ const StepCard = ({ step, isLast }: StepCardProps) => {
 export const OnboardingPage = () => {
   const identity = useIdentity();
   const config = useApi(configApiRef);
-  const githubOwner = config.getOptionalString('organization.githubOwner') ?? 'github.com';
+  const githubOwner = config.getOptionalString('organization.githubOwner') ?? '';
   const c = useColors();
   const { status: ghStatus, login: ghLogin } = useGitHubStatus(identity.userRef);
   const { done, mark, isRegistered, markRegistered } = useProgress(identity.userRef);

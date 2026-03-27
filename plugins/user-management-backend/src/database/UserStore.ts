@@ -89,7 +89,7 @@ export class UserStore {
     }
   }
 
-  async updateGithubUsername(name: string, githubUsername: string, domain?: string): Promise<void> {
+  async updateGithubUsername(name: string, githubUsername: string, domain: string): Promise<void> {
     const now = new Date();
     const updated = await this.db(TABLE)
       .where({ name })
@@ -97,12 +97,11 @@ export class UserStore {
 
     // If no row existed yet (user linked GitHub before completing registration),
     // create a minimal row so the annotation is persisted.
-    if (!updated) {
-      const emailDomain = domain ?? 'example.com';
+    if (updated === 0) {
       await this.db(TABLE).insert({
         name,
         display_name: name,
-        email: `${name}@${emailDomain}`,
+        email: `${name}@${domain}`,
         teams: this.db.raw('?::text[]', ['{}' ]),
         is_lead: false,
         is_admin: false,
