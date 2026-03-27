@@ -474,6 +474,35 @@ kubectl logs -n backstage deployment/backstage -c backstage-backend --tail=100 -
 
 ---
 
+## Documentation References
+
+### In This Repository (`docs/`)
+
+| Document | Description |
+|----------|-------------|
+| [Local Provisioning Quickstart](docs/content/local-provisioning-quickstart.md) | Using the local provisioner — agent CLI setup, provisioning resources |
+| [Local Provisioning Implementation Plan](docs/content/local-provisioning-implementation-plan.md) | Architecture and phase breakdown of the provisioning system |
+| [K8s + ArgoCD + CNPG Integration](docs/content/k8s-argocd-cnpg-integration.md) | Kubernetes service account, ArgoCD setup, CloudNativePG catalog, 3-tier app template |
+| [Permission System](docs/content/permission-system.md) | RBAC policy, 4-tier roles, and how to configure access |
+| [User & Group Management](docs/content/user-group-management.md) | DB-managed users, auto-provisioning, team assignment |
+| [Google OAuth Setup](docs/content/google-oauth-setup.md) | Configuring Google OAuth sign-in |
+| [Template Permissions](docs/content/template-permissions.md) | Scaffolder template access control |
+| [TechDocs Guide](docs/content/techdocs-guide.md) | Setting up and using TechDocs |
+
+### External References
+
+| Resource | Link |
+|----------|------|
+| Backstage Documentation | https://backstage.io/docs |
+| Backstage Helm Chart | https://github.com/backstage/charts |
+| Backstage New Backend System | https://backstage.io/docs/backend-system/ |
+| Backstage Plugin Development | https://backstage.io/docs/plugins/ |
+| CloudNativePG (CNPG) | https://cloudnative-pg.io/documentation/ |
+| Knex Migrations | https://knexjs.org/guide/migrations.html |
+| OAuth 2.0 Device Flow (RFC 8628) | https://www.rfc-editor.org/rfc/rfc8628 |
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
