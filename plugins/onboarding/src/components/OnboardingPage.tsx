@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi, identityApiRef, githubAuthApiRef, configApiRef } from '@backstage/core-plugin-api';
 import { Page, Header, Content } from '@backstage/core-components';
 import {
@@ -10,6 +10,10 @@ import {
 } from 'lucide-react';
 import { useColors, semantic, badge } from '@stratpoint/theme-utils';
 import { userManagementApiRef } from '../api/refs';
+
+// Canonical list of department team IDs — also used by HomePage redirect guard.
+// Keep this as the single source of truth; import DEPT_TEAM_IDS in any other file that needs it.
+export const DEPT_TEAM_IDS = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team'] as const;
 
 const DEPT_TEAMS: Record<string, string> = {
   'web-team': 'Web',
@@ -40,20 +44,24 @@ function useProgress(userRef: string) {
     } catch {}
   }, [userRef]);
 
-  const mark = (id: string, value: boolean) => {
+  const mark = useCallback((id: string, value: boolean) => {
     if (!userRef) return;
     setData(prev => {
       const next = { ...prev, [id]: value };
       try { localStorage.setItem(`onboarding_v1_${userRef}`, JSON.stringify(next)); } catch {}
       return next;
     });
-  };
+  }, [userRef]);
+
+  const markRegistered = useCallback(() => mark('__registered', true), [mark]);
+  const clearRegistered = useCallback(() => mark('__registered', false), [mark]);
 
   return {
     done: data,
     mark,
     isRegistered: data['__registered'] ?? false,
-    markRegistered: () => mark('__registered', true),
+    markRegistered,
+    clearRegistered,
   };
 }
 
@@ -96,8 +104,8 @@ function useGitHubStatus(userRef: string) {
   const api = useApi(userManagementApiRef);
   const [status, setStatus] = useState<'loading' | 'verified' | 'unverified' | 'no-entity'>('loading');
   const [login, setLogin] = useState<string | undefined>();
-  // undefined = still loading; true = exists in DB; false = not in DB
-  const [isInDb, setIsInDb] = useState<boolean | undefined>(undefined);
+  // undefined = loading; true = in DB with ≥1 team; false = not in DB OR in DB with no teams
+  const [isTeamAssigned, setIsTeamAssigned] = useState<boolean | undefined>(undefined);
 
   const check = useCallback(async () => {
     // Source of truth: DB only. GitHub is considered linked only when saved in the DB.
@@ -106,11 +114,13 @@ function useGitHubStatus(userRef: string) {
     try {
       me = await api.getMe();
     } catch {
-      // Server error or network failure — leave isInDb unchanged so we don't
+      // Server error or network failure — leave state unchanged so we don't
       // incorrectly show the registration form to already-registered users during outages.
       return;
     }
-    setIsInDb(me !== null);
+    // A user is "registered" only when they have at least one team assigned.
+    // Users who only linked GitHub (no team yet) have teams=[] and are NOT considered registered.
+    setIsTeamAssigned(me !== null && (me.teams?.length ?? 0) > 0);
     if (me?.github_username) {
       setLogin(me.github_username);
       setStatus('verified');
@@ -126,7 +136,7 @@ function useGitHubStatus(userRef: string) {
     return () => clearInterval(interval);
   }, [userRef, check]);
 
-  return { status, login, refresh: check, isInDb };
+  return { status, login, refresh: check, isTeamAssigned };
 }
 
 // ── GitHub Connect Button ─────────────────────────────────────────────────────
@@ -199,8 +209,9 @@ const GitHubConnectButton = ({ onConnected }: { onConnected?: () => void }) => {
 
 const RegistrationForm = ({ identity, onRegistered }: RegistrationFormProps) => {
   const api = useApi(userManagementApiRef);
-  const config = useApi(configApiRef);
-  const orgDomain = config.getOptionalString('organization.domain') ?? 'your-organization.com';
+  // Derive domain from the authenticated email — no config needed.
+  // Google OAuth already restricts sign-in to the org domain, so this is always correct.
+  const orgDomain = identity.email.split('@')[1] ?? '';
   const c = useColors();
   const [team, setTeam] = useState('');
   const [displayName, setDisplayName] = useState(identity.displayName);
@@ -399,8 +410,27 @@ export const OnboardingPage = () => {
   const config = useApi(configApiRef);
   const githubOwner = config.getOptionalString('organization.githubOwner') ?? '';
   const c = useColors();
-  const { status: ghStatus, login: ghLogin, refresh: refreshGitHub, isInDb } = useGitHubStatus(identity.userRef);
-  const { done, mark, isRegistered, markRegistered } = useProgress(identity.userRef);
+  const { status: ghStatus, login: ghLogin, refresh: refreshGitHub, isTeamAssigned } = useGitHubStatus(identity.userRef);
+  const { done, mark, isRegistered, markRegistered, clearRegistered } = useProgress(identity.userRef);
+
+  // Records when the user submitted the form in the current session.
+  // Used to distinguish a freshly-set localStorage flag (do not clear) from a stale one (do clear).
+  const submittedAt = useRef<number | null>(null);
+
+  const handleRegistered = useCallback(() => {
+    submittedAt.current = Date.now();
+    markRegistered();
+  }, [markRegistered]);
+
+  // Clear a stale "registered" flag if DB confirms the user has no team.
+  // Only clear if the flag is older than 45s (longer than one poll cycle) — this prevents
+  // clearing a flag that was just set by the current session's form submit.
+  useEffect(() => {
+    if (isTeamAssigned === false && isRegistered) {
+      const age = submittedAt.current !== null ? Date.now() - submittedAt.current : Infinity;
+      if (age > 45_000) clearRegistered();
+    }
+  }, [isTeamAssigned, isRegistered, clearRegistered]);
 
   const card = {
     background: c.surface,
@@ -422,16 +452,16 @@ export const OnboardingPage = () => {
     );
   }
 
-  // Registered = persisted flag OR not a new user OR DB confirms they exist.
-  // isInDb is undefined while loading — do NOT treat that as "registered" (prevents false-positive during load).
-  const isDbRegistered = isInDb === true;
+  // "Registered" = user has a team in DB, OR catalog says they're not new, OR session flag set.
+  // isTeamAssigned is undefined while loading — never treat that as registered (prevents false-positive).
+  const isDbRegistered = isTeamAssigned === true;
   const isFullyRegistered = isRegistered || (!identity.isNewUser) || isDbRegistered;
-  // Only show the form once DB check resolves (isInDb === false), not during loading.
-  const needsRegistration = identity.isNewUser && isInDb === false && !isRegistered;
+  // Show form once DB check confirms user has no team (covers: not in DB, or in DB without teams).
+  const needsRegistration = identity.isNewUser && isTeamAssigned === false && !isRegistered;
 
   const githubDone = ghStatus === 'verified';
-  // isInDb is undefined while the initial DB check is in flight for new users.
-  const registrationChecking = identity.isNewUser && isInDb === undefined && !isRegistered;
+  // Show spinner while DB check is still in flight for new unregistered users.
+  const registrationChecking = identity.isNewUser && isTeamAssigned === undefined && !isRegistered;
 
   const steps: Step[] = [
     {
@@ -453,7 +483,7 @@ export const OnboardingPage = () => {
           </Typography>
         </Box>
       ) : needsRegistration ? (
-        <RegistrationForm identity={identity} onRegistered={markRegistered} />
+        <RegistrationForm identity={identity} onRegistered={handleRegistered} />
       ) : undefined,
     },
     {
