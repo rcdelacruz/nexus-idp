@@ -391,7 +391,7 @@ const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: bool
   return (
     <div className={classes.sidebarInner}>
       {/* Logo */}
-      <Link to={isNewUser !== false ? '/onboarding' : '/'} className={classes.logoArea}>
+      <Link to={isNewUser === true ? '/onboarding' : '/'} className={classes.logoArea}>
         <NexusLogoMark size={24} color="#ededed" />
         {isOpen && <span className={classes.logoText}>Nexus IDP</span>}
       </Link>
