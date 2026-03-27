@@ -7,6 +7,12 @@ export interface TocEntry {
   level: 2 | 3;
 }
 
+function decodeHtmlEntities(raw: string): string {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = raw;
+  return textarea.value;
+}
+
 // Extract TOC from pre-rendered HTML (guaranteed ID alignment with DOM)
 export function extractTocFromHtml(html: string): TocEntry[] {
   const entries: TocEntry[] = [];
@@ -15,8 +21,9 @@ export function extractTocFromHtml(html: string): TocEntry[] {
   while ((m = re.exec(html)) !== null) {
     const level = parseInt(m[1], 10) as 2 | 3;
     const id = m[2];
-    // Strip inner HTML tags to get plain text label
-    const label = m[3].replace(/<[^>]+>/g, '').trim();
+    // Strip inner HTML tags then decode HTML entities (handles &amp;, &#8211;, etc.)
+    const stripped = m[3].replace(/<[^>]+>/g, '').trim();
+    const label = decodeHtmlEntities(stripped);
     if (id && label) entries.push({ id, label, level });
   }
   return entries;
