@@ -1,7 +1,7 @@
 # Backstage Local Provisioning System - Implementation Plan
 
-**Project**: Stratpoint Internal Developer Portal - Local Provisioning Feature
-**Backstage Instance**: https://portal.stratpoint.io/
+**Project**: Nexus IDP - Local Provisioning Feature
+**Backstage Instance**: https://portal.yourcompany.io/
 **Document Version**: 2.0
 **Date**: 2025-12-27
 **Status**: Phase 1, 2, 3 Complete - Production Ready
@@ -168,7 +168,7 @@
 
 ## Executive Summary
 
-This implementation plan translates the **Backstage Local Provisioning Design Document** into actionable steps that align with our current Backstage architecture at https://portal.stratpoint.io/.
+This implementation plan translates the **Backstage Local Provisioning Design Document** into actionable steps that align with our current Backstage architecture at https://portal.yourcompany.io/.
 
 ### Key Goals
 
@@ -197,10 +197,10 @@ The architecture designed here will scale across all phases without major refact
 Our Backstage instance uses:
 
 - **Backend System**: New backend API (`createBackend()`) - `packages/backend/src/index.ts`
-- **Authentication**: Google OAuth (domain-restricted to @stratpoint.com)
+- **Authentication**: Google OAuth (domain-restricted to @yourcompany.com)
 - **Permissions**: Custom RBAC policy (`CatalogPermissionPolicy`)
 - **Database**: PostgreSQL 13.3 (via environment variables)
-- **Organization Structure**: `stratpoint/` directory with groups, users, systems
+- **Organization Structure**: `example-org/` directory with groups, users, systems
 - **Templates Repository**: Separate `engineering-standards` repo on GitHub
 - **Existing Custom Plugin**: `@internal/plugin-project-registration` (frontend only)
 
@@ -209,7 +209,7 @@ Our Backstage instance uses:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                 Backstage Instance (Cloud)                      │
-│              https://portal.stratpoint.io/                      │
+│              https://portal.yourcompany.io/                      │
 ├─────────────────────────────────────────────────────────────────┤
 │  Frontend (packages/app/)                                       │
 │  ├─ HomePage with "Training" section (NEW)                      │
@@ -217,7 +217,7 @@ Our Backstage instance uses:
 │  └─ Existing: Catalog, Scaffolder, TechDocs                     │
 ├─────────────────────────────────────────────────────────────────┤
 │  Backend (packages/backend/)                                    │
-│  ├─ @stratpoint/plugin-local-provisioner-backend (NEW)          │
+│  ├─ @example-org/plugin-local-provisioner-backend (NEW)          │
 │  │  ├─ Task Queue API (PostgreSQL)                              │
 │  │  ├─ Agent SSE Endpoint                                       │
 │  │  ├─ Catalog Integration                                      │
@@ -233,7 +233,7 @@ Our Backstage instance uses:
 ┌─────────────────────────────────────────────────────────────────┐
 │           Local Developer Machine                               │
 ├─────────────────────────────────────────────────────────────────┤
-│  @stratpoint/backstage-agent (npm package) (NEW)                │
+│  @example-org/backstage-agent (npm package) (NEW)                │
 │  ├─ Google OAuth token storage                                  │
 │  ├─ SSE connection to Backstage                                 │
 │  ├─ Docker Compose execution engine                             │
@@ -249,10 +249,10 @@ Our Backstage instance uses:
 | Existing System | Integration Point | Notes |
 |----------------|-------------------|-------|
 | **Google OAuth** | Agent authentication uses existing Google OAuth flow | Reuse `AUTH_GOOGLE_CLIENT_ID` credentials (ACTIVE NOW). **SEPARATE from Google Workspace service account** (future - see `docs/content/GOOGLE_WORKSPACE_SETUP.md`). OAuth = user auth, Service Account = automated sync (not yet implemented). |
-| **User Management** | Agent identifies users by email from Backstage identity | Currently: Manual users in `stratpoint/org/users.yaml`. Future: Google Workspace auto-sync. Agent works with both approaches. |
+| **User Management** | Agent identifies users by email from Backstage identity | Currently: Manual users in `example-org/org/users.yaml`. Future: Google Workspace auto-sync. Agent works with both approaches. |
 | **Permission Policy** | Extend `CatalogPermissionPolicy` with local provisioning permissions | Add `local-provisioner.task.create`, `local-provisioner.task.delete` |
 | **Software Catalog** | Auto-register provisioned resources as `Resource` entities | Use existing catalog API |
-| **Scaffolder** | Templates trigger provisioning tasks | Scaffolder action: `stratpoint:local-provision` |
+| **Scaffolder** | Templates trigger provisioning tasks | Scaffolder action: `nexus:local-provision` |
 | **PostgreSQL** | Add `provisioning_tasks` table alongside existing tables | Reuse database connection |
 | **Templates Repo** | Store local provisioning templates in `engineering-standards` repo | Same pattern as existing templates |
 
@@ -971,8 +971,8 @@ import StorageIcon from '@material-ui/icons/Storage';
 **Location**: Separate GitHub repository OR monorepo package
 
 **Option A - Separate Repository** (Recommended):
-- Repository: `https://github.com/stratpoint-engineering/backstage-agent`
-- Package: `@stratpoint/backstage-agent`
+- Repository: `https://github.com/your-org/backstage-agent`
+- Package: `@example-org/backstage-agent`
 - Published to npm registry (private or public)
 
 **Option B - Monorepo Package**:
@@ -984,7 +984,7 @@ import StorageIcon from '@material-ui/icons/Storage';
 **Repository Structure**:
 
 ```
-@stratpoint/backstage-agent/
+@example-org/backstage-agent/
 ├── package.json
 ├── tsconfig.json
 ├── README.md
@@ -1042,7 +1042,7 @@ import { logger } from '../../utils/logger';
 
 export const loginCommand = new Command('login')
   .description('Authenticate with Backstage using Google OAuth')
-  .requiredOption('--url <url>', 'Backstage URL (e.g., https://portal.stratpoint.io)')
+  .requiredOption('--url <url>', 'Backstage URL (e.g., https://portal.yourcompany.io)')
   .action(async (options) => {
     try {
       logger.info(`Authenticating with ${options.url}`);
@@ -1514,7 +1514,7 @@ spec:
   steps:
     - id: queue-task
       name: Queue Provisioning Task
-      action: stratpoint:local-provision
+      action: nexus:local-provision
       input:
         taskType: provision-kafka
         resourceName: ${{ parameters.resourceName }}
@@ -1577,7 +1577,7 @@ export const createLocalProvisionAction = (
     resourceName: string;
     config: any;
   }>({
-    id: 'stratpoint:local-provision',
+    id: 'nexus:local-provision',
     description: 'Queue a local provisioning task for agent execution',
     schema: {
       input: {
@@ -1717,7 +1717,7 @@ import { createLocalProvisionAction } from './plugins/scaffolder/actions/localPr
    - Connecting to provisioned resources
    - Managing resource lifecycle
 
-3. **Agent CLI Reference**: `@stratpoint/backstage-agent/README.md`
+3. **Agent CLI Reference**: `@example-org/backstage-agent/README.md`
    - All CLI commands
    - Configuration options
    - Examples
@@ -1790,7 +1790,7 @@ backstage-main-strat-eng/
 
 **Agent Package** (separate repository):
 ```
-@stratpoint/backstage-agent/
+@example-org/backstage-agent/
 ├── package.json
 ├── src/
 │   ├── cli/
@@ -1866,7 +1866,7 @@ engineering-standards/
 **IMPORTANT - Alignment with User Management and Google Setup**:
 
 **Current State** (what's implemented NOW):
-- **User Management**: Manual users in `stratpoint/org/users.yaml`
+- **User Management**: Manual users in `example-org/org/users.yaml`
 - **Google OAuth**: Active and working for Backstage login (`AUTH_GOOGLE_CLIENT_ID`)
 - **Agent Authentication**: Will use the existing Google OAuth (same credentials)
 

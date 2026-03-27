@@ -1,40 +1,36 @@
-# Welcome to Stratpoint Backstage Documentation
+# Nexus IDP Documentation
 
-This is your TechDocs documentation homepage.
+Welcome to the Nexus IDP internal documentation — the operational guide for platform engineers and team leads managing your Internal Developer Platform.
 
-## Getting Started
+## What is Nexus IDP?
 
-1. **Authentication**
-   - Sign in using your Stratpoint Google account
-   - You'll be automatically assigned to your teams
+Nexus IDP is a white-label Internal Developer Platform, built on Backstage 1.49.1. It serves as the central hub for:
 
-2. **Teams and Groups**
-   - Engineering Department
-     - Frontend Team
-     - Backend Team
-     - DevOps Team
-   - Product Department
-     - Design Team
-     - Product Management Team
+- **Software Catalog** — browse all components, systems, APIs, and resources
+- **FinOps Dashboard** — AWS cost and resource monitoring across Non-Prod, Legacy, and Production accounts
+- **Engineering Docs** — engineering standards, guides, and golden paths from GitHub
+- **Kubernetes Monitoring** — live pod/deployment status via the K8s plugin
+- **ArgoCD Integration** — GitOps deployment history and health status
+- **Local Provisioner** — spin up local Docker Compose environments via the backstage-agent CLI
+- **Software Templates** — scaffold new projects following engineering standards
 
-3. **Documentation**
-   - Each component can have its own documentation
-   - Documentation is written in Markdown
-   - Supports MkDocs features
+## User Roles
 
-## Features
+Nexus IDP uses a 4-tier RBAC system driven by group membership:
 
-- **Software Catalog**
-  - Browse all software components
-  - View team information
-  - Access documentation
+| Role | Group | Access |
+|------|-------|--------|
+| Platform Admin | `backstage-admins` | Full access — catalog CRUD, FinOps, user management |
+| Team Lead | `*-lead` (e.g. `web-team-lead`) | Create/edit catalog entries for their team |
+| Engineer | `web-team`, `mobile-team`, `data-team`, `cloud-team`, `ai-team`, `qa-team` | Read catalog, use scaffolder, K8s, ArgoCD, Local Provisioner |
+| New User | `general-engineers` only | Onboarding flow, Engineering Docs, Tech Radar — limited access until assigned to a team |
 
-- **Software Templates**
-  - Create new projects
-  - Standardized scaffolding
-  - Best practices built-in
+New users are auto-provisioned into `general-engineers` on first Google or GitHub sign-in. A platform admin assigns them to the correct department team via the User Management UI.
 
-- **TechDocs**
-  - Documentation as code
-  - Markdown support
-  - Automatic generation
+## Quick Links
+
+- [Permission System](permission-system.md) — how RBAC works
+- [User & Group Management](user-group-management.md) — managing users and teams
+- [Google OAuth Setup](google-oauth-setup.md) — configuring sign-in
+- [K8s + ArgoCD + CNPG Integration](k8s-argocd-cnpg-integration.md) — Kubernetes and GitOps setup
+- [Local Provisioning](local-provisioning-quickstart.md) — using the local provisioner

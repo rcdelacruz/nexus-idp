@@ -127,6 +127,14 @@ localProvisioner:
 # Engineering Docs — configure your GitHub sources here
 engineeringDocs:
   sources:
+    - id: nexus-idp-docs
+      label: Nexus IDP Docs
+      description: Nexus IDP platform documentation — permissions, user management, integrations
+      repoOwner: your-org
+      repoName: nexus-idp
+      branch: main
+      contentBase: docs/content
+
     - id: engineering-hub
       label: Engineering Hub
       description: Engineering standards, guides, and golden paths
