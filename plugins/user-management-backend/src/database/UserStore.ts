@@ -68,7 +68,7 @@ export class UserStore {
         .update({
           display_name: input.displayName,
           email: input.email,
-          teams: this.db.raw('?::text[]', [JSON.stringify(input.teams).replace('[', '{').replace(']', '}').replace(/"/g, '')]),
+          teams: this.db.raw('?::text[]', [this.toPostgresArray(input.teams)]),
           is_lead: input.isLead ?? existing.is_lead,
           is_admin: input.isAdmin ?? existing.is_admin,
           github_username: input.githubUsername ?? existing.github_username,
