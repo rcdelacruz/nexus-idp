@@ -18,6 +18,8 @@ const DEPT_TEAMS = [
 
 // Plain group names as written in spec.memberOf (no namespace prefix).
 // Derived from DEPT_TEAMS so there's a single source of truth.
+// general-engineers is intentionally excluded: trainees (only in general-engineers) retain
+// the restricted new-user sidebar, matching their limited permissions in permission.ts.
 const DEPT_TEAM_NAMES = new Set(
   DEPT_TEAMS
     .filter(ref => ref !== 'group:default/backstage-admins')
@@ -389,7 +391,7 @@ const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: bool
   return (
     <div className={classes.sidebarInner}>
       {/* Logo */}
-      <Link to={isNewUser ? '/onboarding' : '/'} className={classes.logoArea}>
+      <Link to={isNewUser !== false ? '/onboarding' : '/'} className={classes.logoArea}>
         <NexusLogoMark size={24} color="#ededed" />
         {isOpen && <span className={classes.logoText}>Nexus IDP</span>}
       </Link>
@@ -400,7 +402,7 @@ const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: bool
       {/* Main nav */}
       <div className={classes.navScroll}>
         {isOpen && <div className={classes.sectionLabel}>Platform</div>}
-        {isNewUser ? (
+        {isNewUser !== false ? (
           <>
             <NavItem icon={ClipboardCheck} label="Onboarding" to="/onboarding" />
             <NavItem icon={LayoutGrid} label="Catalog" to="/catalog" />
@@ -434,8 +436,8 @@ const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: bool
           label={isDark ? 'Light mode' : 'Dark mode'}
           onClick={toggleTheme}
         />
-        {!isNewUser && <NavItem icon={UserCog} label="User Management" to="/user-management" />}
-        {!isNewUser && <NavItem icon={Users} label="Teams" to="/catalog?filters%5Bkind%5D=group" />}
+        {isNewUser === false && <NavItem icon={UserCog} label="User Management" to="/user-management" />}
+        {isNewUser === false && <NavItem icon={Users} label="Teams" to="/catalog?filters%5Bkind%5D=group" />}
         <NavItem icon={Settings} label="Settings" to="/settings" />
         <UserMenu />
       </div>

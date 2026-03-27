@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import './HomePage.css';
 import { Page } from '@backstage/core-components';
-import { useApi } from '@backstage/core-plugin-api';
+import { useApi, identityApiRef } from '@backstage/core-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import { CatalogApi } from '@backstage/catalog-client';
 import useAsync from 'react-use/lib/useAsync';
+import { useNavigate } from 'react-router-dom';
+import { DEPT_TEAM_IDS_JWT } from '@internal/plugin-onboarding';
 import {
   LayoutGrid, BookOpen, Code2, Zap, HardDrive, FolderGit2,
   Users, School, Server, ArrowUpRight,
@@ -68,7 +70,24 @@ const SectionLabel = ({ children }: { children: string }) => (
 );
 
 export const HomePage = () => {
+  const identityApi = useApi(identityApiRef);
+  const navigate = useNavigate();
   const catalogApi = useApi(catalogApiRef) as CatalogApi;
+
+  // Redirect new users (no dept team, not admin) to onboarding on first visit.
+  useEffect(() => {
+    identityApi.getBackstageIdentity().then(identity => {
+      const refs = identity.ownershipEntityRefs ?? [];
+      const isAdmin = refs.some(r => r === 'group:default/backstage-admins');
+      const hasDeptTeam = refs.some(r => DEPT_TEAM_IDS_JWT.some(t => r === `group:default/${t}`));
+      if (!hasDeptTeam && !isAdmin) {
+        navigate('/onboarding', { replace: true });
+      }
+    }).catch(err => {
+      // eslint-disable-next-line no-console
+      console.warn('[HomePage] Failed to resolve identity for onboarding redirect check:', err);
+    });
+  }, [identityApi, navigate]);
 
   const { value: stats } = useAsync(async () => {
     const [components, apis, teams, templates] = await Promise.all([
@@ -82,7 +101,7 @@ export const HomePage = () => {
 
   return (
     <Page themeId="home">
-      <div style={{ minHeight: '100vh', background: g.bg }}>
+      <div style={{ background: g.bg, flex: 1 }}>
         <div className="hp-inner">
 
           {/* Hero */}
