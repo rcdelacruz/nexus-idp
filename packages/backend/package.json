@@ -46,6 +46,7 @@
     "@stratpoint/plugin-engineering-docs-backend": "link:../../plugins/engineering-docs-backend",
     "@stratpoint/plugin-finops-backend": "link:../../plugins/finops-backend",
     "@stratpoint/plugin-local-provisioner-backend": "link:../../plugins/local-provisioner-backend",
+    "@stratpoint/plugin-user-management-backend": "link:../../plugins/user-management-backend",
     "app": "link:../app",
     "better-sqlite3": "^12.0.0",
     "dotenv": "^16.4.7",

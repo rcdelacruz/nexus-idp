@@ -3,12 +3,75 @@ import { makeStyles, Menu, MenuItem } from '@material-ui/core';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarPage, useSidebarOpenState } from '@backstage/core-components';
 import { Sidebar } from '@backstage/core-components';
-import { useApi, identityApiRef, appThemeApiRef } from '@backstage/core-plugin-api';
+import { useApi, identityApiRef, appThemeApiRef, githubAuthApiRef } from '@backstage/core-plugin-api';
+import { catalogApiRef } from '@backstage/plugin-catalog-react';
+
+const DEPT_TEAMS = [
+  'group:default/web-team', 'group:default/mobile-team',
+  'group:default/data-team', 'group:default/cloud-team',
+  'group:default/ai-team', 'group:default/qa-team',
+  'group:default/web-lead', 'group:default/mobile-lead',
+  'group:default/data-lead', 'group:default/cloud-lead',
+  'group:default/ai-lead', 'group:default/qa-lead',
+  'group:default/backstage-admins',
+];
+
+// Plain group names as written in spec.memberOf (no namespace prefix).
+// Derived from DEPT_TEAMS so there's a single source of truth.
+const DEPT_TEAM_NAMES = new Set(
+  DEPT_TEAMS
+    .filter(ref => ref !== 'group:default/backstage-admins')
+    .map(ref => ref.replace('group:default/', '')),
+);
+
+const useUserRole = () => {
+  const identityApi = useApi(identityApiRef);
+  const catalogApi = useApi(catalogApiRef);
+  const githubAuth = useApi(githubAuthApiRef);
+  const [role, setRole] = useState<{ isNewUser?: boolean; isAdmin: boolean }>({ isAdmin: false });
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const identity = await identityApi.getBackstageIdentity();
+        const isAdmin = identity.ownershipEntityRefs.some(ref => ref === 'group:default/backstage-admins');
+        if (isAdmin) { setRole({ isNewUser: false, isAdmin: true }); return; }
+
+        // Check team: catalog entity (accurate after 60s sync) OR JWT ownershipEntityRefs
+        // (accurate after fresh login). Using both ensures we never falsely block a user:
+        // - Newly registered user with stale JWT → catalog has web-team
+        // - Catalog call fails → JWT has web-team (from signInWithCatalogUser on login)
+        const entity = await catalogApi.getEntityByRef(identity.userEntityRef).catch(() => null);
+        const memberOf = ((entity?.spec as any)?.memberOf ?? []) as string[];
+        const hasDeptTeamCatalog = memberOf.some(g => DEPT_TEAM_NAMES.has(g));
+        const hasDeptTeamJwt = identity.ownershipEntityRefs.some(ref => DEPT_TEAMS.includes(ref));
+        const hasDeptTeam = hasDeptTeamCatalog || hasDeptTeamJwt;
+
+        // Check GitHub via catalog annotation (primary) OR active OAuth token (fallback).
+        // getAccessToken with optional:true is the same check Settings > Authentication uses —
+        // returns '' silently if not connected, no popup or iframe.
+        const hasGitHubAnnotation = !!entity?.metadata?.annotations?.['github.com/user-login'];
+        const ghToken = await githubAuth.getAccessToken('read:user', { optional: true }).catch(() => '');
+        const hasGitHub = hasGitHubAnnotation || !!ghToken;
+
+        setRole({ isNewUser: !hasDeptTeam || !hasGitHub, isAdmin: false });
+      } catch {
+        // On error keep current state — do not accidentally unlock the portal.
+      }
+    };
+
+    check();
+    const interval = setInterval(check, 30_000);
+    return () => clearInterval(interval);
+  }, [identityApi, catalogApi, githubAuth]);
+
+  return role;
+};
 import { SearchModal, useSearchModal } from '@backstage/plugin-search';
 import {
   Home, LayoutGrid, BookOpen, Code2, Plus, Users, ClipboardList,
   HardDrive, DollarSign, Radar, Settings, Sun, Moon, Search, User, LogOut, LucideIcon,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, ClipboardCheck, UserCog,
 } from 'lucide-react';
 import { NexusLogoMark } from './NexusLogo';
 import { engineeringDocsApiRef } from '@internal/plugin-engineering-docs';
@@ -307,7 +370,7 @@ const DocsNavItem = () => {
   );
 };
 
-const AppSidebar = () => {
+const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: boolean }) => {
   const classes = useStyles();
   const { isOpen } = useSidebarOpenState();
   const appThemeApi = useApi(appThemeApiRef);
@@ -326,7 +389,7 @@ const AppSidebar = () => {
   return (
     <div className={classes.sidebarInner}>
       {/* Logo */}
-      <Link to="/" className={classes.logoArea}>
+      <Link to={isNewUser ? '/onboarding' : '/'} className={classes.logoArea}>
         <NexusLogoMark size={24} color="#ededed" />
         {isOpen && <span className={classes.logoText}>Nexus IDP</span>}
       </Link>
@@ -337,19 +400,31 @@ const AppSidebar = () => {
       {/* Main nav */}
       <div className={classes.navScroll}>
         {isOpen && <div className={classes.sectionLabel}>Platform</div>}
-        <NavItem icon={Home} label="Home" to="/" exact />
-        <NavItem icon={LayoutGrid} label="Catalog" to="/catalog" />
-        <NavItem icon={Code2} label="APIs" to="/api-docs" />
-        <DocsNavItem />
-        <NavItem icon={Plus} label="Create" to="/create" />
+        {isNewUser ? (
+          <>
+            <NavItem icon={ClipboardCheck} label="Onboarding" to="/onboarding" />
+            <NavItem icon={LayoutGrid} label="Catalog" to="/catalog" />
+            <DocsNavItem />
+            <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
+          </>
+        ) : (
+          <>
+            <NavItem icon={Home} label="Home" to="/" exact />
+            <NavItem icon={ClipboardCheck} label="Onboarding" to="/onboarding" />
+            <NavItem icon={LayoutGrid} label="Catalog" to="/catalog" />
+            <NavItem icon={Code2} label="APIs" to="/api-docs" />
+            <DocsNavItem />
+            <NavItem icon={Plus} label="Create" to="/create" />
 
-        <div className={classes.navDivider} />
+            <div className={classes.navDivider} />
 
-        {isOpen && <div className={classes.sectionLabel}>Tools</div>}
-        <NavItem icon={ClipboardList} label="Register Project" to="/project-registration" />
-        <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" />
-        <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
-        <NavItem icon={DollarSign} label="FinOps" to="/finops" />
+            {isOpen && <div className={classes.sectionLabel}>Tools</div>}
+            <NavItem icon={ClipboardList} label="Register Project" to="/project-registration" />
+            <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" />
+            <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
+            {isAdmin && <NavItem icon={DollarSign} label="FinOps" to="/finops" />}
+          </>
+        )}
       </div>
 
       {/* Bottom */}
@@ -359,7 +434,8 @@ const AppSidebar = () => {
           label={isDark ? 'Light mode' : 'Dark mode'}
           onClick={toggleTheme}
         />
-        <NavItem icon={Users} label="Teams" to="/catalog?filters%5Bkind%5D=group" />
+        {!isNewUser && <NavItem icon={UserCog} label="User Management" to="/user-management" />}
+        {!isNewUser && <NavItem icon={Users} label="Teams" to="/catalog?filters%5Bkind%5D=group" />}
         <NavItem icon={Settings} label="Settings" to="/settings" />
         <UserMenu />
       </div>
@@ -389,6 +465,8 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
   const [themeId, setThemeIdState] = useState(() => appThemeApi.getActiveThemeId() ?? 'dark');
   const isDark = themeId === 'dark';
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isNewUser, isAdmin } = useUserRole();
 
   useEffect(() => {
     const subscription = appThemeApi.activeThemeId$().subscribe(id => {
@@ -411,6 +489,15 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
     return () => window.removeEventListener('keydown', toggle);
   }, [appThemeApi, isDark]);
 
+  // New users: Onboarding + Docs + Tech Radar + Settings only — per RBAC plan
+  useEffect(() => {
+    if (isNewUser !== true) return;
+    const allowed = ['/onboarding', '/catalog', '/engineering-docs', '/tech-radar', '/settings', '/search'];
+    if (!allowed.some(p => location.pathname.startsWith(p))) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [isNewUser, location.pathname, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const noSidebarPages = ['/device'];
   if (noSidebarPages.includes(location.pathname)) {
     return <>{children}</>;
@@ -419,7 +506,7 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
   return (
     <SidebarPage>
       <Sidebar>
-        <AppSidebar />
+        <AppSidebar isNewUser={isNewUser} isAdmin={isAdmin} />
       </Sidebar>
       <PageTransition key={location.pathname}>
         {children}

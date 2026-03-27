@@ -1,0 +1,11 @@
+{
+  "name": "@stratpoint/theme-utils",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "license": "Apache-2.0",
+  "private": true,
+  "peerDependencies": {
+    "@material-ui/core": "*",
+    "react": "*"
+  }
+}

@@ -26,8 +26,10 @@ backend.add(import('@backstage/plugin-techdocs-backend'));
 
 // auth plugin
 backend.add(import('@backstage/plugin-auth-backend'));
-backend.add(import('@backstage/plugin-auth-backend-module-google-provider'));
-backend.add(import('@backstage/plugin-auth-backend-module-github-provider'));
+// Custom Google module: auto-provisions org users to general-engineers on first login
+backend.add(import('./plugins/google-auto-provision'));
+// Custom GitHub module: enforces verified org email on GitHub account before sign-in
+backend.add(import('./plugins/github-email-enforcement'));
 
 // catalog plugin
 backend.add(import('@backstage/plugin-catalog-backend'));
@@ -73,6 +75,17 @@ backend.add(
 // local provisioner
 backend.add(
   import('@stratpoint/plugin-local-provisioner-backend').then(m => ({ default: m.localProvisionerPlugin }))
+);
+
+// user management
+backend.add(
+  import('@stratpoint/plugin-user-management-backend').then(m => ({ default: m.userManagementPlugin }))
+);
+backend.add(
+  import('@stratpoint/plugin-user-management-backend').then(m => ({ default: m.userManagementCatalogModule }))
+);
+backend.add(
+  import('@stratpoint/plugin-user-management-backend').then(m => ({ default: m.sessionRevocationModule }))
 );
 
 backend.start();

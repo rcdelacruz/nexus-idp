@@ -4,6 +4,10 @@ app:
 
 organization:
   name: ${ORGANIZATION_NAME}
+  domain: ${ORGANIZATION_DOMAIN}
+  githubOwner: ${ORGANIZATION_GITHUB_OWNER}
+  githubRepo: ${ORGANIZATION_GITHUB_REPO}
+  usersFilePath: ${ORGANIZATION_USERS_FILE_PATH}
 
 backend:
   logging:

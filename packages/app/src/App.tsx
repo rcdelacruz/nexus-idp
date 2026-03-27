@@ -44,6 +44,8 @@ import { EngineeringDocsPage } from '@internal/plugin-engineering-docs';
 import { FinOpsPage } from '@internal/plugin-finops';
 import { CustomTechRadarPage } from './components/techRadar/CustomTechRadarPage';
 import { LocalProvisionerPage } from '@internal/plugin-local-provisioner';
+import { OnboardingPage } from '@internal/plugin-onboarding';
+import { UserManagementPage } from '@internal/plugin-user-management';
 import { DeviceAuthPage } from './components/DeviceAuthPage';
 import { GlobalStyleOverrides } from './components/GlobalStyleOverrides';
 
@@ -128,6 +130,8 @@ const routes = (
     <Route path="/finops" element={<FinOpsPage />} />
     <Route path="/tech-radar" element={<CustomTechRadarPage />} />
     <Route path="/local-provisioner" element={<LocalProvisionerPage />} />
+    <Route path="/onboarding" element={<OnboardingPage />} />
+    <Route path="/user-management" element={<UserManagementPage />} />
   </FlatRoutes>
 );
 

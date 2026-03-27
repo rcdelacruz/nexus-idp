@@ -34,8 +34,11 @@ RUN cd /app && tar xzf bundle.tar.gz && rm bundle.tar.gz
 RUN mkdir -p /app/node_modules/@stratpoint /app/node_modules/@internal && \
     ln -sf /app/plugins/finops-backend /app/node_modules/@stratpoint/plugin-finops-backend && \
     ln -sf /app/plugins/engineering-docs-backend /app/node_modules/@stratpoint/plugin-engineering-docs-backend && \
+    ln -sf /app/plugins/user-management-backend /app/node_modules/@stratpoint/plugin-user-management-backend && \
     ln -sf /app/plugins/engineering-docs /app/node_modules/@internal/plugin-engineering-docs && \
-    ln -sf /app/plugins/finops /app/node_modules/@internal/plugin-finops
+    ln -sf /app/plugins/finops /app/node_modules/@internal/plugin-finops && \
+    ln -sf /app/plugins/onboarding /app/node_modules/@internal/plugin-onboarding && \
+    ln -sf /app/plugins/user-management /app/node_modules/@internal/plugin-user-management
 
 # Install new plugin dependencies that are not in the base image
 USER root
