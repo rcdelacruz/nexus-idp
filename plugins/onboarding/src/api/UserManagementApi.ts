@@ -37,7 +37,8 @@ export class UserManagementApi {
     teams: string[]; is_lead: boolean; is_admin: boolean; github_username: string | null;
   } | null> {
     const res = await this.request('GET', '/me');
-    if (!res.ok) return null;
+    if (res.status === 404) return null;          // user not in DB — definitive "not found"
+    if (!res.ok) throw new Error(`getMe failed: ${res.status}`);  // server/network error
     const data = await res.json() as { user: any };
     return data.user;
   }

@@ -96,10 +96,21 @@ function useGitHubStatus(userRef: string) {
   const api = useApi(userManagementApiRef);
   const [status, setStatus] = useState<'loading' | 'verified' | 'unverified' | 'no-entity'>('loading');
   const [login, setLogin] = useState<string | undefined>();
+  // undefined = still loading; true = exists in DB; false = not in DB
+  const [isInDb, setIsInDb] = useState<boolean | undefined>(undefined);
 
   const check = useCallback(async () => {
     // Source of truth: DB only. GitHub is considered linked only when saved in the DB.
-    const me = await api.getMe().catch(() => null);
+    // getMe() returns null on 404 (not in DB), throws on server/network errors.
+    let me: Awaited<ReturnType<typeof api.getMe>>;
+    try {
+      me = await api.getMe();
+    } catch {
+      // Server error or network failure — leave isInDb unchanged so we don't
+      // incorrectly show the registration form to already-registered users during outages.
+      return;
+    }
+    setIsInDb(me !== null);
     if (me?.github_username) {
       setLogin(me.github_username);
       setStatus('verified');
@@ -115,7 +126,7 @@ function useGitHubStatus(userRef: string) {
     return () => clearInterval(interval);
   }, [userRef, check]);
 
-  return { status, login, refresh: check };
+  return { status, login, refresh: check, isInDb };
 }
 
 // ── GitHub Connect Button ─────────────────────────────────────────────────────
@@ -388,7 +399,7 @@ export const OnboardingPage = () => {
   const config = useApi(configApiRef);
   const githubOwner = config.getOptionalString('organization.githubOwner') ?? '';
   const c = useColors();
-  const { status: ghStatus, login: ghLogin, refresh: refreshGitHub } = useGitHubStatus(identity.userRef);
+  const { status: ghStatus, login: ghLogin, refresh: refreshGitHub, isInDb } = useGitHubStatus(identity.userRef);
   const { done, mark, isRegistered, markRegistered } = useProgress(identity.userRef);
 
   const card = {
@@ -411,11 +422,16 @@ export const OnboardingPage = () => {
     );
   }
 
-  // Registered = persisted flag OR catalog has their entity
-  const isFullyRegistered = isRegistered || (!identity.isNewUser) || ghStatus !== 'no-entity';
-  const needsRegistration = identity.isNewUser && ghStatus === 'no-entity' && !isRegistered;
+  // Registered = persisted flag OR not a new user OR DB confirms they exist.
+  // isInDb is undefined while loading — do NOT treat that as "registered" (prevents false-positive during load).
+  const isDbRegistered = isInDb === true;
+  const isFullyRegistered = isRegistered || (!identity.isNewUser) || isDbRegistered;
+  // Only show the form once DB check resolves (isInDb === false), not during loading.
+  const needsRegistration = identity.isNewUser && isInDb === false && !isRegistered;
 
   const githubDone = ghStatus === 'verified';
+  // isInDb is undefined while the initial DB check is in flight for new users.
+  const registrationChecking = identity.isNewUser && isInDb === undefined && !isRegistered;
 
   const steps: Step[] = [
     {
@@ -429,7 +445,14 @@ export const OnboardingPage = () => {
           : 'Your profile is registered in the portal.',
       done: isFullyRegistered,
       autoDetected: true,
-      custom: needsRegistration ? (
+      custom: registrationChecking ? (
+        <Box display="flex" alignItems="center" style={{ gap: 8, marginTop: 10 }}>
+          <CircularProgress size={14} aria-hidden="true" />
+          <Typography style={{ fontSize: '0.8125rem', color: c.textSecondary }}>
+            Checking registration status…
+          </Typography>
+        </Box>
+      ) : needsRegistration ? (
         <RegistrationForm identity={identity} onRegistered={markRegistered} />
       ) : undefined,
     },
