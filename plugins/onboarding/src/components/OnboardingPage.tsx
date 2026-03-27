@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useApi, identityApiRef, githubAuthApiRef, configApiRef } from '@backstage/core-plugin-api';
 import { Page, Header, Content } from '@backstage/core-components';
 import {
@@ -97,30 +97,31 @@ function useGitHubStatus(userRef: string) {
   const [status, setStatus] = useState<'loading' | 'verified' | 'unverified' | 'no-entity'>('loading');
   const [login, setLogin] = useState<string | undefined>();
 
+  const check = useCallback(async () => {
+    // Source of truth: DB only. GitHub is considered linked only when saved in the DB.
+    const me = await api.getMe().catch(() => null);
+    if (me?.github_username) {
+      setLogin(me.github_username);
+      setStatus('verified');
+      return;
+    }
+    setStatus(me !== null ? 'unverified' : 'no-entity');
+  }, [api]);
+
   useEffect(() => {
     if (!userRef) return;
-    const check = async () => {
-      // Source of truth: DB only. GitHub is considered linked only when saved in the DB.
-      const me = await api.getMe().catch(() => null);
-      if (me?.github_username) {
-        setLogin(me.github_username);
-        setStatus('verified');
-        return;
-      }
-      setStatus(me !== null ? 'unverified' : 'no-entity');
-    };
     check();
     const interval = setInterval(check, 30_000);
     return () => clearInterval(interval);
-  }, [api, userRef]);
+  }, [userRef, check]);
 
-  return { status, login };
+  return { status, login, refresh: check };
 }
 
 // ── GitHub Connect Button ─────────────────────────────────────────────────────
 // Uses GitHub OAuth to get the username — no manual typing needed.
 
-const GitHubConnectButton = () => {
+const GitHubConnectButton = ({ onConnected }: { onConnected?: () => void }) => {
   const api = useApi(userManagementApiRef);
   const githubAuth = useApi(githubAuthApiRef);
   const c = useColors();
@@ -141,9 +142,9 @@ const GitHubConnectButton = () => {
       const ghUser = await ghRes.json() as { login: string };
 
       // Save to DB (so catalog annotation gets set for other features).
-      // The gate and step check the OAuth session directly — no need to wait for catalog sync.
       await api.linkGithub({ githubUsername: ghUser.login, oauthToken: token });
-      // No pending state — useGitHubStatus will immediately detect the OAuth session.
+      // Immediately refresh the GitHub status so the step updates without a page reload.
+      onConnected?.();
     } catch (err: any) {
       // User closed the popup — don't show an error
       if (err?.message?.includes('rejected') || err?.name === 'RejectionError') return;
@@ -387,7 +388,7 @@ export const OnboardingPage = () => {
   const config = useApi(configApiRef);
   const githubOwner = config.getOptionalString('organization.githubOwner') ?? '';
   const c = useColors();
-  const { status: ghStatus, login: ghLogin } = useGitHubStatus(identity.userRef);
+  const { status: ghStatus, login: ghLogin, refresh: refreshGitHub } = useGitHubStatus(identity.userRef);
   const { done, mark, isRegistered, markRegistered } = useProgress(identity.userRef);
 
   const card = {
@@ -441,7 +442,7 @@ export const OnboardingPage = () => {
         : `Connect your GitHub account so the portal can create repos under ${githubOwner} on your behalf.`,
       done: githubDone,
       autoDetected: true,
-      custom: githubDone ? undefined : <GitHubConnectButton />,
+      custom: githubDone ? undefined : <GitHubConnectButton onConnected={refreshGitHub} />,
     },
     {
       id: 'catalog-tour',
