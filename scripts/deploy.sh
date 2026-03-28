@@ -8,7 +8,7 @@ git pull origin develop
 
 echo "==> Building frontend + backend..."
 export PATH="$(pwd)/node_modules/.bin:$PATH"
-yarn build && yarn build:backend
+yarn workspace app build && yarn build:backend
 
 echo "==> Building Docker image..."
 docker build . -f Dockerfile.with-migrations --tag 192.168.2.101:5000/backstage:latest
