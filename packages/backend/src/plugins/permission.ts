@@ -29,6 +29,11 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
     // Get user's group memberships
     const userGroups = user?.identity.ownershipEntityRefs || [];
 
+    // ── Unauthenticated: deny everything ─────────────────────────────────────
+    if (!user) {
+      return { result: AuthorizeResult.DENY };
+    }
+
     // Check if user is an admin
     const isAdmin = userGroups.some(
       ref =>

@@ -1,10 +1,8 @@
-import {
-  TechRadarApi,
-  TechRadarLoaderResponse,
-} from '@backstage-community/plugin-tech-radar';
+import { TechRadarApi } from '@backstage-community/plugin-tech-radar';
 import {
   MovedState,
   RadarEntry,
+  TechRadarLoaderResponse,
 } from '@backstage-community/plugin-tech-radar-common';
 
 const VOLUMES_API =

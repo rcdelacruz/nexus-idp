@@ -26,8 +26,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get install -y --no-install-recommends python3 g++ build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# Install sqlite3 dependencies. You can skip this if you don't use sqlite3 in the image,
-# in which case you should also move better-sqlite3 to "devDependencies" in package.json.
+# Install sqlite3 headers needed to build better-sqlite3 (devDependency, used in tests/build only).
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
@@ -64,13 +63,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get install -y --no-install-recommends python3 g++ build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# Install sqlite3 dependencies. You can skip this if you don't use sqlite3 in the image,
-# in which case you should also move better-sqlite3 to "devDependencies" in package.json.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
-    apt-get install -y --no-install-recommends libsqlite3-dev && \
-    rm -rf /var/lib/apt/lists/*
+# NOTE: libsqlite3-dev is NOT installed in the runtime stage.
+# better-sqlite3 is a devDependency (tests/build only) and is excluded by
+# `yarn workspaces focus --all --production` in the stage above.
 
 # From here on we use the least-privileged `node` user to run the backend.
 USER node

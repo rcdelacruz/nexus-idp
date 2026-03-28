@@ -1,4 +1,4 @@
-import { createApiRef, DiscoveryApi, IdentityApi } from '@backstage/core-plugin-api';
+import { createApiRef } from '@backstage/core-plugin-api';
 import { UserManagementApi } from './UserManagementApi';
 
 export const userManagementApiRef = createApiRef<UserManagementApi>({

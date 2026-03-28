@@ -1,0 +1,18 @@
+# Local developer overrides — copy to app-config.local.yaml (gitignored) and customise.
+# app-config.local.yaml is loaded automatically in development and takes precedence
+# over app-config.yaml.  Never commit app-config.local.yaml.
+
+catalog:
+  locations:
+    # Uncomment to load local template checkouts during development.
+    # Replace the path with your local checkout of engineering-standards.
+    # - type: file
+    #   target: /path/to/engineering-standards/templates/projects/catalog-info.yaml
+    #   rules:
+    #     - allow: [Template, Location]
+
+    # - type: file
+    #   target: /path/to/engineering-standards/catalog-info.yaml
+
+# Override any other base-config values here, e.g. auth credentials for a dev
+# Google/GitHub OAuth app, a different backend port, etc.

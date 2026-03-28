@@ -88,7 +88,12 @@ export const githubEmailEnforcementModule = createBackendModule({
               if (githubLogin) {
                 userStoreReady
                   .then(store => store.updateGithubUsername(localPart, githubLogin, domain))
-                  .catch(() => { /* non-fatal */ });
+                  .catch(err => {
+                    // Non-fatal: GitHub username won't be persisted this login, but auth succeeds.
+                    // If this fires repeatedly, check user-management plugin init — sharedStore
+                    // never resolves if user-management fails to start (DB migration error, etc).
+                    console.warn(`[github-email-enforcement] updateGithubUsername failed for ${localPart}:`, err);
+                  });
               }
 
               // Try catalog sign-in — if the user entity exists, return full identity

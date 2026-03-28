@@ -9,7 +9,6 @@
  */
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import { getRevocationStore } from './sharedRevocationStore';
-import type { Request, Response, NextFunction } from 'express';
 
 /** Decode JWT payload without verifying signature — we only need the `sub` claim. */
 function decodeJwtSub(token: string): string | null {
@@ -40,7 +39,7 @@ export const sessionRevocationModule = createBackendModule({
         // Synchronous store check: if the user-management plugin hasn't initialized
         // yet, getRevocationStore() returns null and we let the request through.
         // This prevents any startup race condition from blocking login or API calls.
-        rootHttpRouter.use('/api', (req: Request, res: Response, next: NextFunction): void => {
+        rootHttpRouter.use('/api', (req, res, next) => {
           const authHeader = req.headers.authorization;
           if (!authHeader?.startsWith('Bearer ')) return next();
 

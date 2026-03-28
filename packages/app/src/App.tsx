@@ -36,7 +36,7 @@ import LightIcon from '@material-ui/icons/WbSunny';
 import { AppRouter, FlatRoutes } from '@backstage/core-app-api';
 import { CustomCatalogGraphPage } from './components/catalogGraph/CustomCatalogGraphPage';
 import { RequirePermission } from '@backstage/plugin-permission-react';
-import { catalogEntityCreatePermission } from '@backstage/plugin-catalog-common/alpha';
+import { catalogEntityCreatePermission, catalogLocationDeletePermission } from '@backstage/plugin-catalog-common/alpha';
 import { CustomTemplateCard } from './components/scaffolder/CustomTemplateCard';
 import { CustomScaffolderListPage } from './components/scaffolder/CustomScaffolderListPage';
 import { ProjectRegistrationPage } from '@internal/backstage-plugin-project-registration';
@@ -127,7 +127,15 @@ const routes = (
     <Route path="/catalog-graph" element={<CustomCatalogGraphPage />} />
     <Route path="/project-registration" element={<ProjectRegistrationPage />} />
     <Route path="/engineering-docs" element={<EngineeringDocsPage />} />
-    <Route path="/finops" element={<FinOpsPage />} />
+    {/* Admin-only route: catalogLocationDeletePermission is BasicPermission + admin-only in CatalogPermissionPolicy */}
+    <Route
+      path="/finops"
+      element={
+        <RequirePermission permission={catalogLocationDeletePermission}>
+          <FinOpsPage />
+        </RequirePermission>
+      }
+    />
     <Route path="/tech-radar" element={<CustomTechRadarPage />} />
     <Route path="/local-provisioner" element={<LocalProvisionerPage />} />
     <Route path="/onboarding" element={<OnboardingPage />} />

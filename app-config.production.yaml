@@ -79,7 +79,7 @@ backend:
       database: ${POSTGRES_DB}
       ssl: false
   cache:
-    store: ${CACHE_STORE:-memory}
+    store: ${CACHE_STORE}
     connection: ${REDIS_URL}
 
 techdocs:
@@ -133,7 +133,43 @@ catalog:
 
 permission:
   enabled: true
+  # NOTE: All permission policy logic is in packages/backend/src/plugins/permission.ts
+  # (CatalogPermissionPolicy). The YAML `policies` block is NOT a supported Backstage
+  # config pattern and has no effect — do not add rules here.
 
+kubernetes:
+  serviceLocatorMethod:
+    type: 'multiTenant'
+  clusterLocatorMethods:
+    - type: 'config'
+      clusters:
+        - name: your-cluster
+          url: https://kubernetes.default.svc
+          authProvider: serviceAccount
+          # In-cluster token: no serviceAccountToken or caData needed.
+          # The Backstage pod must run with serviceAccountName: backstage-k8s-reader
+          # (set in Helm values). Kubernetes automatically mounts the projected SA token.
+          skipTLSVerify: false
+          skipMetricsLookup: false
+
+proxy:
+  endpoints:
+    '/argocd/api':
+      target: ${ARGOCD_URL}
+      changeOrigin: true
+      secure: false
+      headers:
+        Cookie: ${ARGOCD_AUTH_TOKEN}
+
+argocd:
+  appLocatorMethods:
+    - type: 'config'
+      instances:
+        - name: argocd
+          url: ${ARGOCD_URL}
+          token: ${ARGOCD_TOKEN}
+
+# Local Provisioner Configuration
 localProvisioner:
   enabled: true
   sseHeartbeatInterval: 30

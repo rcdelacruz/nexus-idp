@@ -48,7 +48,6 @@
     "@stratpoint/plugin-local-provisioner-backend": "link:../../plugins/local-provisioner-backend",
     "@stratpoint/plugin-user-management-backend": "link:../../plugins/user-management-backend",
     "app": "link:../app",
-    "better-sqlite3": "^12.0.0",
     "dotenv": "^16.4.7",
     "mustache": "^4.2.0",
     "node-gyp": "^10.0.0",
@@ -58,6 +57,7 @@
     "@backstage/cli": "^0.36.0",
     "@types/fs-extra": "^11.0.4",
     "@types/mustache": "^4.2.6",
+    "better-sqlite3": "^12.0.0",
     "jest": "^30.0.0",
     "webpack": "~5.103.0"
   },

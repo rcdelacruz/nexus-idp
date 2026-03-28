@@ -1,3 +1,15 @@
+# =============================================================================
+# DEPRECATED — do not use for new builds.
+#
+# This file patches a stale base image (1.46.1) and will drift further from
+# the current codebase (1.49.1) with every release.
+#
+# Use build/prod/Dockerfile instead:
+#   docker build -f build/prod/Dockerfile -t 192.168.2.101:5000/backstage:1.49.1 .
+#
+# This file is kept only for emergency hotfix reference.
+# =============================================================================
+
 # Build from the working base image and add migration runner
 FROM 192.168.2.101:5000/backstage:1.46.1
 
