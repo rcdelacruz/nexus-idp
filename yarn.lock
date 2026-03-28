@@ -14984,12 +14984,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@stratpoint/plugin-finops-backend@link:../../plugins/finops-backend::locator=app%40workspace%3Apackages%2Fapp":
-  version: 0.0.0-use.local
-  resolution: "@stratpoint/plugin-finops-backend@link:../../plugins/finops-backend::locator=app%40workspace%3Apackages%2Fapp"
-  languageName: node
-  linkType: soft
-
 "@stratpoint/plugin-finops-backend@link:../../plugins/finops-backend::locator=backend%40workspace%3Apackages%2Fbackend":
   version: 0.0.0-use.local
   resolution: "@stratpoint/plugin-finops-backend@link:../../plugins/finops-backend::locator=backend%40workspace%3Apackages%2Fbackend"
@@ -18352,7 +18346,6 @@ __metadata:
     "@mermaid-js/layout-elk": "npm:^0.1.7"
     "@playwright/test": "npm:^1.32.3"
     "@roadiehq/backstage-plugin-argo-cd": "npm:^2.8.6"
-    "@stratpoint/plugin-finops-backend": "link:../../plugins/finops-backend"
     "@testing-library/dom": "npm:^10.0.0"
     "@testing-library/jest-dom": "npm:^6.0.0"
     "@testing-library/react": "npm:^16.0.0"
@@ -35285,6 +35278,11 @@ __metadata:
     react-router-dom: "npm:^6.3.0"
     typescript: "npm:~5.4.0"
     webpack: "npm:~5.103.0"
+  dependenciesMeta:
+    cpu-features:
+      built: false
+    keytar:
+      built: false
   languageName: unknown
   linkType: soft
 

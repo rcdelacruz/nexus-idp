@@ -37,7 +37,7 @@ import { AppRouter, FlatRoutes } from '@backstage/core-app-api';
 import { CustomCatalogGraphPage } from './components/catalogGraph/CustomCatalogGraphPage';
 import { RequirePermission } from '@backstage/plugin-permission-react';
 import { catalogEntityCreatePermission } from '@backstage/plugin-catalog-common/alpha';
-import { finopsReadPermission } from '@stratpoint/plugin-finops-backend';
+import { finopsReadPermission } from './finopsPermissions';
 import { CustomTemplateCard } from './components/scaffolder/CustomTemplateCard';
 import { CustomScaffolderListPage } from './components/scaffolder/CustomScaffolderListPage';
 import { ProjectRegistrationPage } from '@internal/backstage-plugin-project-registration';
