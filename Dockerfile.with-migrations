@@ -1,15 +1,3 @@
-# =============================================================================
-# DEPRECATED — do not use for new builds.
-#
-# This file patches a stale base image (1.46.1) and will drift further from
-# the current codebase (1.49.1) with every release.
-#
-# Use build/prod/Dockerfile instead:
-#   docker build -f build/prod/Dockerfile -t 192.168.2.101:5000/backstage:1.49.1 .
-#
-# This file is kept only for emergency hotfix reference.
-# =============================================================================
-
 # Build from the working base image and add migration runner
 FROM 192.168.2.101:5000/backstage:1.46.1
 
@@ -24,9 +12,9 @@ RUN mkdir -p /app/scripts && chown node:node /app/scripts
 # Copy migration runner script and package.json
 COPY --chown=node:node scripts/run-migrations.js scripts/package.json /app/scripts/
 
-# Copy migration files (JavaScript versions only)
-RUN mkdir -p /app/plugins/local-provisioner-backend/dist/database/migrations
-COPY --chown=node:node plugins/local-provisioner-backend/src/database/migrations/*.js /app/plugins/local-provisioner-backend/dist/database/migrations/
+# Copy migration files to src/ path (run-migrations.js resolves ../plugins/.../src/database/migrations)
+RUN mkdir -p /app/plugins/local-provisioner-backend/src/database/migrations
+COPY --chown=node:node plugins/local-provisioner-backend/src/database/migrations/*.js /app/plugins/local-provisioner-backend/src/database/migrations/
 
 # Install migration dependencies using npm (simpler for standalone script)
 # Run as node user to ensure correct permissions
