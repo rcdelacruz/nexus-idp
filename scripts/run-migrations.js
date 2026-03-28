@@ -102,7 +102,7 @@ async function runMigrations() {
     // Find migrations directory
     const migrationsDir = path.resolve(
       __dirname,
-      '../plugins/local-provisioner-backend/dist/database/migrations'
+      '../plugins/local-provisioner-backend/src/database/migrations'
     );
 
     log(`Migrations directory: ${migrationsDir}`, colors.blue);

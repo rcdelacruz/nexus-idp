@@ -104,6 +104,10 @@ COPY --chown=node:node stratpoint ./stratpoint
 COPY --chown=node:node scripts ./scripts
 RUN cd scripts && npm install --production --no-package-lock && npm cache clean --force
 
+# Copy local-provisioner-backend migration source files (plain .js, not compiled)
+# run-migrations.js references src/database/migrations directly
+COPY --chown=node:node plugins/local-provisioner-backend/src/database/migrations ./plugins/local-provisioner-backend/src/database/migrations
+
 # This will include the examples, if you don't need these simply remove this line
 # COPY --chown=node:node examples ./examples
 
