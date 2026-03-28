@@ -69,6 +69,18 @@ RUN mkdir -p /tmp/newdeps && \
     cp -rn node_modules/. /app/node_modules/ && \
     rm -rf /tmp/newdeps
 
+# Install plugin-catalog-node@2.1.0 as nested dep inside plugin-catalog-backend-module-github.
+# The top-level node_modules already has 1.20.1 which cp -rn cannot overwrite, but placing
+# 2.1.0 in the module's own node_modules gives Node's resolution the correct version
+# (catalogScmEventsServiceRef only exists in 2.1.0+).
+RUN mkdir -p /tmp/catalog-node-update && cd /tmp/catalog-node-update && \
+    npm init -y > /dev/null && \
+    npm install --no-package-lock --legacy-peer-deps @backstage/plugin-catalog-node@2.1.0 && \
+    mkdir -p /app/node_modules/@backstage/plugin-catalog-backend-module-github/node_modules/@backstage && \
+    cp -r node_modules/@backstage/plugin-catalog-node \
+        /app/node_modules/@backstage/plugin-catalog-backend-module-github/node_modules/@backstage/ && \
+    rm -rf /tmp/catalog-node-update
+
 # Fix permissions after tar extraction (tar preserves original 700 permissions from build)
 RUN chmod 755 /app && \
     chown -R node:node /app/scripts
