@@ -5144,6 +5144,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@backstage/plugin-catalog-node@npm:^1.15.0":
+  version: 1.20.1
+  resolution: "@backstage/plugin-catalog-node@npm:1.20.1"
+  dependencies:
+    "@backstage/backend-plugin-api": "npm:^1.6.0"
+    "@backstage/catalog-client": "npm:^1.12.1"
+    "@backstage/catalog-model": "npm:^1.7.6"
+    "@backstage/errors": "npm:^1.2.7"
+    "@backstage/plugin-catalog-common": "npm:^1.1.7"
+    "@backstage/plugin-permission-common": "npm:^0.9.3"
+    "@backstage/plugin-permission-node": "npm:^0.10.7"
+    "@backstage/types": "npm:^1.2.2"
+    lodash: "npm:^4.17.21"
+    yaml: "npm:^2.0.0"
+  checksum: 10c0/820e84dbc072e83eac57173702baa50b373e17665997c148dcb8e61a499145d023209ad5a100c61d1a877eef4e847956dc88de113fd45a6566be508a5533d9b5
+  languageName: node
+  linkType: hard
+
 "@backstage/plugin-catalog-node@npm:^2.1.0":
   version: 2.1.0
   resolution: "@backstage/plugin-catalog-node@npm:2.1.0"
@@ -5571,7 +5589,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@backstage/plugin-permission-node@npm:^0.10.11":
+"@backstage/plugin-permission-node@npm:^0.10.11, @backstage/plugin-permission-node@npm:^0.10.7":
   version: 0.10.11
   resolution: "@backstage/plugin-permission-node@npm:0.10.11"
   dependencies:
@@ -7791,6 +7809,55 @@ __metadata:
     react-dom: "npm:^18.0.0"
     react-router-dom: "npm:^6.3.0"
     react-use: "npm:^17.2.4"
+    webpack: "npm:~5.103.0"
+  peerDependencies:
+    react: ^16.13.1 || ^17.0.0 || ^18.0.0
+  languageName: unknown
+  linkType: soft
+
+"@internal/plugin-onboarding@npm:^0.1.0, @internal/plugin-onboarding@workspace:plugins/onboarding":
+  version: 0.0.0-use.local
+  resolution: "@internal/plugin-onboarding@workspace:plugins/onboarding"
+  dependencies:
+    "@backstage/cli": "npm:^0.36.0"
+    "@backstage/core-components": "npm:^0.18.8"
+    "@backstage/core-plugin-api": "npm:^1.12.4"
+    "@backstage/dev-utils": "npm:^1.1.21"
+    "@backstage/plugin-catalog-react": "npm:^2.1.0"
+    "@backstage/theme": "npm:^0.7.2"
+    "@material-ui/core": "npm:^4.9.13"
+    "@stratpoint/theme-utils": "npm:*"
+    "@types/react": "npm:^18.0.0"
+    jest: "npm:^30.0.0"
+    lucide-react: "npm:0.577.0"
+    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
+    react-dom: "npm:^18.0.0"
+    react-router-dom: "npm:^6.3.0"
+    webpack: "npm:~5.103.0"
+  peerDependencies:
+    react: ^16.13.1 || ^17.0.0 || ^18.0.0
+  languageName: unknown
+  linkType: soft
+
+"@internal/plugin-user-management@npm:^0.1.0, @internal/plugin-user-management@workspace:plugins/user-management":
+  version: 0.0.0-use.local
+  resolution: "@internal/plugin-user-management@workspace:plugins/user-management"
+  dependencies:
+    "@backstage/catalog-model": "npm:^1.7.7"
+    "@backstage/cli": "npm:^0.36.0"
+    "@backstage/core-components": "npm:^0.18.8"
+    "@backstage/core-plugin-api": "npm:^1.12.4"
+    "@backstage/dev-utils": "npm:^1.1.21"
+    "@backstage/plugin-catalog-react": "npm:^2.1.0"
+    "@backstage/theme": "npm:^0.7.2"
+    "@material-ui/core": "npm:^4.9.13"
+    "@stratpoint/theme-utils": "npm:*"
+    "@types/react": "npm:^18.0.0"
+    jest: "npm:^30.0.0"
+    lucide-react: "npm:0.577.0"
+    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
+    react-dom: "npm:^18.0.0"
+    react-router-dom: "npm:^6.3.0"
     webpack: "npm:~5.103.0"
   peerDependencies:
     react: ^16.13.1 || ^17.0.0 || ^18.0.0
@@ -14994,6 +15061,38 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@stratpoint/plugin-user-management-backend@link:../../plugins/user-management-backend::locator=backend%40workspace%3Apackages%2Fbackend":
+  version: 0.0.0-use.local
+  resolution: "@stratpoint/plugin-user-management-backend@link:../../plugins/user-management-backend::locator=backend%40workspace%3Apackages%2Fbackend"
+  languageName: node
+  linkType: soft
+
+"@stratpoint/plugin-user-management-backend@workspace:plugins/user-management-backend":
+  version: 0.0.0-use.local
+  resolution: "@stratpoint/plugin-user-management-backend@workspace:plugins/user-management-backend"
+  dependencies:
+    "@backstage/backend-plugin-api": "npm:^1.8.0"
+    "@backstage/catalog-model": "npm:^1.7.7"
+    "@backstage/cli": "npm:^0.36.0"
+    "@backstage/config": "npm:^1.3.6"
+    "@backstage/errors": "npm:^1.2.7"
+    "@backstage/plugin-auth-node": "npm:^0.6.14"
+    "@backstage/plugin-catalog-node": "npm:^1.15.0"
+    "@types/express": "npm:*"
+    "@types/node": "npm:^22.0.0"
+    express: "npm:^4.21.2"
+  languageName: unknown
+  linkType: soft
+
+"@stratpoint/theme-utils@npm:*, @stratpoint/theme-utils@workspace:packages/theme-utils":
+  version: 0.0.0-use.local
+  resolution: "@stratpoint/theme-utils@workspace:packages/theme-utils"
+  peerDependencies:
+    "@material-ui/core": "*"
+    react: "*"
+  languageName: unknown
+  linkType: soft
+
 "@swagger-api/apidom-ast@npm:^1.1.0":
   version: 1.1.0
   resolution: "@swagger-api/apidom-ast@npm:1.1.0"
@@ -18250,6 +18349,8 @@ __metadata:
     "@internal/plugin-engineering-docs": "npm:^0.1.0"
     "@internal/plugin-finops": "npm:^0.1.0"
     "@internal/plugin-local-provisioner": "npm:^0.1.0"
+    "@internal/plugin-onboarding": "npm:^0.1.0"
+    "@internal/plugin-user-management": "npm:^0.1.0"
     "@material-ui/core": "npm:^4.12.2"
     "@material-ui/icons": "npm:^4.9.1"
     "@mermaid-js/layout-elk": "npm:^0.1.7"
@@ -18264,7 +18365,7 @@ __metadata:
     backstage-plugin-techdocs-addon-mermaid: "npm:^0.17.0"
     cross-env: "npm:^7.0.0"
     jest: "npm:^30.0.0"
-    lucide-react: "npm:^0.577.0"
+    lucide-react: "npm:0.577.0"
     mermaid: "npm:^11.4.1"
     react: "npm:^18.0.2"
     react-dom: "npm:^18.0.2"
@@ -18917,6 +19018,7 @@ __metadata:
     "@stratpoint/plugin-engineering-docs-backend": "link:../../plugins/engineering-docs-backend"
     "@stratpoint/plugin-finops-backend": "link:../../plugins/finops-backend"
     "@stratpoint/plugin-local-provisioner-backend": "link:../../plugins/local-provisioner-backend"
+    "@stratpoint/plugin-user-management-backend": "link:../../plugins/user-management-backend"
     "@types/fs-extra": "npm:^11.0.4"
     "@types/mustache": "npm:^4.2.6"
     app: "link:../app"
@@ -28670,7 +28772,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lucide-react@npm:^0.577.0":
+"lucide-react@npm:0.577.0":
   version: 0.577.0
   resolution: "lucide-react@npm:0.577.0"
   peerDependencies:
@@ -35170,6 +35272,7 @@ __metadata:
   resolution: "root@workspace:."
   dependencies:
     "@backstage/cli": "npm:^0.36.0"
+    "@backstage/cli-defaults": "npm:^0.1.0"
     "@backstage/e2e-test-utils": "npm:^0.1.2"
     "@playwright/test": "npm:^1.32.3"
     "@testing-library/dom": "npm:^10.4.1"
