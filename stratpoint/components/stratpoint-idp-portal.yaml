@@ -1,0 +1,44 @@
+---
+# Nexus IDP — Stratpoint deployment of the Nexus Internal Developer Portal product
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: stratpoint-idp-portal
+  title: Nexus IDP (Stratpoint Deployment)
+  description: >
+    Stratpoint's internal developer portal, running Nexus IDP — an open-source
+    Internal Developer Platform product built on Backstage. Nexus IDP is
+    maintained at github.com/rcdelacruz/nexus-idp; this deployment is
+    Stratpoint's production instance, managed by the Cloud Team.
+  annotations:
+    # Stratpoint deployment repo (fork / deployment config)
+    github.com/project-slug: stratpoint-engineering/backstage-main
+    # Kubernetes integration
+    backstage.io/kubernetes-id: backstage
+    backstage.io/kubernetes-namespace: backstage
+    # Engineering Docs plugin — platform documentation root
+    engineering-docs/content-base: docs/content
+  links:
+    - url: https://github.com/rcdelacruz/nexus-idp
+      title: Nexus IDP — Upstream Product
+      icon: github
+      type: source-code
+    - url: https://github.com/stratpoint-engineering/backstage-main
+      title: Stratpoint Deployment Repo
+      icon: github
+      type: source-code
+    - url: https://backstage.io/docs
+      title: Backstage Documentation
+      icon: docs
+      type: documentation
+  tags:
+    - nexus-idp
+    - backstage
+    - developer-portal
+    - platform
+    - open-source
+spec:
+  type: website
+  lifecycle: production
+  owner: cloud-team
+  system: internal-developer-platform

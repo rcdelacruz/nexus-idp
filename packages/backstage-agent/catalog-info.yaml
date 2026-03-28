@@ -19,4 +19,4 @@ spec:
   owner: devops-team
   system: internal-developer-platform
   dependsOn:
-    - component:default/backstage-portal
+    - component:default/stratpoint-idp-portal

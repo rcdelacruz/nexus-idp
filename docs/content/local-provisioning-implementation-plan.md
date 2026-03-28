@@ -919,7 +919,7 @@ import StorageIcon from '@material-ui/icons/Storage';
         <Button
           className={classes.actionButton}
           color="primary"
-          href="/docs/default/component/backstage-portal/local-provisioner-setup"
+          href="/docs/default/component/stratpoint-idp-portal/local-provisioner-setup"
         >
           Setup Guide
         </Button>

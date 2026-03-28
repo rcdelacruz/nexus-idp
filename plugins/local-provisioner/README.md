@@ -15,7 +15,7 @@ This plugin is already integrated into the Backstage app at `/local-provisioner`
 
 ## Usage
 
-1. **Install the Agent**: Follow the agent setup guide at `/docs/default/component/backstage-portal/local-provisioner-setup`
+1. **Install the Agent**: Follow the agent setup guide at `/docs/default/component/stratpoint-idp-portal/local-provisioner-setup`
 2. **View Tasks**: Navigate to `/local-provisioner` to see your provisioning tasks
 3. **Monitor Agent**: The agent status card shows connection status and health
 4. **Create Resources**: Use training templates to provision local resources
