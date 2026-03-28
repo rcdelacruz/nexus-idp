@@ -150,7 +150,7 @@ export const HomePage = () => {
             <SectionLabel>Platform</SectionLabel>
             <div className="hp-grid-3">
               <Tile icon={LayoutGrid} title="Service Catalog" description="Discover and manage all your software components, services, libraries, and APIs." href="/catalog" />
-              <Tile icon={BookOpen}   title="Documentation"   description="Access comprehensive technical docs for every component in your organization."   href="/docs" />
+              <Tile icon={BookOpen}   title="Documentation"   description="Access comprehensive technical docs for every component in your organization."   href="/engineering-docs" />
               <Tile icon={Code2}      title="API Explorer"    description="Browse internal APIs, view schemas, and explore endpoint definitions."           href="/api-docs" />
             </div>
           </div>
