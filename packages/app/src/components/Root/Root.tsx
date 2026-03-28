@@ -62,8 +62,6 @@ const useUserRole = () => {
     };
 
     check();
-    const interval = setInterval(check, 30_000);
-    return () => clearInterval(interval);
   }, [identityApi, catalogApi, githubAuth]);
 
   return role;

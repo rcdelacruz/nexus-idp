@@ -11,12 +11,7 @@ import {
 import { useColors, semantic, badge } from '@stratpoint/theme-utils';
 import { userManagementApiRef } from '../api/refs';
 
-// Canonical list of department team IDs — also used by HomePage redirect guard.
-// Keep this as the single source of truth; import DEPT_TEAM_IDS in any other file that needs it.
-export const DEPT_TEAM_IDS = ['general-engineers', 'web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team'] as const;
-// JWT-safe list: excludes general-engineers because auto-provision issues that group to ALL new
-// users before registration. Use this when checking ownershipEntityRefs (JWT) directly.
-export const DEPT_TEAM_IDS_JWT = DEPT_TEAM_IDS.filter(t => t !== 'general-engineers') as ReadonlyArray<string>;
+export { DEPT_TEAM_IDS, DEPT_TEAM_IDS_JWT } from '../constants';
 
 const DEPT_TEAMS: Record<string, string> = {
   'general-engineers': 'No team yet — Intern / Trainee',

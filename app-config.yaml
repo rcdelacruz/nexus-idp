@@ -193,4 +193,5 @@ finops:
       - id: account1
         name: Account 1
         profile: aws-profile-1
+        awsAccountNumber: '${FINOPS_AWS_ACCOUNT_1}'
       # Add more accounts as needed

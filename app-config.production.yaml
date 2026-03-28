@@ -55,7 +55,6 @@ backend:
     frame-src:
       - "'self'"
       - 'https://accounts.google.com'
-      - '${APP_BASE_URL}'
     default-src: ["'self'"]
   cors:
     origin: '${APP_BASE_URL}'
