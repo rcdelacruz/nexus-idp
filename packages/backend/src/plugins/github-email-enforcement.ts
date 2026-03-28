@@ -86,12 +86,18 @@ export const githubEmailEnforcementModule = createBackendModule({
               // Non-fatal — if the user isn't in the DB yet (shouldn't happen) we continue.
               const githubLogin = (info.result.fullProfile as any).username as string | undefined;
               if (githubLogin) {
-                userStoreReady
+                // Race userStoreReady against a 10-second timeout so a user-management
+                // startup failure (DB migration lock, connection error, etc.) does not
+                // cause this .then() callback to queue silently forever.
+                const timeout = new Promise<never>((_, reject) =>
+                  setTimeout(
+                    () => reject(new Error('userStoreReady timeout — user-management plugin did not initialize within 10s')),
+                    10_000,
+                  ),
+                );
+                Promise.race([userStoreReady, timeout])
                   .then(store => store.updateGithubUsername(localPart, githubLogin, domain))
                   .catch(err => {
-                    // Non-fatal: GitHub username won't be persisted this login, but auth succeeds.
-                    // If this fires repeatedly, check user-management plugin init — sharedStore
-                    // never resolves if user-management fails to start (DB migration error, etc).
                     console.warn(`[github-email-enforcement] updateGithubUsername failed for ${localPart}:`, err);
                   });
               }

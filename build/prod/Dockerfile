@@ -100,6 +100,10 @@ COPY --chown=node:node app-config*.yaml ./
 # CRITICAL: Required for catalog entities to load in production
 COPY --chown=node:node stratpoint ./stratpoint
 
+# Copy migration runner script and install its standalone npm dependencies
+COPY --chown=node:node scripts ./scripts
+RUN cd scripts && npm install --production --no-package-lock && npm cache clean --force
+
 # This will include the examples, if you don't need these simply remove this line
 # COPY --chown=node:node examples ./examples
 

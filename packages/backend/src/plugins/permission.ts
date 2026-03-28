@@ -13,7 +13,50 @@ import {
 } from '@backstage/plugin-catalog-common/alpha';
 
 /**
+<<<<<<< HEAD
  * Custom permission policy for Backstage catalog operations.
+=======
+ * Department team group refs — engineers assigned to these have "assigned engineer" access.
+ * New users are only in general-engineers until assigned.
+ * NOTE: Keep in sync with DEPT_TEAM_IDS_JWT in plugins/onboarding/src/components/OnboardingPage.tsx.
+ * Leads (e.g. web-lead) satisfy isLead() separately; this list is plain team membership only.
+ */
+const DEPT_TEAMS = [
+  'group:default/web-team',
+  'group:default/mobile-team',
+  'group:default/data-team',
+  'group:default/cloud-team',
+  'group:default/ai-team',
+  'group:default/qa-team',
+];
+
+/** Platform admins — full access to everything including FinOps */
+const isAdmin = (groups: string[]) =>
+  groups.some(
+    ref => ref === 'group:default/backstage-admins' || ref === 'group:default/admins',
+  );
+
+/** Team leads — any group ending in -lead */
+const isLead = (groups: string[]) =>
+  groups.some(ref => ref.startsWith('group:default/') && ref.endsWith('-lead'));
+
+/**
+ * Assigned engineers — members of at least one department team.
+ * This is separate from general-engineers (base group everyone is in).
+ */
+const isAssignedEngineer = (groups: string[]) =>
+  groups.some(ref => DEPT_TEAMS.includes(ref));
+
+/**
+ * New user / unassigned — in general-engineers but not yet in any department team.
+ * Leads and admins also satisfy isAssignedEngineer, so this only catches truly unassigned users.
+ */
+const isUnassigned = (groups: string[]) =>
+  !isAdmin(groups) && !isLead(groups) && !isAssignedEngineer(groups);
+
+/**
+ * RBAC permission policy for Nexus IDP.
+>>>>>>> 32739b3 (fix(security): audit fixes — finops permission, purge scheduler, DEPT_TEAMS sync, deploy pipeline)
  *
  * This policy implements role-based access control (RBAC) for catalog entities.
  *
@@ -46,7 +89,36 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
       return { result: AuthorizeResult.ALLOW };
     }
 
+<<<<<<< HEAD
     // Handle catalog entity deletion - only admins
+=======
+    // ── FinOps: admin only (must precede generic .read wildcard below) ────────
+    if (permissionName.startsWith('finops.')) {
+      return { result: AuthorizeResult.DENY };
+    }
+
+    // ── New User (unassigned): very limited access ───────────────────────────
+    // Only Engineering Docs (custom plugin), Tech Radar read, and search.
+    // No catalog, no scaffolder, no FinOps, no K8s, no ArgoCD.
+    if (isUnassigned(groups)) {
+      if (
+        permissionName.startsWith('techdocs.') ||
+        permissionName.startsWith('search.') ||
+        permissionName.startsWith('engineering-docs.') ||
+        // Read-only catalog access — browse teams, services, APIs
+        permissionName.includes('.read') ||
+        permissionName.includes('.list') ||
+        permissionName.includes('.get')
+      ) {
+        return { result: AuthorizeResult.ALLOW };
+      }
+      return { result: AuthorizeResult.DENY };
+    }
+
+    // ── From here: all assigned users (engineers + leads) ────────────────────
+
+    // Catalog delete: admin only (handled above)
+>>>>>>> 32739b3 (fix(security): audit fixes — finops permission, purge scheduler, DEPT_TEAMS sync, deploy pipeline)
     if (request.permission === catalogEntityDeletePermission) {
       return {
         result: AuthorizeResult.DENY,
@@ -105,9 +177,23 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
       return { result: AuthorizeResult.ALLOW };
     }
 
+<<<<<<< HEAD
     // Deny everything else by default
     return {
       result: AuthorizeResult.DENY,
     };
+=======
+
+    // Kubernetes + ArgoCD: assigned engineers and leads can view
+    if (
+      permissionName.startsWith('kubernetes.') ||
+      permissionName.startsWith('argocd.')
+    ) {
+      return { result: AuthorizeResult.ALLOW };
+    }
+
+    // Default: allow read/list, deny write for assigned users
+    return { result: AuthorizeResult.DENY };
+>>>>>>> 32739b3 (fix(security): audit fixes — finops permission, purge scheduler, DEPT_TEAMS sync, deploy pipeline)
   }
 }

@@ -5,7 +5,7 @@ import { useApi, identityApiRef } from '@backstage/core-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import { CatalogApi } from '@backstage/catalog-client';
 import useAsync from 'react-use/lib/useAsync';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { DEPT_TEAM_IDS_JWT } from '@internal/plugin-onboarding';
 import {
   LayoutGrid, BookOpen, Code2, Zap, HardDrive, FolderGit2,
@@ -24,13 +24,13 @@ const g = {
   blue:    'var(--blue)',
 };
 
-const Tile = ({ icon: Icon, title, description, href }: {
-  icon: React.ElementType; title: string; description: string; href: string;
+const Tile = ({ icon: Icon, title, description, to }: {
+  icon: React.ElementType; title: string; description: string; to: string;
 }) => {
   const [hov, setHov] = React.useState(false);
   return (
-    <a
-      href={href}
+    <Link
+      to={to}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
@@ -59,7 +59,7 @@ const Tile = ({ icon: Icon, title, description, href }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 20, fontSize: '0.8125rem', fontWeight: 500, color: hov ? g.fg1 : g.fg3, transition: 'color 0.15s' }}>
         Open <ArrowUpRight size={12} strokeWidth={2} style={{ transform: hov ? 'translate(1px,-1px)' : 'none', transition: 'transform 0.15s' }} />
       </div>
-    </a>
+    </Link>
   );
 };
 
@@ -119,12 +119,12 @@ export const HomePage = () => {
             </p>
             <div className="hp-hero-bottom">
               <div style={{ display: 'flex', gap: 10 }}>
-                <a href="/catalog" style={{ display: 'inline-flex', alignItems: 'center', height: 36, padding: '0 16px', borderRadius: 6, fontSize: '0.875rem', fontWeight: 500, background: g.fg1, color: g.bg, textDecoration: 'none', letterSpacing: '-0.006em' }}>
+                <Link to="/catalog" style={{ display: 'inline-flex', alignItems: 'center', height: 36, padding: '0 16px', borderRadius: 6, fontSize: '0.875rem', fontWeight: 500, background: g.fg1, color: g.bg, textDecoration: 'none', letterSpacing: '-0.006em' }}>
                   Explore Catalog
-                </a>
-                <a href="/create" style={{ display: 'inline-flex', alignItems: 'center', height: 36, padding: '0 16px', borderRadius: 6, fontSize: '0.875rem', fontWeight: 500, color: g.fg2, textDecoration: 'none', border: `1px solid ${g.border}`, letterSpacing: '-0.006em' }}>
+                </Link>
+                <Link to="/create" style={{ display: 'inline-flex', alignItems: 'center', height: 36, padding: '0 16px', borderRadius: 6, fontSize: '0.875rem', fontWeight: 500, color: g.fg2, textDecoration: 'none', border: `1px solid ${g.border}`, letterSpacing: '-0.006em' }}>
                   Create Component
-                </a>
+                </Link>
               </div>
               <div className="hp-stats">
                 {[
@@ -149,9 +149,9 @@ export const HomePage = () => {
           <div>
             <SectionLabel>Platform</SectionLabel>
             <div className="hp-grid-3">
-              <Tile icon={LayoutGrid} title="Service Catalog" description="Discover and manage all your software components, services, libraries, and APIs." href="/catalog" />
-              <Tile icon={BookOpen}   title="Documentation"   description="Access comprehensive technical docs for every component in your organization."   href="/engineering-docs" />
-              <Tile icon={Code2}      title="API Explorer"    description="Browse internal APIs, view schemas, and explore endpoint definitions."           href="/api-docs" />
+              <Tile icon={LayoutGrid} title="Service Catalog" description="Discover and manage all your software components, services, libraries, and APIs." to="/catalog" />
+              <Tile icon={BookOpen}   title="Documentation"   description="Access comprehensive technical docs for every component in your organization."   to="/engineering-docs" />
+              <Tile icon={Code2}      title="API Explorer"    description="Browse internal APIs, view schemas, and explore endpoint definitions."           to="/api-docs" />
             </div>
           </div>
 
@@ -159,10 +159,10 @@ export const HomePage = () => {
           <div>
             <SectionLabel>Tooling</SectionLabel>
             <div className="hp-grid-4">
-              <Tile icon={Zap}        title="Scaffolder"           description="Create new components from standardized templates."       href="/create" />
-              <Tile icon={Users}      title="Teams"                description="Organize and manage team ownership of components."        href="/catalog?filters%5Bkind%5D=group" />
-              <Tile icon={FolderGit2} title="Project Registration" description="Register new projects and manage their metadata."          href="/project-registration" />
-              <Tile icon={HardDrive}  title="Local Provisioner"    description="Manage resources provisioned to your local dev machine."   href="/local-provisioner" />
+              <Tile icon={Zap}        title="Scaffolder"           description="Create new components from standardized templates."       to="/create" />
+              <Tile icon={Users}      title="Teams"                description="Organize and manage team ownership of components."        to="/catalog?filters%5Bkind%5D=group" />
+              <Tile icon={FolderGit2} title="Project Registration" description="Register new projects and manage their metadata."          to="/project-registration" />
+              <Tile icon={HardDrive}  title="Local Provisioner"    description="Manage resources provisioned to your local dev machine."   to="/local-provisioner" />
             </div>
           </div>
 
@@ -170,9 +170,9 @@ export const HomePage = () => {
           <div>
             <SectionLabel>Local Development</SectionLabel>
             <div className="hp-grid-3">
-              <Tile icon={School}    title="Training Templates" description="Provision Kafka, databases, and resources locally for hands-on learning." href="/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all" />
-              <Tile icon={HardDrive} title="Local Provisioner"  description="View and manage resources provisioned to your local development machine." href="/local-provisioner" />
-              <Tile icon={Server}    title="Agent Setup Guide"  description="Install and configure the Backstage agent on your local machine."         href="/docs/default/component/backstage-agent" />
+              <Tile icon={School}    title="Training Templates" description="Provision Kafka, databases, and resources locally for hands-on learning." to="/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all" />
+              <Tile icon={HardDrive} title="Local Provisioner"  description="View and manage resources provisioned to your local development machine." to="/local-provisioner" />
+              <Tile icon={Server}    title="Agent Setup Guide"  description="Install and configure the Backstage agent on your local machine."         to="/docs/default/component/backstage-agent" />
             </div>
           </div>
 

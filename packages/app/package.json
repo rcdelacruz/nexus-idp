@@ -52,6 +52,7 @@
     "@material-ui/icons": "^4.9.1",
     "@mermaid-js/layout-elk": "^0.1.7",
     "@roadiehq/backstage-plugin-argo-cd": "^2.8.6",
+    "@stratpoint/plugin-finops-backend": "link:../../plugins/finops-backend",
     "backstage-plugin-techdocs-addon-mermaid": "^0.17.0",
     "lucide-react": "0.577.0",
     "mermaid": "^11.4.1",

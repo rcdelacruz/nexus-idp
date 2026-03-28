@@ -6,13 +6,12 @@ import { Sidebar } from '@backstage/core-components';
 import { useApi, identityApiRef, appThemeApiRef, githubAuthApiRef } from '@backstage/core-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 
+// Derived from DEPT_TEAM_IDS_JWT (onboarding plugin) — single source of truth for team names.
+// Leads follow the {name}-lead pattern; backstage-admins are always included as assigned users.
+// Keep permission.ts DEPT_TEAMS in sync: plugins/onboarding/src/components/OnboardingPage.tsx.
 const DEPT_TEAMS = [
-  'group:default/web-team', 'group:default/mobile-team',
-  'group:default/data-team', 'group:default/cloud-team',
-  'group:default/ai-team', 'group:default/qa-team',
-  'group:default/web-lead', 'group:default/mobile-lead',
-  'group:default/data-lead', 'group:default/cloud-lead',
-  'group:default/ai-lead', 'group:default/qa-lead',
+  ...DEPT_TEAM_IDS_JWT.map(t => `group:default/${t}`),
+  ...DEPT_TEAM_IDS_JWT.map(t => `group:default/${t.replace('-team', '-lead')}`),
   'group:default/backstage-admins',
 ];
 
@@ -78,6 +77,7 @@ import {
 import { NexusLogoMark } from './NexusLogo';
 import { engineeringDocsApiRef } from '@internal/plugin-engineering-docs';
 import { DocSource } from '@internal/plugin-engineering-docs';
+import { DEPT_TEAM_IDS_JWT } from '@internal/plugin-onboarding';
 
 
 const useStyles = makeStyles({

@@ -16,8 +16,9 @@ export const userManagementPlugin = createBackendPlugin({
         httpAuth: coreServices.httpAuth,
         userInfo: coreServices.userInfo,
         config: coreServices.rootConfig,
+        scheduler: coreServices.scheduler,
       },
-      async init({ logger, httpRouter, database, httpAuth, userInfo, config }) {
+      async init({ logger, httpRouter, database, httpAuth, userInfo, config, scheduler }) {
         logger.info('Initializing User Management backend plugin');
 
         const orgDomain = config.getString('organization.domain');
@@ -27,6 +28,16 @@ export const userManagementPlugin = createBackendPlugin({
         const revocationStore = await RevocationStore.create(knex);
         resolveSharedUserStore(userStore);
         setRevocationStore(revocationStore);
+
+        await scheduler.scheduleTask({
+          id: 'user-management-revocation-purge',
+          frequency: { hours: 1 },
+          timeout: { minutes: 1 },
+          fn: async () => {
+            await revocationStore.purgeExpired();
+            logger.debug('Purged expired token revocations');
+          },
+        });
 
         const router = await createRouter({ logger, httpAuth, userInfo, userStore, revocationStore, orgDomain });
 

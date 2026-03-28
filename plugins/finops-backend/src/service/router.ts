@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import express from 'express';
-import { LoggerService, HttpAuthService, CacheService } from '@backstage/backend-plugin-api';
+import { LoggerService, HttpAuthService, CacheService, PermissionsService } from '@backstage/backend-plugin-api';
 import { MetadataStore } from './MetadataStore';
 import { Config } from '@backstage/config';
 import { AwsClientFactory } from './AwsClientFactory';
@@ -11,13 +11,16 @@ import { createCostRoutes } from '../api/costRoutes';
 import { createBudgetRoutes } from '../api/budgetRoutes';
 import { createResourceRoutes } from '../api/resourceRoutes';
 import { createRecommendationRoutes } from '../api/recommendationRoutes';
+import { AuthorizeResult, BasicPermission } from '@backstage/plugin-permission-common';
 
 export interface RouterOptions {
   logger: LoggerService;
   config: Config;
   httpAuth: HttpAuthService;
+  permissions: PermissionsService;
   cache: CacheService;
   metadataStore: MetadataStore;
+  finopsReadPermission: BasicPermission;
 }
 
 interface AccountConfig {
@@ -30,7 +33,7 @@ export type AccountServices = { costService: CostService; resourceService: Resou
 export type ServiceResolver = (accountId: string) => AccountServices | undefined;
 
 export async function createRouter(options: RouterOptions): Promise<Router> {
-  const { logger, config, httpAuth, cache, metadataStore } = options;
+  const { logger, config, httpAuth, permissions, cache, metadataStore, finopsReadPermission } = options;
 
   const finopsConfig = config.getOptionalConfig('finops');
   const cacheTtlSeconds = finopsConfig?.getOptionalNumber('aws.cacheTtlSeconds') ?? 300;
@@ -65,17 +68,30 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
     next();
   });
 
-  // Auth middleware — health is public, everything else requires a user session
+  // Auth + permission middleware — health is public, everything else requires
+  // an authenticated user with finops.read permission (admin-only by policy).
   router.use(async (req, res, next) => {
     if (req.path.startsWith('/health')) return next();
 
+    let credentials;
     try {
-      const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
-      (req as any).user = { userEntityRef: credentials.principal.userEntityRef };
-      next();
+      credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
     } catch {
       res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
+
+    const [decision] = await permissions.authorize(
+      [{ permission: finopsReadPermission }],
+      { credentials },
+    );
+    if (decision.result !== AuthorizeResult.ALLOW) {
+      res.status(403).json({ error: 'Forbidden: finops.read permission required' });
+      return;
+    }
+
+    (req as any).user = { userEntityRef: credentials.principal.userEntityRef };
+    next();
   });
 
   router.use('/health', createHealthRoutes());

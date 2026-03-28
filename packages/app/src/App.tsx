@@ -36,7 +36,8 @@ import LightIcon from '@material-ui/icons/WbSunny';
 import { AppRouter, FlatRoutes } from '@backstage/core-app-api';
 import { CustomCatalogGraphPage } from './components/catalogGraph/CustomCatalogGraphPage';
 import { RequirePermission } from '@backstage/plugin-permission-react';
-import { catalogEntityCreatePermission, catalogLocationDeletePermission } from '@backstage/plugin-catalog-common/alpha';
+import { catalogEntityCreatePermission } from '@backstage/plugin-catalog-common/alpha';
+import { finopsReadPermission } from '@stratpoint/plugin-finops-backend';
 import { CustomTemplateCard } from './components/scaffolder/CustomTemplateCard';
 import { CustomScaffolderListPage } from './components/scaffolder/CustomScaffolderListPage';
 import { ProjectRegistrationPage } from '@internal/backstage-plugin-project-registration';
@@ -127,11 +128,11 @@ const routes = (
     <Route path="/catalog-graph" element={<CustomCatalogGraphPage />} />
     <Route path="/project-registration" element={<ProjectRegistrationPage />} />
     <Route path="/engineering-docs" element={<EngineeringDocsPage />} />
-    {/* Admin-only route: catalogLocationDeletePermission is BasicPermission + admin-only in CatalogPermissionPolicy */}
+    {/* Admin-only route: finopsReadPermission enforced both here and in finops-backend router */}
     <Route
       path="/finops"
       element={
-        <RequirePermission permission={catalogLocationDeletePermission}>
+        <RequirePermission permission={finopsReadPermission}>
           <FinOpsPage />
         </RequirePermission>
       }

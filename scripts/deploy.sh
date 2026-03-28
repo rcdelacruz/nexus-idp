@@ -22,12 +22,10 @@ cd "$(dirname "$0")/.."
 echo "==> Pulling latest code..."
 git pull origin main
 
-echo "==> Building frontend + backend..."
-export PATH="$(pwd)/node_modules/.bin:$PATH"
-yarn build:backend
-
 echo "==> Building Docker image..."
-docker build . -f Dockerfile.with-migrations --tag "${REGISTRY}:${IMAGE_TAG}"
+# build/prod/Dockerfile is a full multi-stage build (Stage 2 runs yarn tsc + backend build)
+# BuildKit is required for --mount=type=cache directives in the Dockerfile
+DOCKER_BUILDKIT=1 docker build . -f build/prod/Dockerfile --tag "${REGISTRY}:${IMAGE_TAG}"
 
 echo "==> Pushing image to registry..."
 docker push "${REGISTRY}:${IMAGE_TAG}"
