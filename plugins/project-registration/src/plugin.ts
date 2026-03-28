@@ -14,3 +14,14 @@ export const ProjectRegistrationPage = projectRegistrationPlugin.provide(
     }),
   }),
 );
+
+export const ProjectListPage = projectRegistrationPlugin.provide(
+  createRoutableExtension({
+    name: 'ProjectListPage',
+    component: () =>
+      import('./components/ProjectListPage').then(m => m.ProjectListPage),
+    mountPoint: createRouteRef({
+      id: 'project-list',
+    }),
+  }),
+);

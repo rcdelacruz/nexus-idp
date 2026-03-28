@@ -1,1 +1,1 @@
-export { projectRegistrationPlugin, ProjectRegistrationPage } from './plugin';
+export { projectRegistrationPlugin, ProjectRegistrationPage, ProjectListPage } from './plugin';

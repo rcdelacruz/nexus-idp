@@ -40,7 +40,7 @@ import { catalogEntityCreatePermission } from '@backstage/plugin-catalog-common/
 import { finopsReadPermission } from './finopsPermissions';
 import { CustomTemplateCard } from './components/scaffolder/CustomTemplateCard';
 import { CustomScaffolderListPage } from './components/scaffolder/CustomScaffolderListPage';
-import { ProjectRegistrationPage } from '@internal/backstage-plugin-project-registration';
+import { ProjectRegistrationPage, ProjectListPage } from '@internal/backstage-plugin-project-registration';
 import { EngineeringDocsPage } from '@internal/plugin-engineering-docs';
 import { FinOpsPage } from '@internal/plugin-finops';
 import { CustomTechRadarPage } from './components/techRadar/CustomTechRadarPage';
@@ -127,6 +127,7 @@ const routes = (
     <Route path="/settings" element={<UserSettingsPage />} />
     <Route path="/catalog-graph" element={<CustomCatalogGraphPage />} />
     <Route path="/project-registration" element={<ProjectRegistrationPage />} />
+    <Route path="/projects/manage" element={<ProjectListPage />} />
     <Route path="/engineering-docs" element={<EngineeringDocsPage />} />
     {/* Admin-only route: finopsReadPermission enforced both here and in finops-backend router */}
     <Route

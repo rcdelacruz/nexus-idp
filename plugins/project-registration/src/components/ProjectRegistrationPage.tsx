@@ -9,6 +9,8 @@ import {
   Progress,
   ErrorBoundary,
 } from '@backstage/core-components';
+import { useApi, fetchApiRef, discoveryApiRef } from '@backstage/core-plugin-api';
+import { UserPickerField, CatalogUser } from './UserPickerField';
 import {
   Grid,
   Button,
@@ -16,9 +18,6 @@ import {
   MenuItem,
   Paper,
   Typography,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
   Step,
   Stepper,
   StepLabel,
@@ -59,80 +58,101 @@ const useStyles = makeStyles((theme) => ({
 
 export const ProjectRegistrationPage = () => {
   const classes = useStyles();
+  const fetchApi = useApi(fetchApiRef);
+  const discoveryApi = useApi(discoveryApiRef);
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState({
-    projectName: '',
-    projectDescription: '',
-    clientName: '',
-    startDate: '',
-    expectedEndDate: '',
-    jiraProjectKey: '',
-    jiraProjectTemplate: 'scrum',
-    teamName: '',
-    isNewTeam: true,
-    existingTeamId: '',
-    teamMembers: [{
-      fullName: '',
-      email: '',
-      role: '',
-      accessLevel: 'member'
-    }]
+    name: '',
+    description: '',
+    client_name: '',
+    start_date: '',
+    end_date: '',
+    pm_tool: 'none',
+    jira_key: '',
+    jira_template: 'scrum',
+    team_name: '',
+    team_members: [{ fullName: '', email: '', role: '', accessLevel: 'member' }],
   });
 
   const [submitStatus, setSubmitStatus] = useState({
     loading: false,
     error: null as string | null,
     success: false,
+    projectId: null as string | null,
   });
 
-  const handleNext = () => {
-    setActiveStep((prevStep) => prevStep + 1);
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevStep) => prevStep - 1);
-  };
+  const handleNext = () => setActiveStep((prevStep) => prevStep + 1);
+  const handleBack = () => setActiveStep((prevStep) => prevStep - 1);
 
   const handleChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [field]: event.target.value });
   };
 
+  const [selectedUsers, setSelectedUsers] = useState<(CatalogUser | null)[]>([null]);
+
   const handleTeamMemberChange = (index: number, field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newTeamMembers = [...formData.teamMembers];
+    const newTeamMembers = [...formData.team_members];
+    newTeamMembers[index] = { ...newTeamMembers[index], [field]: event.target.value };
+    setFormData({ ...formData, team_members: newTeamMembers });
+  };
+
+  const handleUserSelect = (index: number, user: CatalogUser | null) => {
+    const newSelected = [...selectedUsers];
+    newSelected[index] = user;
+    setSelectedUsers(newSelected);
+    const newTeamMembers = [...formData.team_members];
     newTeamMembers[index] = {
       ...newTeamMembers[index],
-      [field]: event.target.value,
+      fullName: user?.displayName ?? '',
+      email: user?.email ?? '',
     };
-    setFormData({ ...formData, teamMembers: newTeamMembers });
+    setFormData({ ...formData, team_members: newTeamMembers });
   };
 
   const addTeamMember = () => {
     setFormData({
       ...formData,
-      teamMembers: [
-        ...formData.teamMembers,
-        { fullName: '', email: '', role: '', accessLevel: 'member' },
-      ],
+      team_members: [...formData.team_members, { fullName: '', email: '', role: '', accessLevel: 'member' }],
     });
+    setSelectedUsers([...selectedUsers, null]);
   };
 
   const removeTeamMember = (index: number) => {
-    setFormData({
-      ...formData,
-      teamMembers: formData.teamMembers.filter((_, i) => i !== index),
-    });
+    setFormData({ ...formData, team_members: formData.team_members.filter((_, i) => i !== index) });
+    setSelectedUsers(selectedUsers.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSubmitStatus({ loading: true, error: null, success: false });
+  const handleSubmit = async () => {
+    setSubmitStatus({ loading: true, error: null, success: false, projectId: null });
 
     try {
-      // Here you would implement the API calls to Jira
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulated API call
-      setSubmitStatus({ loading: false, error: null, success: true });
-    } catch (error) {
-      setSubmitStatus({ loading: false, error: 'Failed to create project', success: false });
+      const baseUrl = await discoveryApi.getBaseUrl('project-registration');
+      const response = await fetchApi.fetch(`${baseUrl}/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description || undefined,
+          client_name: formData.client_name,
+          start_date: formData.start_date || undefined,
+          end_date: formData.end_date || undefined,
+          pm_tool: formData.pm_tool !== 'none' ? formData.pm_tool : undefined,
+          jira_key: formData.pm_tool === 'jira' ? formData.jira_key || undefined : undefined,
+          jira_template: formData.pm_tool === 'jira' ? formData.jira_template || undefined : undefined,
+          team_name: formData.team_name || undefined,
+          team_members: formData.team_members.filter(m => m.fullName || m.email),
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(body.error || `Request failed with status ${response.status}`);
+      }
+
+      const project = await response.json();
+      setSubmitStatus({ loading: false, error: null, success: true, projectId: project.id });
+    } catch (error: any) {
+      setSubmitStatus({ loading: false, error: error.message || 'Failed to create project', success: false, projectId: null });
     }
   };
 
@@ -147,19 +167,18 @@ export const ProjectRegistrationPage = () => {
                   required
                   fullWidth
                   label="Project Name"
-                  value={formData.projectName}
-                  onChange={handleChange('projectName')}
+                  value={formData.name}
+                  onChange={handleChange('name')}
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
-                  required
                   fullWidth
                   multiline
                   rows={4}
                   label="Project Description"
-                  value={formData.projectDescription}
-                  onChange={handleChange('projectDescription')}
+                  value={formData.description}
+                  onChange={handleChange('description')}
                 />
               </Grid>
               <Grid item xs={12}>
@@ -167,56 +186,70 @@ export const ProjectRegistrationPage = () => {
                   required
                   fullWidth
                   label="Client Name"
-                  value={formData.clientName}
-                  onChange={handleChange('clientName')}
+                  value={formData.client_name}
+                  onChange={handleChange('client_name')}
                 />
               </Grid>
               <Grid item xs={6}>
                 <TextField
-                  required
                   fullWidth
                   type="date"
                   label="Start Date"
                   InputLabelProps={{ shrink: true }}
-                  value={formData.startDate}
-                  onChange={handleChange('startDate')}
+                  value={formData.start_date}
+                  onChange={handleChange('start_date')}
                 />
               </Grid>
               <Grid item xs={6}>
                 <TextField
-                  required
                   fullWidth
                   type="date"
                   label="Expected End Date"
                   InputLabelProps={{ shrink: true }}
-                  value={formData.expectedEndDate}
-                  onChange={handleChange('expectedEndDate')}
+                  value={formData.end_date}
+                  onChange={handleChange('end_date')}
                 />
               </Grid>
               <Grid item xs={12}>
                 <TextField
-                  required
-                  fullWidth
-                  label="Jira Project Key"
-                  helperText="2-10 uppercase letters (e.g., PROJ)"
-                  value={formData.jiraProjectKey}
-                  onChange={handleChange('jiraProjectKey')}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  required
                   fullWidth
                   select
-                  label="Project Template"
-                  value={formData.jiraProjectTemplate}
-                  onChange={handleChange('jiraProjectTemplate')}
+                  label="Project Management Tool"
+                  value={formData.pm_tool}
+                  onChange={handleChange('pm_tool')}
+                  helperText="Optional — select your team's PM tool"
                 >
-                  <MenuItem value="scrum">Scrum</MenuItem>
-                  <MenuItem value="kanban">Kanban</MenuItem>
-                  <MenuItem value="basic">Basic</MenuItem>
+                  <MenuItem value="none">None</MenuItem>
+                  <MenuItem value="jira">Jira</MenuItem>
+                  <MenuItem value="github">GitHub Projects</MenuItem>
                 </TextField>
               </Grid>
+              {formData.pm_tool === 'jira' && (
+                <>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Jira Project Key"
+                      helperText="2-10 uppercase letters (e.g., PROJ)"
+                      value={formData.jira_key}
+                      onChange={handleChange('jira_key')}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      select
+                      label="Jira Template"
+                      value={formData.jira_template}
+                      onChange={handleChange('jira_template')}
+                    >
+                      <MenuItem value="scrum">Scrum</MenuItem>
+                      <MenuItem value="kanban">Kanban</MenuItem>
+                      <MenuItem value="basic">Basic</MenuItem>
+                    </TextField>
+                  </Grid>
+                </>
+              )}
             </Grid>
           </InfoCard>
         );
@@ -226,55 +259,29 @@ export const ProjectRegistrationPage = () => {
           <InfoCard title="Team Setup">
             <Grid container spacing={3}>
               <Grid item xs={12}>
-                <RadioGroup
-                  value={formData.isNewTeam}
-                  onChange={(e) => setFormData({ ...formData, isNewTeam: e.target.value === 'true' })}
-                >
-                  <FormControlLabel value="true" control={<Radio />} label="Create New Team" />
-                  <FormControlLabel value="false" control={<Radio />} label="Use Existing Team" />
-                </RadioGroup>
+                <TextField
+                  fullWidth
+                  label="Team Name"
+                  value={formData.team_name}
+                  onChange={handleChange('team_name')}
+                  helperText="Optional — leave blank to assign a team later"
+                />
               </Grid>
-              {formData.isNewTeam ? (
-                <Grid item xs={12}>
-                  <TextField
-                    required
-                    fullWidth
-                    label="Team Name"
-                    value={formData.teamName}
-                    onChange={handleChange('teamName')}
-                  />
-                </Grid>
-              ) : (
-                <Grid item xs={12}>
-                  <TextField
-                    required
-                    fullWidth
-                    select
-                    label="Select Existing Team"
-                    value={formData.existingTeamId}
-                    onChange={handleChange('existingTeamId')}
-                  >
-                    <MenuItem value="team1">Frontend Team</MenuItem>
-                    <MenuItem value="team2">Backend Team</MenuItem>
-                  </TextField>
-                </Grid>
-              )}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" style={{ marginBottom: 8 }}>Team Members</Typography>
+              </Grid>
             </Grid>
-          </InfoCard>
-        );
-
-      case 2:
-        return (
-          <InfoCard title="Team Members">
-            {formData.teamMembers.map((member, index) => (
+            {formData.team_members.map((member, index) => (
               <Paper key={index} className={classes.memberCard}>
-                <Grid container spacing={3}>
+                <Grid container spacing={2}>
                   <Grid item xs={12}>
-                    <Typography variant="h6">
-                      Team Member {index + 1}
+                    <Typography variant="subtitle2">
+                      Member {index + 1}
                       {index > 0 && (
                         <Button
+                          type="button"
                           color="secondary"
+                          size="small"
                           onClick={() => removeTeamMember(index)}
                           style={{ float: 'right' }}
                         >
@@ -283,28 +290,15 @@ export const ProjectRegistrationPage = () => {
                       )}
                     </Typography>
                   </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      required
-                      fullWidth
-                      label="Full Name"
-                      value={member.fullName}
-                      onChange={handleTeamMemberChange(index, 'fullName')}
+                  <Grid item xs={12}>
+                    <UserPickerField
+                      label="Select User"
+                      value={selectedUsers[index] ?? null}
+                      onChange={user => handleUserSelect(index, user)}
                     />
                   </Grid>
                   <Grid item xs={6}>
                     <TextField
-                      required
-                      fullWidth
-                      label="Email"
-                      type="email"
-                      value={member.email}
-                      onChange={handleTeamMemberChange(index, 'email')}
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      required
                       fullWidth
                       select
                       label="Role"
@@ -319,7 +313,6 @@ export const ProjectRegistrationPage = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <TextField
-                      required
                       fullWidth
                       select
                       label="Access Level"
@@ -335,6 +328,7 @@ export const ProjectRegistrationPage = () => {
               </Paper>
             ))}
             <Button
+              type="button"
               variant="outlined"
               color="primary"
               fullWidth
@@ -355,7 +349,6 @@ export const ProjectRegistrationPage = () => {
   const steps = [
     { label: 'Project Details', icon: <AssignmentIcon /> },
     { label: 'Team Setup', icon: <GroupAddIcon /> },
-    { label: 'Team Members', icon: <PersonAddIcon /> },
   ];
 
   return (
@@ -365,7 +358,7 @@ export const ProjectRegistrationPage = () => {
         <Content>
           <ContentHeader title="">
             <SupportButton>
-              Register a new project and team with automatic Jira integration
+              Register a new project with optional Jira or GitHub Projects integration
             </SupportButton>
           </ContentHeader>
 
@@ -381,14 +374,14 @@ export const ProjectRegistrationPage = () => {
 
               {submitStatus.success ? (
                 <Alert severity="success">
-                  Project and team successfully created!
+                  Project created successfully! ID: {submitStatus.projectId}
                 </Alert>
               ) : (
-                <form onSubmit={handleSubmit}>
+                <div>
                   {getStepContent(activeStep)}
 
                   {submitStatus.error && (
-                    <Alert severity="error">
+                    <Alert severity="error" style={{ marginTop: 16 }}>
                       {submitStatus.error}
                     </Alert>
                   )}
@@ -406,8 +399,8 @@ export const ProjectRegistrationPage = () => {
                         <Button
                           variant="contained"
                           color="primary"
-                          type="submit"
-                          disabled={submitStatus.loading}
+                          onClick={handleSubmit}
+                          disabled={submitStatus.loading || !formData.name || !formData.client_name}
                         >
                           {submitStatus.loading ? <Progress /> : 'Create Project'}
                         </Button>
@@ -416,13 +409,14 @@ export const ProjectRegistrationPage = () => {
                           variant="contained"
                           color="primary"
                           onClick={handleNext}
+                          disabled={activeStep === 0 && (!formData.name || !formData.client_name)}
                         >
                           Next
                         </Button>
                       )}
                     </div>
                   </div>
-                </form>
+                </div>
               )}
             </Grid>
           </Grid>

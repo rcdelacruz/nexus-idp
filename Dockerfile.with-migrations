@@ -1,5 +1,5 @@
 # Build from the working base image and add migration runner
-FROM 192.168.2.101:5000/backstage:1.46.1
+FROM 192.168.2.101:5000/backstage:latest
 
 USER root
 
@@ -15,6 +15,12 @@ COPY --chown=node:node scripts/run-migrations.js scripts/package.json /app/scrip
 # Copy migration files to src/ path (run-migrations.js resolves ../plugins/.../src/database/migrations)
 RUN mkdir -p /app/plugins/local-provisioner-backend/src/database/migrations
 COPY --chown=node:node plugins/local-provisioner-backend/src/database/migrations/*.js /app/plugins/local-provisioner-backend/src/database/migrations/
+
+RUN mkdir -p /app/plugins/project-registration-backend/src/database/migrations
+COPY --chown=node:node plugins/project-registration-backend/src/database/migrations/*.js /app/plugins/project-registration-backend/src/database/migrations/
+# Also copy to dist/database/migrations — ProjectStore.js resolves __dirname (dist/service/) + ../database/migrations
+RUN mkdir -p /app/plugins/project-registration-backend/dist/database/migrations
+COPY --chown=node:node plugins/project-registration-backend/src/database/migrations/*.js /app/plugins/project-registration-backend/dist/database/migrations/
 
 # Install migration dependencies using npm (simpler for standalone script)
 # Run as node user to ensure correct permissions
@@ -35,6 +41,8 @@ RUN mkdir -p /app/node_modules/@stratpoint /app/node_modules/@internal && \
     ln -sf /app/plugins/finops-backend /app/node_modules/@stratpoint/plugin-finops-backend && \
     ln -sf /app/plugins/engineering-docs-backend /app/node_modules/@stratpoint/plugin-engineering-docs-backend && \
     ln -sf /app/plugins/user-management-backend /app/node_modules/@stratpoint/plugin-user-management-backend && \
+    ln -sf /app/plugins/project-registration-backend /app/node_modules/@stratpoint/plugin-project-registration-backend && \
+    ln -sf /app/plugins/local-provisioner-backend /app/node_modules/@stratpoint/plugin-local-provisioner-backend && \
     ln -sf /app/plugins/engineering-docs /app/node_modules/@internal/plugin-engineering-docs && \
     ln -sf /app/plugins/finops /app/node_modules/@internal/plugin-finops && \
     ln -sf /app/plugins/onboarding /app/node_modules/@internal/plugin-onboarding && \
@@ -45,6 +53,7 @@ USER root
 RUN mkdir -p /tmp/newdeps && \
     cd /tmp/newdeps && \
     npm install --no-package-lock \
+        express-rate-limit \
         @aws-sdk/client-budgets \
         @aws-sdk/client-cloudwatch \
         @aws-sdk/client-cost-explorer \

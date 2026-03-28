@@ -68,9 +68,9 @@ const useUserRole = () => {
 };
 import { SearchModal, useSearchModal } from '@backstage/plugin-search';
 import {
-  Home, LayoutGrid, BookOpen, Code2, Plus, Users, ClipboardList,
+  Home, LayoutGrid, BookOpen, Code2, Plus, Users,
   HardDrive, DollarSign, Radar, Settings, Sun, Moon, Search, User, LogOut, LucideIcon,
-  ChevronDown, ChevronRight, ClipboardCheck, UserCog,
+  ChevronDown, ChevronRight, ClipboardCheck, UserCog, FolderKanban, FilePlus, ListTodo,
 } from 'lucide-react';
 import { NexusLogoMark } from './NexusLogo';
 import { engineeringDocsApiRef } from '@internal/plugin-engineering-docs';
@@ -370,6 +370,57 @@ const DocsNavItem = () => {
   );
 };
 
+const ProjectsNavItem = () => {
+  const classes = useStyles();
+  const { isOpen } = useSidebarOpenState();
+  const location = useLocation();
+  const [expanded, setExpanded] = useState(location.pathname.startsWith('/project'));
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/project')) setExpanded(true);
+  }, [location.pathname]);
+
+  const isActive = location.pathname.startsWith('/project');
+
+  return (
+    <>
+      <button
+        className={`${classes.navItem} ${isActive ? classes.navItemActive : ''}`}
+        onClick={() => setExpanded(e => !e)}
+      >
+        <FolderKanban size={16} strokeWidth={1.5} className={classes.navIcon} />
+        {isOpen && (
+          <>
+            <span className={classes.navLabel}>Projects</span>
+            {expanded
+              ? <ChevronDown size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: '#666' }} />
+              : <ChevronRight size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: '#666' }} />
+            }
+          </>
+        )}
+      </button>
+      {isOpen && expanded && (
+        <>
+          <Link
+            to="/project-registration"
+            className={`${classes.docsSubItem} ${location.pathname === '/project-registration' ? classes.docsSubItemActive : ''}`}
+          >
+            <FilePlus size={13} strokeWidth={1.5} style={{ flexShrink: 0 }} />
+            <span style={{ marginLeft: 6 }}>Register Project</span>
+          </Link>
+          <Link
+            to="/projects/manage"
+            className={`${classes.docsSubItem} ${location.pathname === '/projects/manage' ? classes.docsSubItemActive : ''}`}
+          >
+            <ListTodo size={13} strokeWidth={1.5} style={{ flexShrink: 0 }} />
+            <span style={{ marginLeft: 6 }}>Manage Projects</span>
+          </Link>
+        </>
+      )}
+    </>
+  );
+};
+
 const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: boolean }) => {
   const classes = useStyles();
   const { isOpen } = useSidebarOpenState();
@@ -419,7 +470,7 @@ const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: bool
             <div className={classes.navDivider} />
 
             {isOpen && <div className={classes.sectionLabel}>Tools</div>}
-            <NavItem icon={ClipboardList} label="Register Project" to="/project-registration" />
+            <ProjectsNavItem />
             <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" />
             <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
             {isAdmin && <NavItem icon={DollarSign} label="FinOps" to="/finops" />}
