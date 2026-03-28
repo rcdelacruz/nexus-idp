@@ -14,12 +14,18 @@ import { UserStore } from './database/UserStore';
  * Callers must use a .catch() that logs the failure rather than swallowing it.
  */
 let _resolve: ((store: UserStore) => void) | undefined;
+let _reject: ((err: Error) => void) | undefined;
 
-export const userStoreReady = new Promise<UserStore>(res => {
+export const userStoreReady = new Promise<UserStore>((res, rej) => {
   _resolve = res;
+  _reject = rej;
 });
 
 export function resolveSharedUserStore(store: UserStore): void {
   if (!_resolve) throw new Error('sharedStore resolver not ready');
   _resolve(store);
+}
+
+export function rejectSharedUserStore(err: Error): void {
+  if (_reject) _reject(err);
 }

@@ -106,9 +106,9 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         permissionName.startsWith('search.') ||
         permissionName.startsWith('engineering-docs.') ||
         // Read-only catalog access — browse teams, services, APIs
-        permissionName.includes('.read') ||
-        permissionName.includes('.list') ||
-        permissionName.includes('.get')
+        permissionName.endsWith('.read') ||
+        permissionName.endsWith('.list') ||
+        permissionName.endsWith('.get')
       ) {
         return { result: AuthorizeResult.ALLOW };
       }
@@ -150,9 +150,9 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
 
     // Allow all read permissions
     if (
-      permissionName.includes('.read') ||
-      permissionName.includes('.list') ||
-      permissionName.includes('.get')
+      permissionName.endsWith('.read') ||
+      permissionName.endsWith('.list') ||
+      permissionName.endsWith('.get')
     ) {
       return { result: AuthorizeResult.ALLOW };
     }
