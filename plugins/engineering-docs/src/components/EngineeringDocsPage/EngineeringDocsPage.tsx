@@ -23,15 +23,11 @@ const useStyles = makeStyles(_theme => ({
     position: 'relative' as const,
   },
   refreshBtn: {
-    position: 'absolute' as const,
-    top: 12,
-    right: 16,
-    zIndex: 10,
     padding: 6,
-    color: 'var(--fg-secondary)',
+    color: 'rgba(255,255,255,0.7)',
     '&:hover': {
-      color: 'var(--fg-primary)',
-      background: 'var(--ds-background-200)',
+      color: 'rgba(255,255,255,1)',
+      background: 'rgba(255,255,255,0.1)',
     },
   },
   spinning: {
@@ -186,7 +182,25 @@ export const EngineeringDocsPage = () => {
       <Header
         title={activeSourceLabel}
         subtitle={activeSourceSubtitle}
-      />
+      >
+        {!navLoading && !navError && (
+          <Tooltip title="Refresh this page from source" placement="left">
+            <IconButton
+              size="small"
+              className={classes.refreshBtn}
+              onClick={handleRefresh}
+              disabled={refreshing || !selectedPath}
+              aria-label="Refresh doc"
+            >
+              <RefreshCw
+                size={16}
+                strokeWidth={1.5}
+                className={refreshing ? classes.spinning : undefined}
+              />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Header>
       <Content noPadding className={classes.noPaddingTop}>
         <div
           ref={layoutRef}
@@ -207,23 +221,6 @@ export const EngineeringDocsPage = () => {
                 onSelect={handleSelect}
               />
               <div className={classes.contentScroll}>
-                {!docLoading && !docError && doc && (
-                  <Tooltip title="Refresh this page from source" placement="left">
-                    <IconButton
-                      size="small"
-                      className={classes.refreshBtn}
-                      onClick={handleRefresh}
-                      disabled={refreshing}
-                      aria-label="Refresh doc"
-                    >
-                      <RefreshCw
-                        size={14}
-                        strokeWidth={1.5}
-                        className={refreshing ? classes.spinning : undefined}
-                      />
-                    </IconButton>
-                  </Tooltip>
-                )}
                 {docLoading && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: layoutHeight }}>
                     <CircularProgress size={36} thickness={3} />
