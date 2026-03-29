@@ -208,7 +208,7 @@ export const EngineeringDocsPage = () => {
               />
               <div className={classes.contentScroll}>
                 {!docLoading && !docError && doc && (
-                  <Tooltip title="Refresh this page from GitHub" placement="left">
+                  <Tooltip title="Refresh this page from source" placement="left">
                     <IconButton
                       size="small"
                       className={classes.refreshBtn}
