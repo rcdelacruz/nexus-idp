@@ -29,14 +29,15 @@ const useUserRole = () => {
   const identityApi = useApi(identityApiRef);
   const catalogApi = useApi(catalogApiRef);
   const githubAuth = useApi(githubAuthApiRef);
-  const [role, setRole] = useState<{ isNewUser?: boolean; isAdmin: boolean }>({ isAdmin: false });
+  const [role, setRole] = useState<{ isNewUser?: boolean; isAdmin: boolean; isPM: boolean }>({ isAdmin: false, isPM: false });
 
   useEffect(() => {
     const check = async () => {
       try {
         const identity = await identityApi.getBackstageIdentity();
         const isAdmin = identity.ownershipEntityRefs.some(ref => ref === 'group:default/backstage-admins');
-        if (isAdmin) { setRole({ isNewUser: false, isAdmin: true }); return; }
+        const isPM = identity.ownershipEntityRefs.some(ref => ref === 'group:default/pm-team');
+        if (isAdmin) { setRole({ isNewUser: false, isAdmin: true, isPM }); return; }
 
         // Check team: catalog entity (accurate after 60s sync) OR JWT ownershipEntityRefs
         // (accurate after fresh login). Using both ensures we never falsely block a user:
@@ -55,7 +56,9 @@ const useUserRole = () => {
         const ghToken = await githubAuth.getAccessToken('read:user', { optional: true }).catch(() => '');
         const hasGitHub = hasGitHubAnnotation || !!ghToken;
 
-        setRole({ isNewUser: !hasDeptTeam || !hasGitHub, isAdmin: false });
+        const isPMJwt = identity.ownershipEntityRefs.some(ref => ref === 'group:default/pm-team');
+        const isPMCatalog = memberOf.includes('pm-team');
+        setRole({ isNewUser: !hasDeptTeam || !hasGitHub, isAdmin: false, isPM: isPMJwt || isPMCatalog });
       } catch {
         // On error keep current state — do not accidentally unlock the portal.
       }
@@ -421,7 +424,7 @@ const ProjectsNavItem = () => {
   );
 };
 
-const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: boolean }) => {
+const AppSidebar = ({ isNewUser, isAdmin, isPM }: { isNewUser?: boolean; isAdmin: boolean; isPM: boolean }) => {
   const classes = useStyles();
   const { isOpen } = useSidebarOpenState();
   const appThemeApi = useApi(appThemeApiRef);
@@ -470,7 +473,7 @@ const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: bool
             <div className={classes.navDivider} />
 
             {isOpen && <div className={classes.sectionLabel}>Tools</div>}
-            <ProjectsNavItem />
+            {(isAdmin || isPM) && <ProjectsNavItem />}
             <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" />
             <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
             {isAdmin && <NavItem icon={DollarSign} label="FinOps" to="/finops" />}
@@ -485,8 +488,8 @@ const AppSidebar = ({ isNewUser, isAdmin }: { isNewUser?: boolean; isAdmin: bool
           label={isDark ? 'Light mode' : 'Dark mode'}
           onClick={toggleTheme}
         />
-        {isNewUser === false && <NavItem icon={UserCog} label="User Management" to="/user-management" />}
-        {isNewUser === false && <NavItem icon={Users} label="Teams" to="/catalog?filters%5Bkind%5D=group" />}
+        {isAdmin && <NavItem icon={UserCog} label="User Management" to="/user-management" />}
+        {isAdmin && <NavItem icon={Users} label="Teams" to="/catalog?filters%5Bkind%5D=group" />}
         <NavItem icon={Settings} label="Settings" to="/settings" />
         <UserMenu />
       </div>
@@ -517,7 +520,7 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
   const isDark = themeId === 'dark';
   const location = useLocation();
   const navigate = useNavigate();
-  const { isNewUser, isAdmin } = useUserRole();
+  const { isNewUser, isAdmin, isPM } = useUserRole();
 
   useEffect(() => {
     const subscription = appThemeApi.activeThemeId$().subscribe(id => {
@@ -557,7 +560,7 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
   return (
     <SidebarPage>
       <Sidebar>
-        <AppSidebar isNewUser={isNewUser} isAdmin={isAdmin} />
+        <AppSidebar isNewUser={isNewUser} isAdmin={isAdmin} isPM={isPM} />
       </Sidebar>
       <PageTransition key={location.pathname}>
         {children}

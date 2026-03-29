@@ -21,6 +21,8 @@ const DEPT_TEAMS: Record<string, string> = {
   'cloud-team': 'Cloud',
   'ai-team': 'AI',
   'qa-team': 'QA',
+  'pm-team': 'PM',
+  'sa-team': 'SolArch',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────

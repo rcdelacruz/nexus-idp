@@ -271,61 +271,225 @@ export const ProjectRegistrationPage = () => {
                 <Typography variant="subtitle2" style={{ marginBottom: 8 }}>Team Members</Typography>
               </Grid>
             </Grid>
-            {formData.team_members.map((member, index) => (
-              <Paper key={index} className={classes.memberCard}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2">
-                      Member {index + 1}
-                      {index > 0 && (
-                        <Button
-                          type="button"
-                          color="secondary"
-                          size="small"
-                          onClick={() => removeTeamMember(index)}
-                          style={{ float: 'right' }}
-                        >
-                          Remove
-                        </Button>
-                      )}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <UserPickerField
-                      label="Select User"
-                      value={selectedUsers[index] ?? null}
-                      onChange={user => handleUserSelect(index, user)}
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      select
-                      label="Role"
-                      value={member.role}
-                      onChange={handleTeamMemberChange(index, 'role')}
-                    >
-                      <MenuItem value="developer">Developer</MenuItem>
-                      <MenuItem value="tech-lead">Tech Lead</MenuItem>
-                      <MenuItem value="product-manager">Product Manager</MenuItem>
-                      <MenuItem value="designer">Designer</MenuItem>
-                    </TextField>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      select
-                      label="Access Level"
-                      value={member.accessLevel}
-                      onChange={handleTeamMemberChange(index, 'accessLevel')}
-                    >
-                      <MenuItem value="member">Team Member</MenuItem>
-                      <MenuItem value="lead">Team Lead</MenuItem>
-                      <MenuItem value="admin">Admin</MenuItem>
-                    </TextField>
-                  </Grid>
-                </Grid>
-              </Paper>
+          </>
+        )}
+      </Grid>
+    </Box>
+  );
+
+  const PROJECT_TEAMS: Record<string, string> = {
+    'web-team': 'Web',
+    'mobile-team': 'Mobile',
+    'data-team': 'Data',
+    'cloud-team': 'Cloud',
+    'ai-team': 'AI',
+    'qa-team': 'QA',
+    'sa-team': 'SolArch',
+  };
+
+  const renderTeamSetup = () => (
+    <Box style={card}>
+      <Typography style={sectionLabel}>Team Setup</Typography>
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth select variant="outlined" size="small"
+            label="Assigned Team"
+            value={formData.team_name}
+            onChange={handleChange('team_name')}
+            helperText="Select the department team — or None for solo projects"
+          >
+            <MenuItem value="">None</MenuItem>
+            {Object.entries(PROJECT_TEAMS).map(([value, label]) => (
+              <MenuItem key={value} value={value}>{label}</MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+      </Grid>
+
+      <Typography style={{ ...sectionLabel, marginTop: 20 }}>Team Members</Typography>
+
+      {formData.team_members.map((member, index) => (
+        <Box
+          key={index}
+          style={{
+            background: c.surfaceSubtle,
+            border: `1px solid ${c.border}`,
+            borderRadius: 8,
+            padding: 16,
+            marginBottom: 10,
+          }}
+        >
+          <Box display="flex" justifyContent="space-between" alignItems="center" style={{ marginBottom: 10 }}>
+            <Typography style={{ fontSize: '0.75rem', color: c.textMuted }}>
+              Member {index + 1}
+            </Typography>
+            {index > 0 && (
+              <button
+                type="button"
+                onClick={() => removeTeamMember(index)}
+                aria-label={`Remove member ${index + 1}`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                  background: 'transparent', border: `1px solid ${c.border}`,
+                  color: c.textMuted, fontSize: '0.75rem', fontWeight: 500,
+                }}
+              >
+                <Minus size={12} strokeWidth={1.5} aria-hidden="true" />
+                Remove
+              </button>
+            )}
+          </Box>
+          <Grid container spacing={1}>
+            <Grid item xs={12}>
+              <UserPickerField
+                label="Select User"
+                size="small"
+                value={selectedUsers[index] ?? null}
+                onChange={user => handleUserSelect(index, user)}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth select variant="outlined" size="small"
+                label="Role"
+                value={member.role}
+                onChange={handleTeamMemberChange(index, 'role')}
+              >
+                <MenuItem value="developer">Developer</MenuItem>
+                <MenuItem value="tech-lead">Tech Lead</MenuItem>
+                <MenuItem value="product-manager">Product Manager</MenuItem>
+                <MenuItem value="designer">Designer</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth select variant="outlined" size="small"
+                label="Access Level"
+                value={member.accessLevel}
+                onChange={handleTeamMemberChange(index, 'accessLevel')}
+              >
+                <MenuItem value="member">Team Member</MenuItem>
+                <MenuItem value="lead">Team Lead</MenuItem>
+                <MenuItem value="admin">Admin</MenuItem>
+              </TextField>
+            </Grid>
+          </Grid>
+        </Box>
+      ))}
+
+      <button
+        type="button"
+        onClick={addTeamMember}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4,
+          padding: '8px 14px', borderRadius: 6, cursor: 'pointer',
+          background: 'transparent', border: `1px solid ${c.border}`,
+          color: c.textSecondary, fontSize: '0.8125rem', fontWeight: 500,
+        }}
+      >
+        <UserPlus size={14} strokeWidth={1.5} aria-hidden="true" />
+        Add Team Member
+      </button>
+    </Box>
+  );
+
+  const renderReview = () => {
+    const members = formData.team_members.filter(m => m.fullName || m.email);
+    return (
+      <Box style={card}>
+        <Typography style={sectionLabel}>Review &amp; Create</Typography>
+        <Typography style={{ fontSize: '0.8125rem', color: c.textSecondary, marginBottom: 16 }}>
+          Review the information below. Use Back to make changes before creating.
+        </Typography>
+
+        {/* Project details */}
+        <Typography style={{ ...sectionLabel, marginTop: 8, marginBottom: 8 }}>Project</Typography>
+        <div style={reviewRow}>
+          <span style={reviewLabel}>Name</span>
+          <span style={reviewValue}>{formData.name}</span>
+        </div>
+        {formData.description && (
+          <div style={reviewRow}>
+            <span style={reviewLabel}>Description</span>
+            <span style={{ ...reviewValue, maxWidth: 400 }}>{formData.description}</span>
+          </div>
+        )}
+        <div style={reviewRow}>
+          <span style={reviewLabel}>Client</span>
+          <span style={reviewValue}>{formData.client_name}</span>
+        </div>
+        {formData.start_date && (
+          <div style={reviewRow}>
+            <span style={reviewLabel}>Start Date</span>
+            <span style={reviewValue}>{formData.start_date}</span>
+          </div>
+        )}
+        {formData.end_date && (
+          <div style={reviewRow}>
+            <span style={reviewLabel}>End Date</span>
+            <span style={reviewValue}>{formData.end_date}</span>
+          </div>
+        )}
+        {formData.pm_tool !== 'none' && (
+          <div style={reviewRow}>
+            <span style={reviewLabel}>PM Tool</span>
+            <span style={reviewValue}>{PM_TOOL_LABELS[formData.pm_tool] ?? formData.pm_tool}</span>
+          </div>
+        )}
+        {formData.pm_tool === 'jira' && formData.jira_key && (
+          <div style={reviewRow}>
+            <span style={reviewLabel}>Jira Key</span>
+            <span style={reviewValue}>{formData.jira_key}</span>
+          </div>
+        )}
+        {formData.pm_tool === 'jira' && (
+          <div style={reviewRow}>
+            <span style={reviewLabel}>Jira Template</span>
+            <span style={reviewValue}>{formData.jira_template}</span>
+          </div>
+        )}
+
+        {/* Team */}
+        <Typography style={{ ...sectionLabel, marginTop: 20, marginBottom: 8 }}>Team</Typography>
+        <div style={reviewRow}>
+          <span style={reviewLabel}>Assigned Team</span>
+          <span style={reviewValue}>{PROJECT_TEAMS[formData.team_name] || formData.team_name || '—'}</span>
+        </div>
+        {members.length > 0 ? (
+          <div style={{ ...reviewRow, flexDirection: 'column', gap: 8, borderBottom: 'none' }}>
+            <span style={reviewLabel}>Members ({members.length})</span>
+            {members.map((m, i) => (
+              <Box
+                key={i}
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                style={{
+                  padding: '8px 12px',
+                  background: c.surfaceSubtle,
+                  border: `1px solid ${c.border}`,
+                  borderRadius: 6,
+                }}
+              >
+                <Box>
+                  <Typography style={{ fontSize: '0.875rem', color: c.text, fontWeight: 500 }}>
+                    {m.fullName}
+                  </Typography>
+                  <Typography style={{ fontSize: '0.75rem', color: c.textMuted }}>
+                    {m.email}
+                  </Typography>
+                </Box>
+                <Box style={{ textAlign: 'right' }}>
+                  <Typography style={{ fontSize: '0.8125rem', color: c.textSecondary }}>
+                    {ROLE_LABELS[m.role] ?? (m.role || '—')}
+                  </Typography>
+                  <Typography style={{ fontSize: '0.75rem', color: c.textMuted }}>
+                    {ACCESS_LABELS[m.accessLevel] ?? m.accessLevel}
+                  </Typography>
+                </Box>
+              </Box>
             ))}
             <Button
               type="button"

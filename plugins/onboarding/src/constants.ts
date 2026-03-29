@@ -12,6 +12,8 @@ export const DEPT_TEAM_IDS = [
   'cloud-team',
   'ai-team',
   'qa-team',
+  'pm-team',
+  'sa-team',
 ] as const;
 
 /**

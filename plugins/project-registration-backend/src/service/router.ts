@@ -57,7 +57,7 @@ export function createRouter(options: {
   /**
    * POST /projects
    * Create a new project.
-   * Leads and admins only — enforced via userInfo.getUserInfo() ownershipEntityRefs.
+   * PM and admins only — enforced via userInfo.getUserInfo() ownershipEntityRefs.
    */
   router.post('/projects', async (req, res) => {
     try {
@@ -69,11 +69,11 @@ export function createRouter(options: {
       const isAdmin = ownershipRefs.some(
         r => r === 'group:default/backstage-admins' || r === 'group:default/admins',
       );
-      const isLead = ownershipRefs.some(
-        r => r.startsWith('group:default/') && r.endsWith('-lead'),
+      const isPM = ownershipRefs.some(
+        r => r === 'group:default/pm-team',
       );
-      if (!isAdmin && !isLead) {
-        return res.status(403).json({ error: 'Only team leads and admins can create projects' });
+      if (!isAdmin && !isPM) {
+        return res.status(403).json({ error: 'Only project managers and admins can create projects' });
       }
 
       const {
@@ -125,9 +125,9 @@ export function createRouter(options: {
       const info = await userInfo.getUserInfo(credentials);
       const ownershipRefs = info.ownershipEntityRefs ?? [];
       const isAdmin = ownershipRefs.some(r => r === 'group:default/backstage-admins' || r === 'group:default/admins');
-      const isLead = ownershipRefs.some(r => r.startsWith('group:default/') && r.endsWith('-lead'));
-      if (!isAdmin && !isLead) {
-        return res.status(403).json({ error: 'Only team leads and admins can update projects' });
+      const isPM = ownershipRefs.some(r => r === 'group:default/pm-team');
+      if (!isAdmin && !isPM) {
+        return res.status(403).json({ error: 'Only project managers and admins can update projects' });
       }
 
       const { name, description, client_name, start_date, end_date, pm_tool, jira_key, jira_template, team_name, team_members } = req.body;
@@ -156,9 +156,9 @@ export function createRouter(options: {
       const info = await userInfo.getUserInfo(credentials);
       const ownershipRefs = info.ownershipEntityRefs ?? [];
       const isAdmin = ownershipRefs.some(r => r === 'group:default/backstage-admins' || r === 'group:default/admins');
-      const isLead = ownershipRefs.some(r => r.startsWith('group:default/') && r.endsWith('-lead'));
-      if (!isAdmin && !isLead) {
-        return res.status(403).json({ error: 'Only team leads and admins can unarchive projects' });
+      const isPM = ownershipRefs.some(r => r === 'group:default/pm-team');
+      if (!isAdmin && !isPM) {
+        return res.status(403).json({ error: 'Only project managers and admins can unarchive projects' });
       }
       await projectStore.unarchiveProject(req.params.id);
       return res.json({ message: 'Project restored successfully' });
@@ -214,11 +214,11 @@ export function createRouter(options: {
       const isAdmin = ownershipRefs.some(
         r => r === 'group:default/backstage-admins' || r === 'group:default/admins',
       );
-      const isLead = ownershipRefs.some(
-        r => r.startsWith('group:default/') && r.endsWith('-lead'),
+      const isPM = ownershipRefs.some(
+        r => r === 'group:default/pm-team',
       );
-      if (!isAdmin && !isLead) {
-        return res.status(403).json({ error: 'Only team leads and admins can archive projects' });
+      if (!isAdmin && !isPM) {
+        return res.status(403).json({ error: 'Only project managers and admins can archive projects' });
       }
 
       await projectStore.archiveProject(req.params.id);

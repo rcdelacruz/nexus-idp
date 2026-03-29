@@ -85,7 +85,7 @@ async function verifyGitHubOrgEmail(
   }
 }
 
-const DEPT_TEAMS = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team'];
+const DEPT_TEAMS = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team', 'pm-team', 'sa-team'];
 
 // Only users authenticated via Google OAuth with the org domain are issued tokens by Backstage.
 // As an extra defense-in-depth check, we validate the userEntityRef namespace and name format.

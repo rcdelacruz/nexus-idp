@@ -6,7 +6,7 @@ import { UserEntity } from '@backstage/catalog-model';
 import { LoggerService, SchedulerServiceTaskRunner } from '@backstage/backend-plugin-api';
 import { UserStore } from '../database/UserStore';
 
-const DEPT_TEAMS = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team'];
+const DEPT_TEAMS = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team', 'pm-team', 'sa-team'];
 
 export class UserEntityProvider implements EntityProvider {
   private connection?: EntityProviderConnection;

@@ -28,6 +28,8 @@ const DEPT_TEAMS = [
   'group:default/cloud-team',
   'group:default/ai-team',
   'group:default/qa-team',
+  'group:default/pm-team',
+  'group:default/sa-team',
 ];
 
 /** Platform admins — full access to everything including FinOps */

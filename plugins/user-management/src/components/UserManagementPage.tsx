@@ -14,7 +14,7 @@ import { userManagementApiRef } from '../api/refs';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEPT_TEAMS = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team'];
+const DEPT_TEAMS = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team', 'pm-team', 'sa-team'];
 
 const TEAM_LABELS: Record<string, string> = {
   'web-team': 'Web',
@@ -23,6 +23,8 @@ const TEAM_LABELS: Record<string, string> = {
   'cloud-team': 'Cloud',
   'ai-team': 'AI',
   'qa-team': 'QA',
+  'pm-team': 'PM',
+  'sa-team': 'SolArch',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────

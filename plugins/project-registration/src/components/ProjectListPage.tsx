@@ -462,11 +462,20 @@ export const ProjectListPage = () => {
                 </Grid>
                 <Grid item xs={12}>
                   <TextField
-                    fullWidth label="Team Name"
+                    fullWidth select variant="outlined" size="small"
+                    label="Assigned Team"
                     value={editForm.team_name}
                     onChange={handleEditChange('team_name')}
-                    className={classes.dialogField}
-                  />
+                  >
+                    <MenuItem value="">None</MenuItem>
+                    <MenuItem value="web-team">Web</MenuItem>
+                    <MenuItem value="mobile-team">Mobile</MenuItem>
+                    <MenuItem value="data-team">Data</MenuItem>
+                    <MenuItem value="cloud-team">Cloud</MenuItem>
+                    <MenuItem value="ai-team">AI</MenuItem>
+                    <MenuItem value="qa-team">QA</MenuItem>
+                    <MenuItem value="sa-team">SolArch</MenuItem>
+                  </TextField>
                 </Grid>
                 <Grid item xs={6}>
                   <TextField
