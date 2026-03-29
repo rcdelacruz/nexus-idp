@@ -7,5 +7,3 @@ nav:
   - Template Permissions: template-permissions.md
   - TechDocs Guide: techdocs-guide.md
   - K8s + ArgoCD + CNPG: k8s-argocd-cnpg-integration.md
-  - Local Provisioning: local-provisioning-quickstart.md
-  - Local Provisioning Plan: local-provisioning-implementation-plan.md
