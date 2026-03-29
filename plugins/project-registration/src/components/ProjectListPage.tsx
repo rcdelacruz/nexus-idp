@@ -457,7 +457,41 @@ export const ProjectListPage = () => {
                     required fullWidth label="Client Name"
                     value={editForm.client_name}
                     onChange={handleEditChange('client_name')}
-                    className={classes.dialogField}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth select variant="outlined" size="small"
+                    label="Assigned Team"
+                    value={editForm.team_name}
+                    onChange={handleEditChange('team_name')}
+                  >
+                    <MenuItem value="">None</MenuItem>
+                    <MenuItem value="web-team">Web</MenuItem>
+                    <MenuItem value="mobile-team">Mobile</MenuItem>
+                    <MenuItem value="data-team">Data</MenuItem>
+                    <MenuItem value="cloud-team">Cloud</MenuItem>
+                    <MenuItem value="ai-team">AI</MenuItem>
+                    <MenuItem value="qa-team">QA</MenuItem>
+                    <MenuItem value="sa-team">SolArch</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth type="date" variant="outlined" size="small"
+                    label="Start Date"
+                    InputLabelProps={{ shrink: true }}
+                    value={editForm.start_date}
+                    onChange={handleEditChange('start_date')}
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth type="date" variant="outlined" size="small"
+                    label="End Date"
+                    InputLabelProps={{ shrink: true }}
+                    value={editForm.end_date}
+                    onChange={handleEditChange('end_date')
                   />
                 </Grid>
                 <Grid item xs={12}>
