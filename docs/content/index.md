@@ -1,10 +1,10 @@
 # Nexus IDP Documentation
 
-Welcome to the Nexus IDP internal documentation — the operational guide for platform engineers and team leads managing your Internal Developer Platform.
+Welcome to the Nexus IDP internal documentation — the operational guide for platform engineers and team leads managing the Stratpoint Internal Developer Platform.
 
 ## What is Nexus IDP?
 
-Nexus IDP is a white-label Internal Developer Platform, built on Backstage 1.49.1. It serves as the central hub for:
+Nexus IDP is Stratpoint's Internal Developer Platform, built on Backstage 1.49.1. It serves as the central hub for:
 
 - **Software Catalog** — browse all components, systems, APIs, and resources
 - **FinOps Dashboard** — AWS cost and resource monitoring across Non-Prod, Legacy, and Production accounts
@@ -33,4 +33,5 @@ New users are auto-provisioned into `general-engineers` on first Google or GitHu
 - [User & Group Management](user-group-management.md) — managing users and teams
 - [Google OAuth Setup](google-oauth-setup.md) — configuring sign-in
 - [K8s + ArgoCD + CNPG Integration](k8s-argocd-cnpg-integration.md) — Kubernetes and GitOps setup
-- [Local Provisioning](local-provisioning-quickstart.md) — using the local provisioner
+
+- [Design System](design-system.md) — Geist design tokens, components, and rules for contributors

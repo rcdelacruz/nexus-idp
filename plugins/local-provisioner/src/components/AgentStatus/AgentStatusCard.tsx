@@ -132,9 +132,7 @@ export const AgentStatusCard = ({ agent, loading, onDisconnect, onRevoke }: Agen
             </Typography>
             <Box mt={2}>
               <Typography variant="body2" color="primary">
-                <a href="/docs/default/component/backstage-agent">
-                  View Setup Guide
-                </a>
+                {/* TODO: wire to local-provisioner engineering-docs source once plugins are in separate repos */}
               </Typography>
             </Box>
           </div>

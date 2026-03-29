@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Content, Header, Page, InfoCard } from '@backstage/core-components';
-import { Grid } from '@material-ui/core';
+import { Grid, Box, Typography } from '@material-ui/core';
 import { useApi, errorApiRef } from '@backstage/core-plugin-api';
+import { Construction } from 'lucide-react';
+import { useColors } from '@stratpoint/theme-utils';
 import { localProvisionerApiRef } from '../../api/LocalProvisionerClient';
 import { useProvisioningTasks } from '../../hooks/useProvisioningTasks';
 import { useAgents } from '../../hooks/useAgents';
@@ -64,6 +66,8 @@ export const LocalProvisionerPage = () => {
     }
   }, [api, errorApi, selectedAgentId]);
 
+  const c = useColors();
+
   return (
     <Page themeId="tool">
       <Header
@@ -71,6 +75,22 @@ export const LocalProvisionerPage = () => {
         subtitle="Manage local development resources provisioned to your machine"
       />
       <Content>
+        <Box
+          display="flex" alignItems="flex-start"
+          style={{
+            background: c.surfaceSubtle,
+            border: `1px solid ${c.border}`,
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 20,
+            gap: 10,
+          }}
+        >
+          <Construction size={16} color={c.textMuted} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
+          <Typography style={{ fontSize: '0.8125rem', color: c.textMuted }}>
+            This page is under construction. The Local Provisioner is being restructured as a standalone installable plugin.
+          </Typography>
+        </Box>
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
             <AgentList
