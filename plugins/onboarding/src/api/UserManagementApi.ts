@@ -35,6 +35,7 @@ export class UserManagementApi {
   async getMe(): Promise<{
     name: string; display_name: string; email: string;
     teams: string[]; is_lead: boolean; is_admin: boolean; github_username: string | null;
+    onboarding_catalog_tour: boolean; onboarding_engineering_docs: boolean;
   } | null> {
     const res = await this.request('GET', '/me');
     if (res.status === 404) return null;          // user not in DB — definitive "not found"
@@ -57,5 +58,9 @@ export class UserManagementApi {
 
   assign(args: { userName: string; teams: string[]; isLead?: boolean; displayName?: string }) {
     return this.post('/assign', args);
+  }
+
+  markOnboardingStep(step: 'catalog_tour' | 'engineering_docs', done: boolean) {
+    return this.post('/onboarding-step', { step, done });
   }
 }

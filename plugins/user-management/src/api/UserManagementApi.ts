@@ -32,6 +32,7 @@ export class UserManagementApi {
   async listUsers(): Promise<Array<{
     name: string; display_name: string; email: string;
     teams: string[]; is_lead: boolean; is_admin: boolean; github_username: string | null;
+    onboarding_catalog_tour: boolean; onboarding_engineering_docs: boolean;
   }>> {
     const res = await this.requestRaw('GET', '/users');
     if (!res.ok) {
@@ -71,5 +72,9 @@ export class UserManagementApi {
 
   deleteUser(userName: string) {
     return this.request('DELETE', `/users/${encodeURIComponent(userName)}`);
+  }
+
+  markOnboardingStep(step: 'catalog_tour' | 'engineering_docs', done: boolean) {
+    return this.request('POST', '/onboarding-step', { step, done });
   }
 }

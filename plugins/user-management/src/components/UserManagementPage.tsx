@@ -38,6 +38,9 @@ interface UserRecord {
   isLead: boolean;
   isAdmin: boolean;
   isUnassigned: boolean;
+  githubLinked: boolean;
+  onboardingCatalogTour: boolean;
+  onboardingEngineeringDocs: boolean;
 }
 
 export interface AssignDialogProps {
@@ -364,6 +367,9 @@ export const UserManagementPage = () => {
             isLead: row.is_lead,
             isAdmin: row.is_admin,
             isUnassigned: !hasDeptTeam && !row.is_admin,
+            githubLinked: !!row.github_username,
+            onboardingCatalogTour: row.onboarding_catalog_tour ?? false,
+            onboardingEngineeringDocs: row.onboarding_engineering_docs ?? false,
           };
         });
       records.sort((a, b) => {
@@ -463,6 +469,7 @@ export const UserManagementPage = () => {
                   <TableCell style={headerCell} scope="col">User</TableCell>
                   <TableCell style={headerCell} scope="col">Department</TableCell>
                   <TableCell style={headerCell} scope="col">Groups</TableCell>
+                  <TableCell style={headerCell} scope="col">Onboarding</TableCell>
                   <TableCell style={headerCell} scope="col">Action</TableCell>
                 </TableRow>
               </TableHead>
@@ -520,6 +527,28 @@ export const UserManagementPage = () => {
                           <span style={{ fontSize: '0.75rem', color: c.textMuted }}>—</span>
                         )}
                       </Box>
+                    </TableCell>
+
+                    <TableCell style={{ borderBottom: 'none', padding: '12px 16px' }}>
+                      {(() => {
+                        const steps = [
+                          { label: 'Team', done: user.deptTeams.length > 0 || user.isAdmin },
+                          { label: 'GitHub', done: user.githubLinked },
+                          { label: 'Catalog', done: user.onboardingCatalogTour },
+                          { label: 'Docs', done: user.onboardingEngineeringDocs },
+                        ];
+                        const completed = steps.filter(s => s.done).length;
+                        return (
+                          <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
+                            {steps.map(s => (
+                              <span key={s.label} style={badge(s.done ? 'green' : 'gray')}>{s.label}</span>
+                            ))}
+                            <Typography style={{ fontSize: '0.6875rem', color: c.textMuted, marginLeft: 4 }}>
+                              {completed}/{steps.length}
+                            </Typography>
+                          </Box>
+                        );
+                      })()}
                     </TableCell>
 
                     <TableCell style={{ borderBottom: 'none', padding: '12px 16px' }}>

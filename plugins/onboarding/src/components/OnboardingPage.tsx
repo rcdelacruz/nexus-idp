@@ -28,29 +28,51 @@ const DEPT_TEAMS: Record<string, string> = {
 export interface StepCardProps { step: Step; isLast: boolean; }
 export interface RegistrationFormProps { identity: ReturnType<typeof useIdentity>; onRegistered: () => void; }
 
-// ── Session-persistent progress ───────────────────────────────────────────────
-// NOTE: userRef arrives async (identity API), so we cannot use useState lazy init.
-// Instead, start empty and load from localStorage once userRef is known.
+// ── Onboarding progress ──────────────────────────────────────────────────────
+// Steps 1 (register) and 2 (github) are derived from DB fields (teams, github_username).
+// Steps 3 (catalog-tour) and 4 (engineering-docs) are stored in DB columns.
+// The __registered flag is session-only (localStorage) to bridge the gap between
+// form submit and the next DB poll confirming team assignment.
 
-function useProgress(userRef: string) {
+function useProgress(userRef: string, api: { markOnboardingStep: (step: 'catalog_tour' | 'engineering_docs', done: boolean) => Promise<any> }) {
   const [data, setData] = useState<Record<string, boolean>>({});
 
+  // Load __registered flag from localStorage (session-only)
   useEffect(() => {
     if (!userRef) return;
     try {
       const saved = JSON.parse(localStorage.getItem(`onboarding_v1_${userRef}`) ?? '{}');
-      setData(saved);
+      setData(prev => ({ ...prev, __registered: saved.__registered ?? false }));
     } catch {}
   }, [userRef]);
+
+  // Load DB-backed steps from getMe response
+  const loadFromDb = useCallback((me: { onboarding_catalog_tour: boolean; onboarding_engineering_docs: boolean } | null) => {
+    if (!me) return;
+    setData(prev => ({
+      ...prev,
+      'catalog-tour': me.onboarding_catalog_tour,
+      'engineering-docs': me.onboarding_engineering_docs,
+    }));
+  }, []);
 
   const mark = useCallback((id: string, value: boolean) => {
     if (!userRef) return;
     setData(prev => {
       const next = { ...prev, [id]: value };
-      try { localStorage.setItem(`onboarding_v1_${userRef}`, JSON.stringify(next)); } catch {}
+      // __registered is session-only
+      if (id === '__registered') {
+        try { localStorage.setItem(`onboarding_v1_${userRef}`, JSON.stringify({ __registered: value })); } catch {}
+      }
+      // DB-backed steps
+      if (id === 'catalog-tour') {
+        api.markOnboardingStep('catalog_tour', value).catch(() => {});
+      } else if (id === 'engineering-docs') {
+        api.markOnboardingStep('engineering_docs', value).catch(() => {});
+      }
       return next;
     });
-  }, [userRef]);
+  }, [userRef, api]);
 
   const markRegistered = useCallback(() => mark('__registered', true), [mark]);
   const clearRegistered = useCallback(() => mark('__registered', false), [mark]);
@@ -58,6 +80,7 @@ function useProgress(userRef: string) {
   return {
     done: data,
     mark,
+    loadFromDb,
     isRegistered: data['__registered'] ?? false,
     markRegistered,
     clearRegistered,
@@ -99,26 +122,22 @@ function useIdentity() {
   return state;
 }
 
-function useGitHubStatus(userRef: string) {
+function useGitHubStatus(userRef: string, onMeLoaded?: (me: { onboarding_catalog_tour: boolean; onboarding_engineering_docs: boolean } | null) => void) {
   const api = useApi(userManagementApiRef);
   const [status, setStatus] = useState<'loading' | 'verified' | 'unverified' | 'no-entity'>('loading');
   const [login, setLogin] = useState<string | undefined>();
-  // undefined = loading; true = in DB with ≥1 team; false = not in DB OR in DB with no teams
   const [isTeamAssigned, setIsTeamAssigned] = useState<boolean | undefined>(undefined);
+  const onMeLoadedRef = useRef(onMeLoaded);
+  onMeLoadedRef.current = onMeLoaded;
 
   const check = useCallback(async () => {
-    // Source of truth: DB only. GitHub is considered linked only when saved in the DB.
-    // getMe() returns null on 404 (not in DB), throws on server/network errors.
     let me: Awaited<ReturnType<typeof api.getMe>>;
     try {
       me = await api.getMe();
     } catch {
-      // Server error or network failure — leave state unchanged so we don't
-      // incorrectly show the registration form to already-registered users during outages.
       return;
     }
-    // A user is "registered" only when they have at least one team assigned.
-    // Users who only linked GitHub (no team yet) have teams=[] and are NOT considered registered.
+    onMeLoadedRef.current?.(me);
     setIsTeamAssigned(me !== null && (me.teams?.length ?? 0) > 0);
     if (me?.github_username) {
       setLogin(me.github_username);
@@ -409,8 +428,9 @@ export const OnboardingPage = () => {
   const config = useApi(configApiRef);
   const githubOwner = config.getOptionalString('organization.githubOwner') ?? '';
   const c = useColors();
-  const { status: ghStatus, login: ghLogin, refresh: refreshGitHub, isTeamAssigned } = useGitHubStatus(identity.userRef);
-  const { done, mark, isRegistered, markRegistered, clearRegistered } = useProgress(identity.userRef);
+  const userManagementApi = useApi(userManagementApiRef);
+  const { done, mark, loadFromDb, isRegistered, markRegistered, clearRegistered } = useProgress(identity.userRef, userManagementApi);
+  const { status: ghStatus, login: ghLogin, refresh: refreshGitHub, isTeamAssigned } = useGitHubStatus(identity.userRef, loadFromDb);
 
   // Records when the user submitted the form in the current session.
   // Used to distinguish a freshly-set localStorage flag (do not clear) from a stale one (do clear).

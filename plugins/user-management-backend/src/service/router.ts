@@ -253,6 +253,27 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
     res.json({ ok: true, message: 'GitHub account linked. Your profile will update within a minute.' });
   }));
 
+  // ── POST /onboarding-step ──────────────────────────────────────────────────
+  // Any authenticated user marks their own onboarding step as done/undone.
+  // Body: { step: 'catalog_tour' | 'engineering_docs'; done: boolean }
+  router.post('/onboarding-step', wrap(async (req: Request, res: Response) => {
+    const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
+    const info = await userInfo.getUserInfo(credentials);
+    const name = assertOrgUser(info.userEntityRef, orgDomain);
+
+    const { step, done } = req.body;
+    if (!['catalog_tour', 'engineering_docs'].includes(step)) {
+      throw new InputError(`Invalid step: ${step}. Must be 'catalog_tour' or 'engineering_docs'.`);
+    }
+    if (typeof done !== 'boolean') {
+      throw new InputError('done must be a boolean');
+    }
+
+    await userStore.updateOnboardingStep(name, step, done);
+    logger.info(`User ${name} marked onboarding step '${step}' as ${done ? 'done' : 'undone'}`);
+    res.json({ ok: true });
+  }));
+
   // ── POST /assign ──────────────────────────────────────────────────────────
   // Admin-only: assign any user to a team.
   // Body: { userName: string; teams: string[]; isLead?: boolean; displayName?: string; email?: string }

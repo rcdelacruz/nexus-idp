@@ -124,20 +124,23 @@ export function badge(variant: string): React.CSSProperties {
     fontVariantNumeric: 'tabular-nums',
   };
 
-  // Solid color variants — dark bg, white text
+  // Solid color variants — tinted bg with bright colored text
+  // Uses -200 bg (deep tint in dark, pastel in light) + -900 text (bright in dark, dark in light)
+  // Same visual weight as subtle but with stronger color presence
   const SOLID: Record<string, React.CSSProperties> = {
-    blue:    { background: 'var(--ds-blue-800)',   color: 'var(--ds-contrast-fg, #fff)' },
-    purple:  { background: 'var(--ds-purple-900)', color: 'var(--ds-contrast-fg, #fff)' },
-    amber:   { background: 'var(--ds-amber-700)',  color: '#000' },
-    red:     { background: 'var(--ds-red-900)',    color: 'var(--ds-contrast-fg, #fff)' },
-    green:   { background: 'var(--ds-green-900)',  color: 'var(--ds-contrast-fg, #fff)' },
-    teal:    { background: 'var(--ds-teal-900)',   color: 'var(--ds-contrast-fg, #fff)' },
-    pink:    { background: 'var(--ds-pink-900)',   color: 'var(--ds-contrast-fg, #fff)' },
-    gray:    { background: 'var(--ds-gray-900)',   color: 'var(--ds-contrast-fg, #fff)' },
+    blue:    { background: 'var(--ds-blue-200)',   color: 'var(--ds-blue-900)' },
+    purple:  { background: 'var(--ds-purple-200)', color: 'var(--ds-purple-900)' },
+    amber:   { background: 'var(--ds-amber-200)',  color: 'var(--ds-amber-900)' },
+    red:     { background: 'var(--ds-red-200)',    color: 'var(--ds-red-900)' },
+    green:   { background: 'var(--ds-green-200)',  color: 'var(--ds-green-900)' },
+    teal:    { background: 'var(--ds-teal-200)',   color: 'var(--ds-teal-900)' },
+    pink:    { background: 'var(--ds-pink-200)',   color: 'var(--ds-pink-900)' },
+    gray:    { background: 'var(--ds-gray-200)',   color: 'var(--ds-gray-1000)' },
     inverted:{ background: 'var(--ds-gray-1000)',  color: 'var(--ds-gray-100)' },
   };
 
-  // Subtle variants — light tinted bg, dark colored text
+  // Subtle variants — tinted bg, colored text
+  // -200 bg adapts per mode (light=pastel, dark=deep tint), -900 text adapts (light=dark, dark=bright)
   const SUBTLE: Record<string, React.CSSProperties> = {
     blue:    { background: 'var(--ds-blue-200)',   color: 'var(--ds-blue-900)' },
     purple:  { background: 'var(--ds-purple-200)', color: 'var(--ds-purple-900)' },

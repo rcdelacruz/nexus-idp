@@ -9,6 +9,8 @@ export interface UserRecord {
   is_lead: boolean;
   is_admin: boolean;
   github_username: string | null;
+  onboarding_catalog_tour: boolean;
+  onboarding_engineering_docs: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -44,6 +46,8 @@ export class UserStore {
         table.boolean('is_lead').notNullable().defaultTo(false);
         table.boolean('is_admin').notNullable().defaultTo(false);
         table.string('github_username').nullable();
+        table.boolean('onboarding_catalog_tour').notNullable().defaultTo(false);
+        table.boolean('onboarding_engineering_docs').notNullable().defaultTo(false);
         table.timestamp('created_at').notNullable().defaultTo(db.fn.now());
         table.timestamp('updated_at').notNullable().defaultTo(db.fn.now());
       });
@@ -53,6 +57,14 @@ export class UserStore {
       if (!hasIsAdmin) {
         await db.schema.alterTable(TABLE, (table: any) => {
           table.boolean('is_admin').notNullable().defaultTo(false);
+        });
+      }
+      // Add onboarding progress columns (migration)
+      const hasCatalogTour = await db.schema.hasColumn(TABLE, 'onboarding_catalog_tour');
+      if (!hasCatalogTour) {
+        await db.schema.alterTable(TABLE, (table: any) => {
+          table.boolean('onboarding_catalog_tour').notNullable().defaultTo(false);
+          table.boolean('onboarding_engineering_docs').notNullable().defaultTo(false);
         });
       }
     }
@@ -116,6 +128,13 @@ export class UserStore {
     await this.db(TABLE)
       .where({ name })
       .update({ is_admin: isAdmin, updated_at: new Date() });
+  }
+
+  async updateOnboardingStep(name: string, step: 'catalog_tour' | 'engineering_docs', done: boolean): Promise<void> {
+    const column = `onboarding_${step}`;
+    await this.db(TABLE)
+      .where({ name })
+      .update({ [column]: done, updated_at: new Date() });
   }
 
   async delete(name: string): Promise<void> {
