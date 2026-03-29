@@ -24,10 +24,11 @@ const useStyles = makeStyles(_theme => ({
   },
   refreshBtn: {
     padding: 6,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'inherit',
+    opacity: 0.7,
     '&:hover': {
-      color: 'rgba(255,255,255,1)',
-      background: 'rgba(255,255,255,0.1)',
+      opacity: 1,
+      background: 'rgba(128,128,128,0.15)',
     },
   },
   spinning: {
