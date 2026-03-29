@@ -44,10 +44,12 @@ export class GitHubDocsService {
     this.cachePrefix = `${repoOwner}/${repoName}@${branch}:`;
   }
 
-  private async cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  private async cached<T>(key: string, fn: () => Promise<T>, skipCache = false): Promise<T> {
     const cacheKey = `${this.cachePrefix}${key}`;
-    const hit = await this.cache.get<any>(cacheKey);
-    if (hit !== undefined) return hit as T;
+    if (!skipCache) {
+      const hit = await this.cache.get<any>(cacheKey);
+      if (hit !== undefined) return hit as T;
+    }
     const data = await fn();
     await this.cache.set(cacheKey, data as any);
     return data;
@@ -120,10 +122,11 @@ export class GitHubDocsService {
     return key.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  async buildNav(): Promise<NavItem[]> {
+  async buildNav(skipCache = false): Promise<NavItem[]> {
     this.logger.info(`[engineering-docs] buildNav called for ${this.apiBase} / ${this.contentBase}`);
     return this.cached('nav', async () => {
       // Try MkDocs first (mkdocs.yml at repo root)
+
       try {
         const src = await this.fetchRawContent('mkdocs.yml');
         const cleanedSrc = src.replace(/!![a-zA-Z]+\/[a-zA-Z][a-zA-Z0-9:._]*/g, 'null');
@@ -150,7 +153,7 @@ export class GitHubDocsService {
         this.logger.warn(`[engineering-docs] Trees API failed, falling back to recursive traversal: ${e}`);
         return this.buildNavForDir(this.contentBase, '');
       }
-    });
+    }, skipCache);
   }
 
   private convertMkDocsNav(navItems: any[]): NavItem[] {
@@ -900,6 +903,14 @@ export class GitHubDocsService {
 
   async getDocContent(docPath: string): Promise<DocContent> {
     return this.cached(`doc:${docPath}`, () => this._fetchDocContent(docPath));
+  }
+
+  async refreshDocContent(docPath: string): Promise<DocContent> {
+    return this.cached(`doc:${docPath}`, () => this._fetchDocContent(docPath), true);
+  }
+
+  async refreshNav(): Promise<NavItem[]> {
+    return this.buildNav(true);
   }
 
   private async _fetchDocContent(docPath: string): Promise<DocContent> {

@@ -30,6 +30,16 @@ export class EngineeringDocsClient implements EngineeringDocsApi {
     return res.json();
   }
 
+  private async fetchPost<T>(path: string): Promise<T> {
+    const [baseUrl, headers] = await Promise.all([this.getBaseUrl(), this.authHeaders()]);
+    const res = await fetch(`${baseUrl}${path}`, { method: 'POST', headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error((err as any).error ?? res.statusText);
+    }
+    return res.json();
+  }
+
   async getSources(): Promise<DocSource[]> {
     const data = await this.fetch<{ sources: DocSource[] }>('/docs/sources');
     return data.sources;
@@ -60,5 +70,16 @@ export class EngineeringDocsClient implements EngineeringDocsApi {
   ): Promise<DocContent> {
     const params = new URLSearchParams({ repo, branch, base: contentBase, path: docPath });
     return this.fetch<DocContent>(`/docs/entity/content?${params}`);
+  }
+
+  async refreshDoc(docPath: string, sourceId?: string): Promise<DocContent> {
+    const base = sourceId ? `/docs/sources/${encodeURIComponent(sourceId)}` : '/docs';
+    return this.fetchPost<DocContent>(`${base}/refresh/doc?path=${encodeURIComponent(docPath)}`);
+  }
+
+  async refreshNav(sourceId?: string): Promise<NavItem[]> {
+    const base = sourceId ? `/docs/sources/${encodeURIComponent(sourceId)}` : '/docs';
+    const data = await this.fetchPost<{ nav: NavItem[] }>(`${base}/refresh/nav`);
+    return data.nav;
   }
 }

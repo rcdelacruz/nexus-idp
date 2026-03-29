@@ -7,7 +7,7 @@ import { makeStyles, useTheme } from '@material-ui/core';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const SyntaxHighlighter: any = require('react-syntax-highlighter').default ?? require('react-syntax-highlighter');
 import { atomOneDark, atomOneLight } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, RefreshCw } from 'lucide-react';
 import { slugify } from './DocTOC';
 
 // ─── Mermaid ────────────────────────────────────────────────────────────────
@@ -315,6 +315,8 @@ interface DocViewerProps {
   html?: string;       // pre-rendered HTML from backend (preferred)
   currentPath?: string; // selected nav path (e.g. "getting-started/installation")
   onNavigate?: (path: string) => void; // called when an internal doc link is clicked
+  onRefresh?: () => void; // called when user clicks refresh
+  refreshing?: boolean;   // true while refresh is in flight
 }
 
 // Resolve a relative doc link href to a nav path (no extension, relative to currentPath's dir)

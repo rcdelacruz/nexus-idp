@@ -38,4 +38,10 @@ export interface EngineeringDocsApi {
     contentBase: string,
     docPath: string,
   ): Promise<DocContent>;
+
+  /** Force-refresh a specific doc page from GitHub (bypasses cache, returns fresh content). */
+  refreshDoc(docPath: string, sourceId?: string): Promise<DocContent>;
+
+  /** Force-refresh the nav for a source from GitHub. */
+  refreshNav(sourceId?: string): Promise<NavItem[]>;
 }
