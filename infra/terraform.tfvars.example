@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and fill in values — DO NOT COMMIT terraform.tfvars
+aws_region  = "ap-southeast-1"
+aws_profile = "cost-admin-nonprod"
+
+backstage_image        = "746540123485.dkr.ecr.ap-southeast-1.amazonaws.com/backstage-idp-prod:latest"
+backstage_app_base_url = "https://portal.stratpoint.io"
+
+# Secrets — set via TF_VAR_ env vars in CI/CD instead of this file
+auth_google_client_id      = ""
+auth_google_client_secret  = ""
+backend_secret             = ""
+github_token               = ""
+auth_github_client_id      = ""
+auth_github_client_secret  = ""
