@@ -9,7 +9,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { DEPT_TEAM_IDS_JWT } from '@internal/plugin-onboarding';
 import {
   LayoutGrid, BookOpen, Code2, Zap, HardDrive, FolderGit2,
-  Users, School, Server, ArrowUpRight,
+  Users, School, Radar, DollarSign, ArrowUpRight,
 } from 'lucide-react';
 
 const g = {
@@ -73,14 +73,20 @@ export const HomePage = () => {
   const identityApi = useApi(identityApiRef);
   const navigate = useNavigate();
   const catalogApi = useApi(catalogApiRef) as CatalogApi;
+  const [isAdmin, setIsAdmin] = React.useState(false);
+  const [isPM, setIsPM] = React.useState(false);
 
   // Redirect new users (no dept team, not admin) to onboarding on first visit.
+  // Also detect role for conditional homepage sections.
   useEffect(() => {
     identityApi.getBackstageIdentity().then(identity => {
       const refs = identity.ownershipEntityRefs ?? [];
-      const isAdmin = refs.some(r => r === 'group:default/backstage-admins');
+      const admin = refs.some(r => r === 'group:default/backstage-admins');
+      const pm = refs.some(r => r === 'group:default/pm-team');
+      setIsAdmin(admin);
+      setIsPM(pm);
       const hasDeptTeam = refs.some(r => DEPT_TEAM_IDS_JWT.some(t => r === `group:default/${t}`));
-      if (!hasDeptTeam && !isAdmin) {
+      if (!hasDeptTeam && !admin) {
         navigate('/onboarding', { replace: true });
       }
     }).catch(err => {
@@ -149,32 +155,45 @@ export const HomePage = () => {
           <div>
             <SectionLabel>Platform</SectionLabel>
             <div className="hp-grid-3">
-              <Tile icon={LayoutGrid} title="Service Catalog" description="Discover and manage all your software components, services, libraries, and APIs." to="/catalog" />
-              <Tile icon={BookOpen}   title="Documentation"   description="Access comprehensive technical docs for every component in your organization."   to="/engineering-docs" />
-              <Tile icon={Code2}      title="API Explorer"    description="Browse internal APIs, view schemas, and explore endpoint definitions."           to="/api-docs" />
+              <Tile icon={LayoutGrid} title="Service Catalog" description="Discover and manage all software components, services, and APIs." to="/catalog" />
+              <Tile icon={BookOpen}   title="Documentation"   description="Technical docs for every component in the organization."         to="/engineering-docs" />
+              <Tile icon={Code2}      title="API Explorer"    description="Browse internal APIs, view schemas, and endpoint definitions."    to="/api-docs" />
             </div>
           </div>
 
-          {/* Tooling — 4 equal columns */}
+          {/* Tooling — 3 equal columns */}
           <div>
             <SectionLabel>Tooling</SectionLabel>
-            <div className="hp-grid-4">
-              <Tile icon={Zap}        title="Scaffolder"           description="Create new components from standardized templates."       to="/create" />
-              <Tile icon={Users}      title="Teams"                description="Organize and manage team ownership of components."        to="/catalog?filters%5Bkind%5D=group" />
-              <Tile icon={FolderGit2} title="Project Registration" description="Register new projects and manage their metadata."          to="/project-registration" />
-              <Tile icon={HardDrive}  title="Local Provisioner"    description="Manage resources provisioned to your local dev machine."   to="/local-provisioner" />
+            <div className="hp-grid-3">
+              <Tile icon={Zap}        title="Scaffolder"         description="Create new components from standardized templates."            to="/create" />
+              <Tile icon={HardDrive}  title="Local Provisioner"  description="Manage resources provisioned to your local dev machine."       to="/local-provisioner" />
+              <Tile icon={Radar}      title="Tech Radar"         description="Track technology adoption across the organization."            to="/tech-radar" />
             </div>
           </div>
 
-          {/* Local Dev — 3 equal columns */}
-          <div>
-            <SectionLabel>Local Development</SectionLabel>
-            <div className="hp-grid-3">
-              <Tile icon={School}    title="Training Templates" description="Provision Kafka, databases, and resources locally for hands-on learning." to="/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all" />
-              <Tile icon={HardDrive} title="Local Provisioner"  description="View and manage resources provisioned to your local development machine." to="/local-provisioner" />
-              <Tile icon={Server}    title="Agent Setup Guide"  description="Install and configure the Backstage agent on your local machine."         to="/docs/default/component/backstage-agent" />
+          {/* Projects — PM + Admin only */}
+          {(isAdmin || isPM) && (
+            <div>
+              <SectionLabel>Projects</SectionLabel>
+              <div className="hp-grid-3">
+                <Tile icon={FolderGit2} title="Register Project" description="Register a new project and assign a team."                     to="/project-registration" />
+                <Tile icon={FolderGit2} title="Manage Projects"  description="Edit, archive, or delete existing projects."                   to="/projects/manage" />
+                <Tile icon={Users}      title="Teams"            description="View and manage team ownership of components."                 to="/catalog?filters%5Bkind%5D=group" />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Admin — Admin only */}
+          {isAdmin && (
+            <div>
+              <SectionLabel>Administration</SectionLabel>
+              <div className="hp-grid-3">
+                <Tile icon={Users}      title="User Management" description="Assign teams, promote admins, and manage users."               to="/user-management" />
+                <Tile icon={DollarSign} title="FinOps"          description="Cost visibility, rightsizing, and unused resources."            to="/finops" />
+                <Tile icon={School}     title="Training"        description="Provision Kafka, databases, and resources for hands-on learning." to="/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all" />
+              </div>
+            </div>
+          )}
 
         </div>
       </div>
