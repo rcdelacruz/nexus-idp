@@ -1,21 +1,26 @@
 import { PermissionPolicy, PolicyQuery } from '@backstage/plugin-permission-node';
+import { DatabaseService, LoggerService } from '@backstage/backend-plugin-api';
 import {
   AuthorizeResult,
   PolicyDecision,
+  isResourcePermission,
 } from '@backstage/plugin-permission-common';
 import { BackstageIdentityResponse } from '@backstage/plugin-auth-node';
 import {
   catalogEntityCreatePermission,
   catalogEntityDeletePermission,
+  catalogEntityReadPermission,
   catalogEntityRefreshPermission,
   catalogLocationCreatePermission,
   catalogLocationDeletePermission,
+  RESOURCE_TYPE_CATALOG_ENTITY,
 } from '@backstage/plugin-catalog-common/alpha';
+import {
+  catalogConditions,
+  createCatalogConditionalDecision,
+} from '@backstage/plugin-catalog-backend/alpha';
 
 /**
-<<<<<<< HEAD
- * Custom permission policy for Backstage catalog operations.
-=======
  * Department team group refs — engineers assigned to these have "assigned engineer" access.
  * New users are only in general-engineers until assigned.
  * NOTE: Keep in sync with DEPT_TEAM_IDS_JWT in plugins/onboarding/src/components/OnboardingPage.tsx.
@@ -42,12 +47,21 @@ const isAdmin = (groups: string[]) =>
 const isLead = (groups: string[]) =>
   groups.some(ref => ref.startsWith('group:default/') && ref.endsWith('-lead'));
 
+/** Project managers */
+const isPM = (groups: string[]) =>
+  groups.some(ref => ref === 'group:default/pm-team');
+
+/** Engineering teams only — excludes pm-team (PMs are not engineers) */
+const ENGINEERING_TEAMS = DEPT_TEAMS.filter(
+  t => t !== 'group:default/pm-team' && t !== 'group:default/general-engineers',
+);
+
 /**
- * Assigned engineers — members of at least one department team.
- * This is separate from general-engineers (base group everyone is in).
+ * Assigned engineers — members of at least one engineering team.
+ * Excludes pm-team and general-engineers.
  */
 const isAssignedEngineer = (groups: string[]) =>
-  groups.some(ref => DEPT_TEAMS.includes(ref));
+  groups.some(ref => ENGINEERING_TEAMS.includes(ref));
 
 /**
  * New user / unassigned — in general-engineers but not yet in any department team.
@@ -57,43 +71,106 @@ const isUnassigned = (groups: string[]) =>
   !isAdmin(groups) && !isLead(groups) && !isAssignedEngineer(groups);
 
 /**
- * RBAC permission policy for Nexus IDP.
->>>>>>> 32739b3 (fix(security): audit fixes — finops permission, purge scheduler, DEPT_TEAMS sync, deploy pipeline)
+ * RBAC permission policy for Stratpoint IDP.
  *
- * This policy implements role-based access control (RBAC) for catalog entities.
- *
- * Role hierarchy:
- * - backstage-admins: Full access to all operations
- * - Regular users: Read-only access, can create entities but not delete
+ * Role hierarchy (determined by group membership):
+ * ┌─────────────────┬─────────────────────────┬─────────────────────────────────────────┐
+ * │ Role            │ Groups                  │ Access                                  │
+ * ├─────────────────┼─────────────────────────┼─────────────────────────────────────────┤
+ * │ Platform Admin  │ backstage-admins        │ Full access to all features + FinOps    │
+ * │ Team Lead       │ *-lead                  │ Create/edit catalog for own team        │
+ * │ Engineer        │ web/mobile/data/cloud/  │ Read catalog + use scaffolder           │
+ * │                 │ ai/qa-team              │                                         │
+ * │ New User        │ general-engineers only  │ Docs, Tech Radar, onboarding only       │
+ * └─────────────────┴─────────────────────────┴─────────────────────────────────────────┘
  */
 export class CatalogPermissionPolicy implements PermissionPolicy {
+  private db: Awaited<ReturnType<DatabaseService['getClient']>> | null = null;
+
+  constructor(db?: DatabaseService, private readonly logger?: LoggerService) {
+    if (db) {
+      db.getClient()
+        .then(client => { this.db = client; })
+        .catch(err => {
+          this.logger?.error(
+            `CatalogPermissionPolicy: DB init failed — PM project team visibility disabled: ${err.message}`,
+          );
+        });
+    }
+  }
+
+  /** Get team refs from projects created by this user */
+  private async getProjectTeamRefs(userEntityRef: string): Promise<string[]> {
+    if (!this.db) return [];
+    try {
+      const rows = await this.db('project_registration_projects')
+        .select('team_name')
+        .where('created_by', userEntityRef)
+        .whereNotNull('team_name')
+        .where('status', 'active');
+      return rows
+        .map((r: any) => r.team_name)
+        .filter(Boolean)
+        .map((t: string) => `group:default/${t}`);
+    } catch {
+      return [];
+    }
+  }
+
   async handle(
     request: PolicyQuery,
     user?: BackstageIdentityResponse,
   ): Promise<PolicyDecision> {
-    // Get user's group memberships
-    const userGroups = user?.identity.ownershipEntityRefs || [];
+    const groups = user?.identity.ownershipEntityRefs ?? [];
+    const permissionName = request.permission.name;
 
     // ── Unauthenticated: deny everything ─────────────────────────────────────
     if (!user) {
       return { result: AuthorizeResult.DENY };
     }
 
-    // Check if user is an admin
-    const isAdmin = userGroups.some(
-      ref =>
-        ref === 'group:default/backstage-admins' ||
-        ref === 'group:default/admins'
-    );
-
-    // Admin users have full access
-    if (isAdmin) {
+    // ── Platform Admin: full access ──────────────────────────────────────────
+    if (isAdmin(groups)) {
       return { result: AuthorizeResult.ALLOW };
     }
 
-<<<<<<< HEAD
-    // Handle catalog entity deletion - only admins
-=======
+    // ── Catalog entity read: role-based visibility filtering ─────────────────
+    if (isResourcePermission(request.permission, RESOURCE_TYPE_CATALOG_ENTITY) &&
+        request.permission.name === catalogEntityReadPermission.name) {
+
+      // PM (without engineering team): groups, users, and components owned by their project teams.
+      if (isPM(groups) && !isAssignedEngineer(groups)) {
+        const projectTeamRefs = await this.getProjectTeamRefs(user.identity.userEntityRef);
+        const allClaims = [...groups, ...projectTeamRefs];
+        return createCatalogConditionalDecision(request.permission, {
+          anyOf: [
+            catalogConditions.isEntityKind({ kinds: ['group', 'user'] }),
+            catalogConditions.isEntityOwner({ claims: allClaims }),
+          ],
+        });
+      }
+
+      // Dev + SA (assigned engineers): components, APIs, systems, resources, templates, users, groups
+      // Excludes Location kind and other internal catalog entities
+      if (isAssignedEngineer(groups)) {
+        return createCatalogConditionalDecision(request.permission, {
+          anyOf: [
+            catalogConditions.isEntityKind({
+              kinds: ['component', 'api', 'system', 'domain', 'resource', 'template', 'user', 'group'],
+            }),
+          ],
+        });
+      }
+
+      // Unassigned / new users: same as intern — training templates only
+      return createCatalogConditionalDecision(request.permission, {
+        allOf: [
+          catalogConditions.isEntityKind({ kinds: ['template'] }),
+          catalogConditions.hasSpec({ key: 'type', value: 'training' }),
+        ],
+      });
+    }
+
     // ── FinOps: admin only (must precede generic .read wildcard below) ────────
     if (permissionName.startsWith('finops.')) {
       return { result: AuthorizeResult.DENY };
@@ -107,7 +184,6 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         permissionName.startsWith('techdocs.') ||
         permissionName.startsWith('search.') ||
         permissionName.startsWith('engineering-docs.') ||
-        // Read-only catalog access — browse teams, services, APIs
         permissionName.endsWith('.read') ||
         permissionName.endsWith('.list') ||
         permissionName.endsWith('.get')
@@ -120,37 +196,32 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
     // ── From here: all assigned users (engineers + leads) ────────────────────
 
     // Catalog delete: admin only (handled above)
->>>>>>> 32739b3 (fix(security): audit fixes — finops permission, purge scheduler, DEPT_TEAMS sync, deploy pipeline)
     if (request.permission === catalogEntityDeletePermission) {
-      return {
-        result: AuthorizeResult.DENY,
-      };
+      return { result: AuthorizeResult.DENY };
     }
 
-    // Handle catalog location deletion - only admins
+    // Catalog location delete: admin only
     if (request.permission === catalogLocationDeletePermission) {
-      return {
-        result: AuthorizeResult.DENY,
-      };
+      return { result: AuthorizeResult.DENY };
     }
 
-    // Allow entity creation for authenticated users
+    // Catalog create / location create: leads + admins only
     if (
       request.permission === catalogEntityCreatePermission ||
       request.permission === catalogLocationCreatePermission
     ) {
-      return { result: AuthorizeResult.ALLOW };
+      if (isLead(groups)) {
+        return { result: AuthorizeResult.ALLOW };
+      }
+      return { result: AuthorizeResult.DENY };
     }
 
-    // Allow entity refresh for authenticated users
+    // Catalog entity refresh: leads + engineers (not new users, handled above)
     if (request.permission === catalogEntityRefreshPermission) {
       return { result: AuthorizeResult.ALLOW };
     }
 
-    // Default: allow read operations, deny write operations
-    const permissionName = request.permission.name;
-
-    // Allow all read permissions
+    // Read operations: all assigned users
     if (
       permissionName.endsWith('.read') ||
       permissionName.endsWith('.list') ||
@@ -159,32 +230,42 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
       return { result: AuthorizeResult.ALLOW };
     }
 
-    // Allow scaffolder operations for authenticated users
+    // Scaffolder: use templates → engineers + leads (not new hires)
+    // Create/edit templates → leads only
     if (permissionName.startsWith('scaffolder.')) {
+      // Template management (creating/editing templates in the catalog) → leads only
+      if (
+        permissionName === 'scaffolder.template.create' ||
+        permissionName === 'scaffolder.template.update' ||
+        permissionName === 'scaffolder.template.delete'
+      ) {
+        if (isLead(groups)) {
+          return { result: AuthorizeResult.ALLOW };
+        }
+        return { result: AuthorizeResult.DENY };
+      }
+      // All other scaffolder operations (use templates, view tasks, etc.) → all assigned engineers
       return { result: AuthorizeResult.ALLOW };
     }
 
-    // Allow search operations
+    // Search: all assigned users
     if (permissionName.startsWith('search.')) {
       return { result: AuthorizeResult.ALLOW };
     }
 
-    // Allow TechDocs operations
-    if (permissionName.startsWith('techdocs.')) {
+    // Engineering Docs / TechDocs: all assigned users
+    if (
+      permissionName.startsWith('techdocs.') ||
+      permissionName.startsWith('engineering-docs.')
+    ) {
       return { result: AuthorizeResult.ALLOW };
     }
 
-    // Allow local provisioner operations for authenticated users
+    // Local Provisioner: engineers and leads can provision own environments
     if (permissionName.startsWith('local-provisioner.')) {
       return { result: AuthorizeResult.ALLOW };
     }
 
-<<<<<<< HEAD
-    // Deny everything else by default
-    return {
-      result: AuthorizeResult.DENY,
-    };
-=======
 
     // Kubernetes + ArgoCD: assigned engineers and leads can view
     if (
@@ -196,6 +277,5 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
 
     // Default: allow read/list, deny write for assigned users
     return { result: AuthorizeResult.DENY };
->>>>>>> 32739b3 (fix(security): audit fixes — finops permission, purge scheduler, DEPT_TEAMS sync, deploy pipeline)
   }
 }

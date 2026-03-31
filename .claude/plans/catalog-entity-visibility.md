@@ -94,9 +94,9 @@ if (permission === catalogEntityReadPermission) {
 
 ---
 
-## Decisions Needed
+## Decisions (resolved 2026-03-31)
 
-1. Should PMs see ALL components or only their team's? (ownership-based vs role-based)
-2. What happens to entity relations pointing to hidden entities?
-3. Should search results also be filtered?
-4. Should the API Explorer page have the same filters?
+1. **PMs see their team's components only.** Visibility is the union of all roles — a user in both `pm-team` and `web-team` sees PM stuff + Web team components.
+2. **Hidden entity relations: show name but block access.** The relation appears in the graph/list but clicking it shows a permission denied message.
+3. **Search results are filtered.** Same visibility rules — search cannot bypass catalog filters.
+4. **API Explorer has the same filters.** APIs are catalog entities, same permission policy applies.
