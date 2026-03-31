@@ -51,6 +51,7 @@ export interface BackendUnusedResource {
 export interface BackendRightsizingRecommendation {
   instance_id: string;
   account_id: string;
+  region: string;
   current_type: string;
   target_type: string;
   estimated_monthly_savings: number;
@@ -140,6 +141,7 @@ export interface UnusedResourcesData {
 export interface RightsizingRecommendation {
   instanceId: string;
   accountId: string;
+  region: string;
   currentType: string;
   targetType: string;
   estimatedMonthlySavings: number;

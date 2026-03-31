@@ -66,6 +66,7 @@ let _recsCache: RecsCache | null = null;
 
 export const RecommendationsTab = ({ refreshKey, accountId }: { refreshKey: number; accountId: string }) => {
   const api = useApi(finopsApiRef);
+  const c = useColors();
   const cached = (_recsCache?.refreshKey === refreshKey && _recsCache?.accountId === accountId) ? _recsCache : null;
   const [loading, setLoading] = useState(!cached);
   const [rightsizing, setRightsizing] = useState<RightsizingRecommendation[]>(cached?.rightsizing ?? []);
@@ -127,6 +128,7 @@ export const RecommendationsTab = ({ refreshKey, accountId }: { refreshKey: numb
                 <TableHead>
                   <TableRow>
                     <TableCell>Instance ID</TableCell>
+                    <TableCell>Region</TableCell>
                     <TableCell>Current Type</TableCell>
                     <TableCell>Recommended</TableCell>
                     <TableCell>Est. Monthly Savings</TableCell>
@@ -135,7 +137,18 @@ export const RecommendationsTab = ({ refreshKey, accountId }: { refreshKey: numb
                 <TableBody>
                   {rightsizing.map(r => (
                     <TableRow key={r.instanceId}>
-                      <TableCell style={{ fontFamily: 'monospace' }}>{r.instanceId}</TableCell>
+                      <TableCell>
+                        <a
+                          href={`https://${r.region}.console.aws.amazon.com/ec2/v2/home?region=${r.region}#Instances:instanceId=${r.instanceId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${r.instanceId} in AWS Console`}
+                          style={{ fontFamily: '"Geist Mono", monospace', color: c.blue, textDecoration: 'none', fontWeight: 500 }}
+                        >
+                          {r.instanceId}
+                        </a>
+                      </TableCell>
+                      <TableCell>{r.region}</TableCell>
                       <TableCell>{r.currentType}</TableCell>
                       <TableCell>{r.targetType}</TableCell>
                       <TableCell style={{ color: '#43a047' }}>{fmt(r.estimatedMonthlySavings)}</TableCell>

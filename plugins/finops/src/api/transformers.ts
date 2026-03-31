@@ -58,6 +58,7 @@ export function transformRecommendation(b: BackendRightsizingRecommendation): Ri
   return {
     instanceId: b.instance_id,
     accountId: b.account_id,
+    region: b.region,
     currentType: b.current_type,
     targetType: b.target_type,
     estimatedMonthlySavings: b.estimated_monthly_savings,

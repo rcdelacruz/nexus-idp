@@ -12,12 +12,52 @@ import { LoggerService, CacheService } from '@backstage/backend-plugin-api';
 import { AwsClientFactory } from './AwsClientFactory';
 import { MetadataStore } from './MetadataStore';
 
+const REGION_MAP: Record<string, string> = {
+  'US East (N. Virginia)': 'us-east-1',
+  'US East (Ohio)': 'us-east-2',
+  'US West (N. California)': 'us-west-1',
+  'US West (Oregon)': 'us-west-2',
+  'Africa (Cape Town)': 'af-south-1',
+  'Asia Pacific (Hong Kong)': 'ap-east-1',
+  'Asia Pacific (Hyderabad)': 'ap-south-2',
+  'Asia Pacific (Jakarta)': 'ap-southeast-3',
+  'Asia Pacific (Melbourne)': 'ap-southeast-4',
+  'Asia Pacific (Mumbai)': 'ap-south-1',
+  'Asia Pacific (Osaka)': 'ap-northeast-3',
+  'Asia Pacific (Seoul)': 'ap-northeast-2',
+  'Asia Pacific (Singapore)': 'ap-southeast-1',
+  'Asia Pacific (Sydney)': 'ap-southeast-2',
+  'Asia Pacific (Tokyo)': 'ap-northeast-1',
+  'Canada (Central)': 'ca-central-1',
+  'Canada West (Calgary)': 'ca-west-1',
+  'Europe (Frankfurt)': 'eu-central-1',
+  'Europe (Ireland)': 'eu-west-1',
+  'Europe (London)': 'eu-west-2',
+  'Europe (Milan)': 'eu-south-1',
+  'Europe (Paris)': 'eu-west-3',
+  'Europe (Spain)': 'eu-south-2',
+  'Europe (Stockholm)': 'eu-north-1',
+  'Europe (Zurich)': 'eu-central-2',
+  'Israel (Tel Aviv)': 'il-central-1',
+  'Middle East (Bahrain)': 'me-south-1',
+  'Middle East (UAE)': 'me-central-1',
+  'South America (São Paulo)': 'sa-east-1',
+};
+
+function toRegionCode(displayName: string): string {
+  if (!displayName) return '';
+  // Already a region code (e.g. "ap-southeast-1")
+  if (/^[a-z]{2}-[a-z]+-\d$/.test(displayName)) return displayName;
+  return REGION_MAP[displayName] ?? displayName;
+}
+
 export class CostService {
   private readonly cacheTtlSeconds: number;
   private readonly cachePrefix: string;
   private readonly ceClient: CostExplorerClient;
   private readonly budgetsClient: BudgetsClient;
   private readonly stsClient: STSClient;
+  private readonly factory: AwsClientFactory;
 
   constructor(
     factory: AwsClientFactory,
@@ -29,6 +69,7 @@ export class CostService {
   ) {
     this.cacheTtlSeconds = cacheTtlSeconds;
     this.cachePrefix = `${accountId}:`;
+    this.factory = factory;
     this.ceClient = factory.costExplorer();
     this.budgetsClient = factory.budgets();
     this.stsClient = factory.sts();
@@ -194,9 +235,10 @@ export class CostService {
         new GetRightsizingRecommendationCommand({ Service: 'AmazonEC2' }),
       );
 
-      return (res.RightsizingRecommendations ?? []).map(r => ({
+      const recs = (res.RightsizingRecommendations ?? []).map(r => ({
         instance_id: r.CurrentInstance?.ResourceId ?? '',
         account_id: r.AccountId ?? '',
+        region: toRegionCode(r.CurrentInstance?.ResourceDetails?.EC2ResourceDetails?.Region ?? ''),
         current_type: r.CurrentInstance?.ResourceDetails?.EC2ResourceDetails?.InstanceType ?? '',
         target_type:
           r.RightsizingType === 'MODIFY'
@@ -208,6 +250,36 @@ export class CostService {
         ),
         currency: 'USD',
       }));
+
+      // Filter out stale recommendations for instances that no longer exist
+      const byRegion = new Map<string, string[]>();
+      for (const r of recs) {
+        if (!r.region || !r.instance_id) continue;
+        const list = byRegion.get(r.region) ?? [];
+        list.push(r.instance_id);
+        byRegion.set(r.region, list);
+      }
+
+      const existingIds = new Set<string>();
+      for (const [region, ids] of byRegion) {
+        try {
+          const ec2 = this.factory.ec2(region);
+          const { DescribeInstancesCommand } = await import('@aws-sdk/client-ec2');
+          const desc = await ec2.send(new DescribeInstancesCommand({ InstanceIds: ids }));
+          for (const reservation of desc.Reservations ?? []) {
+            for (const inst of reservation.Instances ?? []) {
+              if (inst.InstanceId && inst.State?.Name !== 'terminated') {
+                existingIds.add(inst.InstanceId);
+              }
+            }
+          }
+        } catch {
+          // If describe fails, keep all recs for that region
+          for (const id of ids) existingIds.add(id);
+        }
+      }
+
+      return recs.filter(r => existingIds.has(r.instance_id));
     });
   }
 
