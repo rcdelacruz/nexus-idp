@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useApi, identityApiRef } from '@backstage/core-plugin-api';
-import { Page, Header, Content } from '@backstage/core-components';
+import { Page, Header, Content, Table as BackstageTable, TableColumn } from '@backstage/core-components';
 import {
   Box, Checkbox, CircularProgress, Dialog, DialogContent, DialogTitle,
-  FormControlLabel, FormGroup, IconButton, Table, TableBody,
-  TableCell, TableHead, TableRow, Typography,
+  FormControlLabel, FormGroup, IconButton, Typography,
 } from '@material-ui/core';
 import {
   AlertCircle, Check, Loader, Shield, UserCheck, UserX, X, Info, ShieldCheck, Trash2,
@@ -14,9 +13,10 @@ import { userManagementApiRef } from '../api/refs';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEPT_TEAMS = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team', 'pm-team', 'sa-team'];
+const DEPT_TEAMS = ['general-engineers', 'web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team', 'pm-team', 'sa-team'];
 
 const TEAM_LABELS: Record<string, string> = {
+  'general-engineers': 'Trainee',
   'web-team': 'Web',
   'mobile-team': 'Mobile',
   'data-team': 'Data',
@@ -348,9 +348,9 @@ export const UserManagementPage = () => {
     setLoading(true);
     api.listUsers().then(rows => {
       const records: UserRecord[] = rows
-        // Only show fully registered users: must have a dept team OR explicit DB admin flag.
+        // Show all users who have at least one team (including general-engineers) or are admin.
         // Ghost rows (GitHub-only, no team, no admin) are artifacts and should not appear here.
-        .filter(row => row.teams.some(g => DEPT_TEAMS.includes(g)) || row.is_admin)
+        .filter(row => row.teams.length > 0 || row.is_admin)
         .map(row => {
           const hasDeptTeam = row.teams.some(g => DEPT_TEAMS.includes(g));
           const deptTeams = row.teams.filter((g: string) => DEPT_TEAMS.includes(g));
@@ -421,22 +421,9 @@ export const UserManagementPage = () => {
   const card = { background: c.surface, border: `1px solid ${c.border}`, borderRadius: 8 } as const;
 
 
-  const actionBtn = {
-    display: 'inline-flex' as const, alignItems: 'center' as const,
-    gap: 6, padding: '5px 12px', borderRadius: 6,
-    fontSize: '0.8125rem', fontWeight: 500, cursor: 'pointer',
-    border: `1px solid ${c.border}`, background: 'transparent', color: c.textSecondary,
-  } as const;
-
-  const headerCell = {
-    color: c.textMuted, fontSize: '0.75rem', fontWeight: 600,
-    letterSpacing: '0.06em', textTransform: 'uppercase' as const,
-    borderBottom: `1px solid ${c.border}`, background: c.surface,
-  };
-
   return (
     <Page themeId="tool">
-      <Header title="User Management" subtitle={`${users.length} users · ${newUserCount} new`} />
+      <Header title="User Management" subtitle="Manage users, assign teams, and control access" />
       <Content>
 
         {/* Info banner */}
@@ -454,145 +441,150 @@ export const UserManagementPage = () => {
         </Box>
 
         {/* Table */}
-        <Box component="section" aria-label="Users" style={card}>
-          {loading ? (
-            <Box display="flex" justifyContent="center" style={{ padding: 48 }}>
-              <CircularProgress aria-label="Loading users" />
-            </Box>
-          ) : users.length === 0 ? (
+        <BackstageTable<UserRecord>
+          title={`${users.length} users · ${newUserCount} new`}
+          data={users}
+          isLoading={loading}
+          emptyContent={
             <Box display="flex" flexDirection="column" alignItems="center" style={{ padding: 48, gap: 8 }}>
               <UserCheck size={32} color={c.textMuted} strokeWidth={1.5} aria-hidden="true" />
               <Typography style={{ color: c.textSecondary }}>No users found.</Typography>
             </Box>
-          ) : (
-            <Table aria-label="User list">
-              <TableHead>
-                <TableRow>
-                  <TableCell style={headerCell} scope="col">User</TableCell>
-                  <TableCell style={headerCell} scope="col">Department</TableCell>
-                  <TableCell style={headerCell} scope="col">Groups</TableCell>
-                  <TableCell style={headerCell} scope="col">Onboarding</TableCell>
-                  <TableCell style={headerCell} scope="col">Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {users.map(user => (
-                  <TableRow key={user.entityRef} style={{ borderBottom: `1px solid ${c.border}` }} data-unassigned={user.isUnassigned}>
-                    <TableCell style={{ borderBottom: 'none', padding: '12px 16px' }}>
-                      <Box display="flex" alignItems="center" style={{ gap: 10 }}>
-                        <Box
-                          aria-hidden="true"
-                          style={{
-                            width: 32, height: 32, borderRadius: '50%',
-                            background: c.avatarBg, border: `1px solid ${c.border}`,
-                            flexShrink: 0, overflow: 'hidden',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}
-                        >
-                          {user.picture
-                            ? <img src={user.picture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : <span style={{ fontSize: '0.75rem', color: c.textSecondary, fontWeight: 600 }}>
-                                {user.displayName.charAt(0).toUpperCase()}
-                              </span>
-                          }
-                        </Box>
-                        <Box>
-                          <Typography style={{ fontSize: '0.875rem', fontWeight: 500, color: c.text }}>
-                            {user.displayName}
-                          </Typography>
-                          <Typography style={{ fontSize: '0.75rem', color: c.textSecondary }}>
-                            {user.email}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-
-                    <TableCell style={{ borderBottom: 'none', padding: '12px 16px' }}>
-                      {user.isAdmin
-                        ? <span style={badge('purple')}>Admin</span>
-                        : user.deptTeams.length > 0
-                          ? <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
-                              {user.deptTeams.map(t => (
-                                <span key={t} style={badge('blue-subtle')}>{TEAM_LABELS[t] || t}</span>
-                              ))}
-                            </Box>
-                          : <span style={badge('amber')}>New user</span>
-                      }
-                    </TableCell>
-
-                    <TableCell style={{ borderBottom: 'none', padding: '12px 16px', maxWidth: 200 }}>
-                      <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
-                        {user.currentGroups.map(g => (
-                          <span key={g} style={badge('gray')}>{g}</span>
-                        ))}
-                        {user.currentGroups.length === 0 && (
-                          <span style={{ fontSize: '0.75rem', color: c.textMuted }}>—</span>
-                        )}
-                      </Box>
-                    </TableCell>
-
-                    <TableCell style={{ borderBottom: 'none', padding: '12px 16px' }}>
-                      {(() => {
-                        const steps = [
-                          { label: 'Team', done: user.deptTeams.length > 0 || user.isAdmin },
-                          { label: 'GitHub', done: user.githubLinked },
-                          { label: 'Catalog', done: user.onboardingCatalogTour },
-                          { label: 'Docs', done: user.onboardingEngineeringDocs },
-                        ];
-                        const completed = steps.filter(s => s.done).length;
-                        return (
-                          <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
-                            {steps.map(s => (
-                              <span key={s.label} style={badge(s.done ? 'green' : 'gray')}>{s.label}</span>
-                            ))}
-                            <Typography style={{ fontSize: '0.6875rem', color: c.textMuted, marginLeft: 4 }}>
-                              {completed}/{steps.length}
-                            </Typography>
-                          </Box>
-                        );
-                      })()}
-                    </TableCell>
-
-                    <TableCell style={{ borderBottom: 'none', padding: '12px 16px' }}>
-                      <Box display="flex" style={{ gap: 6, flexWrap: 'wrap' }}>
-                        {!user.isAdmin && (
-                          <button
-                            onClick={() => setSelectedUser(user)}
-                            aria-label={`${user.isUnassigned ? 'Assign' : 'Reassign'} ${user.displayName} to a team`}
-                            style={actionBtn}
-                          >
-                            <UserX size={13} strokeWidth={1.5} aria-hidden="true" />
-                            {user.isUnassigned ? 'Assign team' : 'Reassign'}
-                          </button>
-                        )}
-                        {user.name !== currentUserName && (
-                          <button
-                            onClick={() => setPromoteTarget(user)}
-                            aria-label={user.isAdmin ? `Revoke admin from ${user.displayName}` : `Promote ${user.displayName} to admin`}
-                            style={{ ...actionBtn, color: user.isAdmin ? semantic.warning : c.textSecondary, borderColor: user.isAdmin ? semantic.warning : c.border }}
-                          >
-                            <ShieldCheck size={13} strokeWidth={1.5} aria-hidden="true" />
-                            {user.isAdmin ? 'Revoke admin' : 'Make admin'}
-                          </button>
-                        )}
-                        {user.name !== currentUserName && (
-                          <button
-                            onClick={() => setDeleteTarget(user)}
-                            aria-label={`Remove ${user.displayName}`}
-                            style={{ ...actionBtn, color: semantic.error, borderColor: semantic.error }}
-                          >
-                            <Trash2 size={13} strokeWidth={1.5} aria-hidden="true" />
-                            Remove
-                          </button>
-                        )}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Box>
+          }
+          options={{
+            search: true,
+            paging: true,
+            pageSize: 10,
+            pageSizeOptions: [10, 25, 50],
+            padding: 'dense',
+            actionsColumnIndex: -1,
+          }}
+          columns={[
+            {
+              title: 'User',
+              field: 'displayName',
+              render: (user: UserRecord) => (
+                <Box display="flex" alignItems="center" style={{ gap: 10 }}>
+                  <Box
+                    aria-hidden="true"
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%',
+                      background: c.avatarBg, border: `1px solid ${c.border}`,
+                      flexShrink: 0, overflow: 'hidden',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    {user.picture
+                      ? <img src={user.picture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <span style={{ fontSize: '0.75rem', color: c.textSecondary, fontWeight: 600 }}>
+                          {user.displayName.charAt(0).toUpperCase()}
+                        </span>
+                    }
+                  </Box>
+                  <Box>
+                    <Typography style={{ fontSize: '0.875rem', fontWeight: 500, color: c.text }}>
+                      {user.displayName}
+                    </Typography>
+                    <Typography style={{ fontSize: '0.75rem', color: c.textSecondary }}>
+                      {user.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              ),
+            },
+            {
+              title: 'Department',
+              field: 'deptTeams',
+              render: (user: UserRecord) => user.isAdmin
+                ? <span style={badge('purple')}>Admin</span>
+                : user.deptTeams.length > 0
+                  ? <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
+                      {user.deptTeams.map(t => (
+                        <span key={t} style={badge('blue-subtle')}>{TEAM_LABELS[t] || t}</span>
+                      ))}
+                    </Box>
+                  : <span style={badge('amber')}>New user</span>,
+            },
+            {
+              title: 'Groups',
+              field: 'currentGroups',
+              render: (user: UserRecord) => (
+                <Box display="flex" style={{ gap: 4, flexWrap: 'wrap', maxWidth: 200 }}>
+                  {user.currentGroups.map(g => (
+                    <span key={g} style={badge('gray')}>{g}</span>
+                  ))}
+                  {user.currentGroups.length === 0 && (
+                    <span style={{ fontSize: '0.75rem', color: c.textMuted }}>—</span>
+                  )}
+                </Box>
+              ),
+            },
+            {
+              title: 'Onboarding',
+              sorting: false,
+              render: (user: UserRecord) => {
+                const steps = [
+                  { label: 'Team', done: user.deptTeams.length > 0 || user.isAdmin },
+                  { label: 'GitHub', done: user.githubLinked },
+                  { label: 'Catalog', done: user.onboardingCatalogTour },
+                  { label: 'Docs', done: user.onboardingEngineeringDocs },
+                ];
+                const completed = steps.filter(s => s.done).length;
+                return (
+                  <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
+                    {steps.map(s => (
+                      <span key={s.label} style={badge(s.done ? 'green' : 'gray')}>
+                        {s.label}
+                      </span>
+                    ))}
+                    <Typography style={{ fontSize: '0.6875rem', color: c.textMuted, marginLeft: 4 }}>
+                      {completed}/{steps.length}
+                    </Typography>
+                  </Box>
+                );
+              },
+            },
+            {
+              title: 'Action',
+              sorting: false,
+              searchable: false,
+              render: (user: UserRecord) => (
+                <Box display="flex" style={{ gap: 4 }} alignItems="center">
+                  {!user.isAdmin && (
+                    <IconButton
+                      size="small"
+                      title={user.isUnassigned ? 'Assign team' : 'Reassign'}
+                      aria-label={`${user.isUnassigned ? 'Assign' : 'Reassign'} ${user.displayName} to a team`}
+                      onClick={() => setSelectedUser(user)}
+                    >
+                      <UserX size={16} strokeWidth={1.5} />
+                    </IconButton>
+                  )}
+                  {user.name !== currentUserName && (
+                    <IconButton
+                      size="small"
+                      title={user.isAdmin ? 'Revoke admin' : 'Make admin'}
+                      aria-label={user.isAdmin ? `Revoke admin from ${user.displayName}` : `Promote ${user.displayName} to admin`}
+                      onClick={() => setPromoteTarget(user)}
+                    >
+                      <ShieldCheck size={16} strokeWidth={1.5} />
+                    </IconButton>
+                  )}
+                  {user.name !== currentUserName && (
+                    <IconButton
+                      size="small"
+                      title="Remove"
+                      aria-label={`Remove ${user.displayName}`}
+                      onClick={() => setDeleteTarget(user)}
+                    >
+                      <Trash2 size={16} strokeWidth={1.5} />
+                    </IconButton>
+                  )}
+                </Box>
+              ),
+            },
+          ] as TableColumn<UserRecord>[]}
+        />
 
         {selectedUser && (
           <AssignDialog

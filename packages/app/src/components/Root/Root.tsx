@@ -468,7 +468,7 @@ const AppSidebar = ({ isNewUser, isAdmin, isPM }: { isNewUser?: boolean; isAdmin
             <NavItem icon={LayoutGrid} label="Catalog" to="/catalog" />
             <NavItem icon={Code2} label="APIs" to="/api-docs" />
             <DocsNavItem />
-            <NavItem icon={Plus} label="Create" to="/create" />
+            {!isPM && <NavItem icon={Plus} label="Create" to="/create" />}
 
             <div className={classes.navDivider} />
 

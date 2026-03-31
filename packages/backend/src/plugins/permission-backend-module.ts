@@ -1,4 +1,4 @@
-import { createBackendModule } from '@backstage/backend-plugin-api';
+import { createBackendModule, coreServices } from '@backstage/backend-plugin-api';
 import { policyExtensionPoint } from '@backstage/plugin-permission-node/alpha';
 import { CatalogPermissionPolicy } from './permission';
 
@@ -12,9 +12,10 @@ export default createBackendModule({
     reg.registerInit({
       deps: {
         policy: policyExtensionPoint,
+        database: coreServices.database,
       },
-      async init({ policy }) {
-        policy.setPolicy(new CatalogPermissionPolicy());
+      async init({ policy, database }) {
+        policy.setPolicy(new CatalogPermissionPolicy(database));
       },
     });
   },
