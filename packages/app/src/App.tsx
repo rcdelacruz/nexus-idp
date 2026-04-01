@@ -31,8 +31,7 @@ import {
 import { createApp } from '@backstage/app-defaults';
 import { UnifiedThemeProvider } from '@backstage/theme';
 import { stratpointDarkTheme, stratpointLightTheme } from './theme';
-import DarkIcon from '@material-ui/icons/Brightness2';
-import LightIcon from '@material-ui/icons/WbSunny';
+import { Moon, Sun } from 'lucide-react';
 import { AppRouter, FlatRoutes } from '@backstage/core-app-api';
 import { CustomCatalogGraphPage } from './components/catalogGraph/CustomCatalogGraphPage';
 import { RequirePermission } from '@backstage/plugin-permission-react';
@@ -40,6 +39,8 @@ import { catalogEntityCreatePermission } from '@backstage/plugin-catalog-common/
 import { finopsReadPermission } from './finopsPermissions';
 import { CustomTemplateCard } from './components/scaffolder/CustomTemplateCard';
 import { CustomScaffolderListPage } from './components/scaffolder/CustomScaffolderListPage';
+import { CustomTemplateWizardPage } from './components/scaffolder/CustomTemplateWizardPage';
+import { CustomTaskPage } from './components/scaffolder/CustomTaskPage';
 import { ProjectRegistrationPage, ProjectListPage } from '@internal/backstage-plugin-project-registration';
 import { EngineeringDocsPage } from '@internal/plugin-engineering-docs';
 import { FinOpsPage } from '@internal/plugin-finops';
@@ -57,7 +58,7 @@ const app = createApp({
       id: 'dark',
       title: 'Dark',
       variant: 'dark',
-      icon: <DarkIcon />,
+      icon: <Moon size={16} strokeWidth={1.5} />,
       Provider: ({ children }) => (
         <UnifiedThemeProvider theme={stratpointDarkTheme} children={children} />
       ),
@@ -66,7 +67,7 @@ const app = createApp({
       id: 'light',
       title: 'Light',
       variant: 'light',
-      icon: <LightIcon />,
+      icon: <Sun size={16} strokeWidth={1.5} />,
       Provider: ({ children }) => (
         <UnifiedThemeProvider theme={stratpointLightTheme} children={children} />
       ),
@@ -111,7 +112,7 @@ const routes = (
       path="/docs/:namespace/:kind/:name/*"
       element={<TechDocsRedirect />}
     />
-    <Route path="/create" element={<ScaffolderPage components={{ TemplateCardComponent: CustomTemplateCard as any, EXPERIMENTAL_TemplateListPageComponent: (props: any) => <CustomScaffolderListPage {...props} TemplateCardComponent={CustomTemplateCard as any} /> }} />} />
+    <Route path="/create" element={<ScaffolderPage components={{ TemplateCardComponent: CustomTemplateCard as any, TaskPageComponent: CustomTaskPage, EXPERIMENTAL_TemplateListPageComponent: (props: any) => <CustomScaffolderListPage {...props} TemplateCardComponent={CustomTemplateCard as any} />, EXPERIMENTAL_TemplateWizardPageComponent: CustomTemplateWizardPage }} />} />
     <Route path="/api-docs" element={<CustomApiExplorerPage />} />
     <Route
       path="/catalog-import"

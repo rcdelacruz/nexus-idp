@@ -8,7 +8,7 @@
     "role": "backend"
   },
   "scripts": {
-    "start": "NODE_OPTIONS=--no-node-snapshot env-cmd -f ../../.env backstage-cli package start",
+    "start": "NODE_OPTIONS=--no-node-snapshot backstage-cli package start",
     "build": "backstage-cli package build",
     "lint": "backstage-cli package lint",
     "test": "backstage-cli package test",
@@ -42,6 +42,7 @@
     "@backstage/plugin-search-backend-module-techdocs": "^0.4.12",
     "@backstage/plugin-search-backend-node": "^1.4.2",
     "@backstage/plugin-techdocs-backend": "^2.1.6",
+    "@roadiehq/backstage-plugin-argo-cd-backend": "^4.7.1",
     "@stratpoint/plugin-engineering-docs-backend": "link:../../plugins/engineering-docs-backend",
     "@stratpoint/plugin-finops-backend": "link:../../plugins/finops-backend",
     "@stratpoint/plugin-local-provisioner-backend": "link:../../plugins/local-provisioner-backend",

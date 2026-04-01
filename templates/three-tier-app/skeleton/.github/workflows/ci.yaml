@@ -1,0 +1,73 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  FRONTEND_IMAGE: ghcr.io/${{ "${{ github.repository }}" }}-frontend
+  BACKEND_IMAGE: ghcr.io/${{ "${{ github.repository }}" }}-backend
+
+jobs:
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: cd backend && npm install
+      - run: cd backend && npm run build
+      - run: cd backend && npm test
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: cd frontend && npm install
+      - run: cd frontend && npm run build
+
+  build-and-push:
+    name: Build & Push Images
+    needs: [test-backend, test-frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ "${{ env.REGISTRY }}" }}
+          username: stratpoint-engineering
+          password: ${{ "${{ secrets.GH_PAT }}" }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ "${{ env.FRONTEND_IMAGE }}" }}:latest
+            ${{ "${{ env.FRONTEND_IMAGE }}" }}:${{ "${{ github.sha }}" }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ "${{ env.BACKEND_IMAGE }}" }}:latest
+            ${{ "${{ env.BACKEND_IMAGE }}" }}:${{ "${{ github.sha }}" }}

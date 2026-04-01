@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${{ values.appName }}-backend
+  labels:
+    app: ${{ values.appName }}-backend
+    backstage.io/kubernetes-id: ${{ values.appName }}-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${{ values.appName }}-backend
+  template:
+    metadata:
+      labels:
+        app: ${{ values.appName }}-backend
+        backstage.io/kubernetes-id: ${{ values.appName }}-backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      initContainers:
+        - name: migrate
+          image: ghcr.io/${{ values.repoOwner }}/${{ values.repoName }}-backend:latest
+          command: ["node", "-e", "require('./dist/db/connection').db.migrate.latest().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)})"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ${{ values.appName }}-db-app
+                  key: uri
+      containers:
+        - name: backend
+          image: ghcr.io/${{ values.repoOwner }}/${{ values.repoName }}-backend:latest
+          ports:
+            - containerPort: ${{ values.backendPort }}
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "${{ values.backendPort }}"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ${{ values.appName }}-db-app
+                  key: uri
+            - name: CORS_ORIGIN
+              value: https://${{ values.appName }}.${{ values.ingressDomain }}
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: ${{ values.backendPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: ${{ values.backendPort }}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

@@ -6,12 +6,6 @@
  * Happy hacking!
  */
 
-import * as dotenv from 'dotenv';
-
-// Load environment variables from .env file
-dotenv.config();
-
-
 import { createBackend } from '@backstage/backend-defaults';
 
 const backend = createBackend();
@@ -60,6 +54,9 @@ backend.add(import('@backstage/plugin-search-backend-module-techdocs'));
 
 // kubernetes
 backend.add(import('@backstage/plugin-kubernetes-backend'));
+
+// argocd
+backend.add(import('@roadiehq/backstage-plugin-argo-cd-backend'));
 
 // sonarqube
 backend.add(import('@backstage-community/plugin-sonarqube-backend'));

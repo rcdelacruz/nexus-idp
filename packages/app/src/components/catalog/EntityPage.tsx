@@ -63,6 +63,7 @@ import {
 } from '@backstage-community/plugin-github-actions';
 
 import {
+  EntityArgoCDContent,
   EntityArgoCDHistoryCard,
   isArgocdAvailable,
 } from '@roadiehq/backstage-plugin-argo-cd';
@@ -132,13 +133,6 @@ const entityWarningContent = (
 const overviewContent = (
   <Grid container spacing={3} alignItems="stretch">
     {entityWarningContent}
-    <EntitySwitch>
-      <EntitySwitch.Case if={e => Boolean(isArgocdAvailable(e))}>
-        <Grid item sm={6}>
-          <EntityArgoCDHistoryCard />
-        </Grid>
-      </EntitySwitch.Case>
-    </EntitySwitch>
     <Grid item md={6}>
       <EntityAboutCard />
     </Grid>
@@ -165,6 +159,14 @@ const serviceEntityPage = (
 
     <EntityLayout.Route path="/ci-cd" title="CI/CD">
       {cicdContent}
+    </EntityLayout.Route>
+
+    <EntityLayout.Route
+      path="/argocd"
+      title="ArgoCD"
+      if={isArgocdAvailable}
+    >
+      <EntityArgoCDContent />
     </EntityLayout.Route>
 
     <EntityLayout.Route
@@ -211,6 +213,14 @@ const websiteEntityPage = (
 
     <EntityLayout.Route path="/ci-cd" title="CI/CD">
       {cicdContent}
+    </EntityLayout.Route>
+
+    <EntityLayout.Route
+      path="/argocd"
+      title="ArgoCD"
+      if={isArgocdAvailable}
+    >
+      <EntityArgoCDContent />
     </EntityLayout.Route>
 
     <EntityLayout.Route

@@ -46,9 +46,9 @@ function resolveDocSource(annotations: Record<string, string>): {
 const useStyles = makeStyles(() => ({
   layout: {
     display: 'flex',
-    overflow: 'hidden',
-    height: '100%',
-    minHeight: 600,
+    height: 'calc(100vh - 200px)',
+    minHeight: 400,
+    position: 'relative' as const,
   },
   contentScroll: {
     flex: 1,
@@ -90,6 +90,9 @@ export const EngineeringDocsEntityContent = () => {
 
   const layoutRef = useRef<HTMLDivElement>(null);
 
+  // Track whether we fell back to README mode (no docs folder, just README.md)
+  const [readmeMode, setReadmeMode] = useState(false);
+
   useEffect(() => {
     if (source.mode === 'none') return;
     setNavLoading(true);
@@ -97,6 +100,7 @@ export const EngineeringDocsEntityContent = () => {
     setNav([]);
     setDoc(undefined);
     setSelectedPath('');
+    setReadmeMode(false);
 
     const load = source.mode === 'source'
       ? api.getNav(source.sourceId)
@@ -104,12 +108,35 @@ export const EngineeringDocsEntityContent = () => {
 
     load
       .then(items => {
+        // Empty nav (no docs folder or no .md/.mdx files) → fall back to README
+        if (!items.length && source.mode === 'repo' && source.repo) {
+          setReadmeMode(true);
+          setNavLoading(false);
+          setDocLoading(true);
+          api.getEntityContent(source.repo, source.branch, '.', 'README')
+            .then(content => { setDoc(content); setDocLoading(false); })
+            .catch(readmeErr => { setNavError(readmeErr); setDocLoading(false); });
+          return;
+        }
         setNav(items);
         setNavLoading(false);
         const first = firstPagePath(items);
         if (first) setSelectedPath(first);
       })
-      .catch(e => { setNavError(e); setNavLoading(false); });
+      .catch(() => {
+        // Nav call failed entirely — also try README fallback
+        if (source.mode === 'repo' && source.repo) {
+          setReadmeMode(true);
+          setNavLoading(false);
+          setDocLoading(true);
+          api.getEntityContent(source.repo, source.branch, '.', 'README')
+            .then(content => { setDoc(content); setDocLoading(false); })
+            .catch(readmeErr => { setNavError(readmeErr); setDocLoading(false); });
+        } else {
+          setNavError(new Error('No docs or README found'));
+          setNavLoading(false);
+        }
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity.metadata.name]);
 
@@ -141,6 +168,32 @@ export const EngineeringDocsEntityContent = () => {
         missing="content"
         description={`Add an ${ENGINEERING_DOCS_REPO_ANNOTATION} annotation pointing to a GitHub repo with MDX files, or a ${ENGINEERING_DOCS_SOURCE_ANNOTATION} annotation referencing a configured source.`}
       />
+    );
+  }
+
+  // README mode: no sidebar, just rendered README with optional TOC
+  if (readmeMode) {
+    return (
+      <div ref={layoutRef} className={classes.layout}>
+        <div className={classes.contentScroll}>
+          {docLoading && <Progress />}
+          {!docLoading && navError && (
+            <Box p={4}>
+              <EmptyState
+                title="No docs found"
+                missing="content"
+                description="This project has no docs/ folder or README.md."
+              />
+            </Box>
+          )}
+          {!docLoading && !navError && doc && (
+            <DocViewer content={doc.content} html={doc.html} currentPath="README.md" onNavigate={() => {}} />
+          )}
+        </div>
+        {!docLoading && !navError && doc && tocEntries.length > 0 && (
+          <DocTOC entries={tocEntries} />
+        )}
+      </div>
     );
   }
 

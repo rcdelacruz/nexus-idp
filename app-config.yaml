@@ -1,17 +1,22 @@
 app:
   title: Nexus IDP
   baseUrl: 'http://localhost:3000'
+  https:
+    certificate:
+      cert: './cert.pem'
+      key: './key.pem'
 
 organization:
-  name: ${ORGANIZATION_NAME}
-  domain: ${ORGANIZATION_DOMAIN}
-  githubOwner: ${ORGANIZATION_GITHUB_OWNER}
-  githubRepo: ${ORGANIZATION_GITHUB_REPO}
-  usersFilePath: ${ORGANIZATION_USERS_FILE_PATH}
+  name: Stratpoint Technologies
+  domain: stratpoint.com
+  githubOwner: stratpoint-engineering
+  githubRepo: backstage-main
+  usersFilePath: stratpoint/org/users.yaml
 
 backend:
   logging:
     level: debug
+  # Used for enabling authentication, secret is shared by all backend plugins
   auth:
     keys:
       - secret: ${BACKEND_SECRET}
@@ -19,20 +24,28 @@ backend:
   reading:
     allow:
       - host: github.com
+      - host: gitlab.coderstudio.co
       - host: gitlab.com
+      - host: file
   listen:
     port: 7007
     host: '0.0.0.0'
+    # Uncomment the following host directive to bind to specific interfaces
+    # host: 127.0.0.1
   csp:
     connect-src: ["'self'", 'http:', 'https:']
     script-src: ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
     style-src: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com']
     worker-src: ["'self'", 'blob:']
     font-src: ["'self'", 'https://fonts.gstatic.com']
+    # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
+    # Default Helmet Content-Security-Policy values can be removed by setting the key to false
   cors:
-    origin: http://localhost:3000
+    origin: [http://localhost:3000, https://portal.stratpoint.io]
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
     credentials: true
+  # This is for local development only, it is not recommended to use this in production
+  # The production database configuration is stored in app-config.production.yaml
   cache:
     store: redis
     connection: ${REDIS_URL}
@@ -48,12 +61,27 @@ backend:
 integrations:
   github:
     - host: github.com
+      # This is a Personal Access Token or PAT from GitHub. You can find out how to generate this token, and more information
+      # about setting up the GitHub integration here: https://backstage.io/docs/integrations/github/locations#configuration
       token: ${GITHUB_TOKEN}
       debug: false
-  # gitlab:
-  #   - host: gitlab.com
-  #     token: ${GITLAB_TOKEN}
-  #     apiBaseUrl: https://gitlab.com/api/v4
+    ### Example for how to add your GitHub Enterprise instance using the API:
+    # - host: ghe.example.net
+    #   apiBaseUrl: https://ghe.example.net/api/v3
+    #   token: ${GHE_TOKEN}
+  gitlab:
+    - host: gitlab.coderstudio.co
+      token: ${GITLAB_TOKEN}
+      apiBaseUrl: https://gitlab.coderstudio.co/api/v4
+    - host: gitlab.com
+      token: ${GITLAB_COM_TOKEN}
+      apiBaseUrl: https://gitlab.com/api/v4
+
+
+# Reference documentation http://backstage.io/docs/features/techdocs/configuration
+# Note: After experimenting with basic setup, use CI/CD to generate docs
+# and an external cloud storage when deploying TechDocs for production use-case.
+# https://backstage.io/docs/features/techdocs/how-to-guides#how-to-migrate-from-techdocs-basic-to-recommended-deployment-approach
 techdocs:
   builder: 'local'
   generator:
@@ -65,6 +93,7 @@ techdocs:
   reading:
     allow:
       - host: github.com
+      - host: gitlab.coderstudio.co
 
 auth:
   environment: development
@@ -74,20 +103,24 @@ auth:
         clientId: ${AUTH_GITHUB_CLIENT_ID}
         clientSecret: ${AUTH_GITHUB_CLIENT_SECRET}
         callbackUrl: ${AUTH_GITHUB_CALLBACK_URL}
+        # Enable GitHub sign-in
         signIn:
           enabled: true
     google:
       development:
         clientId: ${AUTH_GOOGLE_CLIENT_ID}
         clientSecret: ${AUTH_GOOGLE_CLIENT_SECRET}
-        signIn:
-          resolvers:
-            - resolver: emailMatchingUserEntityProfileEmail
+        # Sign-in resolver is handled by the custom google-auto-provision module
+        # which auto-provisions @stratpoint.com users into general-engineers on first login
 
 scaffolder:
   github:
     token: ${GITHUB_TOKEN}
     visibility: private
+  # Base domain for scaffolded app ingress URLs.
+  # Set in .env as SCAFFOLDER_INGRESS_DOMAIN
+  # Examples: 192.168.2.210.nip.io, apps.coderstudio.co, apps.example.com
+  ingressDomain: ${SCAFFOLDER_INGRESS_DOMAIN}
 
 catalog:
   import:
@@ -99,8 +132,8 @@ catalog:
   orphanStrategy: delete
   providers:
     github:
-      default:
-        organization: ${GITHUB_ORG}
+      stratpoint:
+        organization: stratpoint-engineering
         catalogPath: /catalog-info.yaml
         filters:
           branch: main
@@ -108,17 +141,58 @@ catalog:
           frequency: { minutes: 30 }
           timeout: { minutes: 3 }
   locations:
-    # Your organization catalog — copy example-org/ and customize
+    # Stratpoint Organization - Root catalog location
     - type: file
-      target: ../../example-org/catalog-info.yaml
+      target: ../../stratpoint/catalog-info.yaml
       rules:
         - allow: [Location, Component, System, API, Resource, Group, User]
 
-    # Uncomment to load templates from a GitHub repo:
+    # Local templates (development)
+    - type: file
+      target: ../../templates/three-tier-app/template.yaml
+      rules:
+        - allow: [Template]
+
+    # Stratpoint Templates - maintained in separate repository (private)
+    # See app-config.local.yaml for development template references
+    # Production templates loaded from: https://github.com/stratpoint-engineering/engineering-standards.git
+    # Uncomment for production:
     # - type: url
-    #   target: https://github.com/<your-org>/backstage-templates/blob/main/catalog-info.yaml
+    #   target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/projects/catalog-info.yaml
     #   rules:
-    #     - allow: [Template, Location]
+    #     - allow: [Template, Location, Component, System, Domain, Group]
+
+    # External examples
+    # - type: url
+    #   target: https://github.com/backstage/backstage/blob/master/catalog-info.yaml
+      # rules:
+      #   - allow: [Component, System, API, Resource, Location, Group, User]
+      # owner: group:default/backstage-admins
+
+    # - type: url
+    #   target: https://gitlab.coderstudio.co/stratpoint/engineering-standards/-/blob/main/catalog-info.yml
+    # - type: url
+    #   target: https://raw.githubusercontent.com/devxp-tech/backstage-catalog/main/devxp/all.yaml
+    #   rules:
+    #     - allow: [Component, System, API, Resource, Location, Group, User]
+    #   owner: group:default/backstage-admins
+
+    # - type: url
+    #   target: https://raw.githubusercontent.com/devxp-tech/backstage/main/catalog-info.yaml
+    #   rules:
+    #     - allow: [Component, System, API, Resource, Location, Group, User]
+    #   owner: group:default/backstage-admins
+
+    ## Uncomment these lines to add more example data
+    # - type: url
+    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/all.yaml
+
+    ## Uncomment these lines to add an example org
+    # - type: url
+    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/acme-corp.yaml
+    #   rules:
+    #     - allow: [User, Group]
+
 
     # Local template overrides: add in app-config.local.yaml (gitignored)
     # See app-config.local.yaml.example for template
@@ -129,17 +203,30 @@ kubernetes:
   clusterLocatorMethods:
     - type: 'config'
       clusters:
-        - name: your-cluster
+        - name: talos-homelab
+          # In-cluster URL — works because Backstage runs inside the same cluster.
+          # If running Backstage outside the cluster, change to: https://192.168.2.198:6443
           url: https://kubernetes.default.svc
           authProvider: serviceAccount
           # In-cluster token: no serviceAccountToken or caData needed.
           # The Backstage pod must run with serviceAccountName: backstage-k8s-reader
           # (set in Helm values). Kubernetes automatically mounts the projected SA token.
           skipTLSVerify: false
+          # Set to true if metrics-server is not installed (run `kubectl top nodes` to check).
+          # Without metrics-server, CPU/memory charts won't show but everything else works.
           skipMetricsLookup: false
 
 proxy:
   endpoints:
+    # GitHub API proxy — used by GitHub Actions plugin (CI/CD tab)
+    # Injects server-side GITHUB_TOKEN so users don't need GitHub OAuth
+    '/github/api':
+      target: https://api.github.com
+      changeOrigin: true
+      headers:
+        Authorization: Bearer ${GITHUB_TOKEN}
+        Accept: application/vnd.github+json
+
     # ArgoCD API proxy — used by the ArgoCD history card on entity overview pages
     '/argocd/api':
       target: ${ARGOCD_URL}
@@ -147,17 +234,27 @@ proxy:
       secure: false
       headers:
         Cookie: ${ARGOCD_AUTH_TOKEN}
+        # ARGOCD_AUTH_TOKEN format: argocd.token=<jwt>
+        # Get it from: ArgoCD UI → User Info → Copy JWT token
 
 argocd:
+  baseUrl: ${ARGOCD_URL}
+  namespacedApps: true
   appLocatorMethods:
     - type: 'config'
       instances:
         - name: argocd
           url: ${ARGOCD_URL}
+          frontendUrl: ${ARGOCD_URL}
           token: ${ARGOCD_TOKEN}
+          # ARGOCD_TOKEN: bare JWT (same value as ARGOCD_AUTH_TOKEN without the "argocd.token=" prefix)
+          # Create a dedicated service account for Backstage:
+          #   argocd account create --account backstage
+          #   argocd account generate-token --account backstage
 
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:
+  # setting this to `false` will disable permissions
   enabled: true
   # NOTE: All permission policy logic is in packages/backend/src/plugins/permission.ts
   # (CatalogPermissionPolicy). The YAML `policies` block is NOT a supported Backstage
@@ -165,45 +262,74 @@ permission:
 
 # Local Provisioner Configuration
 localProvisioner:
+  # Enable or disable the local provisioning feature
   enabled: true
+
+  # SSE heartbeat interval in seconds (keeps agent connections alive)
   sseHeartbeatInterval: 30
+
+  # Task retention period in days (cleanup old completed/failed tasks)
   taskRetentionDays: 30
+
+  # Supported resource types for local provisioning
   supportedResources:
     - kafka
     - postgres
     - redis
     - mongodb
+
+  # Agent configuration
   agent:
+    # Minimum required agent version
     minimumVersion: '1.0.0'
 
-# Engineering Docs — configure your GitHub sources here
 engineeringDocs:
   sources:
     - id: nexus-idp-docs
       label: Nexus IDP Docs
       description: Nexus IDP platform documentation — permissions, user management, integrations
-      repoOwner: your-org
-      repoName: nexus-idp
+      repoOwner: stratpoint-engineering
+      repoName: backstage-main
       branch: main
       contentBase: docs/content
 
     - id: engineering-hub
       label: Engineering Hub
-      description: Engineering standards, guides, and golden paths
-      repoOwner: ${GITHUB_ORG}
+      description: Stratpoint engineering standards, guides, and golden paths
+      repoOwner: stratpoint-engineering
       repoName: engineering-hub
       branch: main
       contentBase: src/content
 
-# FinOps — configure your AWS accounts here
+    # Local Provisioner docs live at plugins/local-provisioner/docs/
+    # Will be wired as an engineering-docs source once plugins are in separate repos.
+
+    # strat-training/kafka is a PUBLIC repo — any valid GITHUB_TOKEN can read it.
+    - id: kafka-training
+      label: Kafka Training
+      description: Kafka training materials, guides, and exercises
+      repoOwner: strat-training
+      repoName: kafka
+      branch: main
+      contentBase: docs
+
 finops:
+  awsAccessPortalUrl: 'https://stratpoint.awsapps.com/start'
+  awsRoleToAssume: 'AccountAdmin'
   aws:
-    region: ${AWS_REGION:-us-east-1}
+    region: us-east-1
     idleThresholdDays: 180
     cacheTtlSeconds: 86400
     accounts:
-      - id: account1
-        name: Account 1
-        profile: aws-profile-1
-        awsAccountNumber: '${FINOPS_AWS_ACCOUNT_1}'
-      # Add more accounts as needed
+      - id: nonprod
+        name: Non-Prod
+        profile: cost-admin-nonprod
+        awsAccountNumber: '${FINOPS_AWS_ACCOUNT_NONPROD}'
+      - id: legacy
+        name: Legacy
+        profile: cost-admin-legacy
+        awsAccountNumber: '${FINOPS_AWS_ACCOUNT_LEGACY}'
+      - id: prod
+        name: Production
+        profile: cost-admin-prod
+        awsAccountNumber: '${FINOPS_AWS_ACCOUNT_PROD}'

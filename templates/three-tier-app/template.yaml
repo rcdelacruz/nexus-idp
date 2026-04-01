@@ -1,0 +1,182 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: three-tier-app
+  title: 3-Tier Application (K8s + ArgoCD + CNPG)
+  description: >
+    Provisions a complete 3-tier application: React frontend, Node.js/FastAPI/Go backend,
+    CloudNativePG (CNPG) PostgreSQL database, Kubernetes manifests (Deployment/Service/Ingress),
+    and an ArgoCD Application for GitOps deployment.
+  tags:
+    - kubernetes
+    - postgresql
+    - argocd
+    - cnpg
+    - gitops
+    - recommended
+spec:
+  owner: group:default/devops-team
+  type: service
+
+  parameters:
+    - title: Application Identity
+      required: [appName, description, owner]
+      properties:
+        appName:
+          title: Application Name
+          type: string
+          description: >
+            Lowercase letters and hyphens only. Used as the base name for all
+            Kubernetes resources, database names, and catalog entities.
+          pattern: '^[a-z][a-z0-9-]{2,48}[a-z0-9]$'
+          ui:autofocus: true
+          ui:help: 'Example: payment-service, user-portal, inventory-api'
+        description:
+          title: Description
+          type: string
+          description: What does this application do?
+        owner:
+          title: Owning Team
+          type: string
+          description: The team responsible for this application
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+
+    - title: Repository & Deployment
+      required: [repoOwner, repoName, environment, backendLanguage]
+      properties:
+        repoOwner:
+          title: GitHub Organization
+          type: string
+          description: GitHub org where the application repo will be created
+          default: strat-main-team
+        repoName:
+          title: Repository Name
+          type: string
+          description: GitHub repository name for the application source code
+        environment:
+          title: Target Environment
+          type: string
+          enum: [dev, staging, prod]
+          enumNames: ['Development', 'Staging', 'Production']
+          default: dev
+        backendLanguage:
+          title: Backend Language
+          type: string
+          enum: [nodejs, python, go]
+          enumNames: ['Node.js (Express)', 'Python (FastAPI)', 'Go (Gin)']
+          default: nodejs
+        frontendPort:
+          title: Frontend Container Port
+          type: integer
+          default: 3000
+        backendPort:
+          title: Backend Container Port
+          type: integer
+          default: 8080
+
+    - title: Database Configuration
+      required: []
+      properties:
+        dbInstances:
+          title: CNPG Cluster Instances
+          type: integer
+          default: 1
+          enum: [1, 2, 3]
+          enumNames:
+            - '1 instance — dev/staging, no HA'
+            - '2 instances — staging with one standby'
+            - '3 instances — production HA (recommended)'
+        dbStorageSize:
+          title: Database Storage (Longhorn)
+          type: string
+          default: '5Gi'
+          enum: ['1Gi', '5Gi', '10Gi', '25Gi', '50Gi', '100Gi']
+        enableConnectionPooling:
+          title: Enable PgBouncer Connection Pooling
+          type: boolean
+          default: true
+          description: Adds a CNPG Pooler resource in transaction mode
+
+  steps:
+    - id: discover-ingress
+      name: Discover Ingress Domain
+      action: kubernetes:get-ingress-domain
+      input: {}
+
+    - id: fetch-skeleton
+      name: Generate Project Files
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          appName: ${{ parameters.appName }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          repoOwner: ${{ parameters.repoOwner }}
+          repoName: ${{ parameters.repoName }}
+          environment: ${{ parameters.environment }}
+          backendLanguage: ${{ parameters.backendLanguage }}
+          ingressDomain: ${{ steps['discover-ingress'].output.ingressDomain }}
+          frontendPort: ${{ parameters.frontendPort }}
+          backendPort: ${{ parameters.backendPort }}
+          dbName: ${{ parameters.appName | replace("-", "_") }}
+          dbInstances: ${{ parameters.dbInstances }}
+          dbStorageSize: ${{ parameters.dbStorageSize }}
+          enableConnectionPooling: ${{ parameters.enableConnectionPooling }}
+          namespace: ${{ parameters.appName }}-${{ parameters.environment }}
+
+    - id: create-repo
+      name: Create GitHub Repository
+      action: github:repo:create
+      input:
+        repoUrl: github.com?owner=${{ parameters.repoOwner }}&repo=${{ parameters.repoName }}
+        description: ${{ parameters.description }}
+        repoVisibility: private
+        defaultBranch: main
+        topics:
+          - backstage-3tier
+
+    - id: set-cr-pat
+      name: Configure GHCR Access
+      action: github:repo:set-secret
+      input:
+        repoOwner: ${{ parameters.repoOwner }}
+        repoName: ${{ parameters.repoName }}
+
+    - id: push-content
+      name: Push Initial Content
+      action: github:repo:push
+      input:
+        repoUrl: github.com?owner=${{ parameters.repoOwner }}&repo=${{ parameters.repoName }}
+        defaultBranch: main
+
+    - id: create-pull-secret
+      name: Create Image Pull Secret
+      action: kubernetes:create-pull-secret
+      input:
+        namespace: ${{ parameters.appName }}-${{ parameters.environment }}
+
+    - id: deploy-argocd
+      name: Register ArgoCD Application
+      action: kubernetes:apply
+      input:
+        manifestPath: k8s/argocd-application.yaml
+
+    - id: register
+      name: Register in Backstage Catalog
+      action: catalog:register
+      input:
+        catalogInfoUrl: https://github.com/${{ parameters.repoOwner }}/${{ parameters.repoName }}/blob/main/catalog-info.yaml
+
+  output:
+    links:
+      - title: GitHub Repository
+        url: ${{ steps['create-repo'].output.remoteUrl }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}
+      - title: ArgoCD
+        url: https://argocd.coderstudio.co/applications/${{ parameters.appName }}-${{ parameters.environment }}

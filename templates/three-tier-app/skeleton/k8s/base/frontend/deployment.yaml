@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${{ values.appName }}-frontend
+  labels:
+    app: ${{ values.appName }}-frontend
+    backstage.io/kubernetes-id: ${{ values.appName }}-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${{ values.appName }}-frontend
+  template:
+    metadata:
+      labels:
+        app: ${{ values.appName }}-frontend
+        backstage.io/kubernetes-id: ${{ values.appName }}-frontend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: frontend
+          image: ghcr.io/${{ values.repoOwner }}/${{ values.repoName }}-frontend:latest
+          ports:
+            - containerPort: ${{ values.frontendPort }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: ${{ values.frontendPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: ${{ values.frontendPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi

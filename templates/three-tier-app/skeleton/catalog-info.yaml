@@ -1,0 +1,200 @@
+---
+# System — groups all components of ${{ values.appName }} together
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: ${{ values.appName }}
+  title: ${{ values.appName | title }}
+  description: ${{ values.description }}
+  annotations:
+    backstage.io/source-location: url:https://github.com/${{ values.repoOwner }}/${{ values.repoName }}
+  links:
+    - url: http://${{ values.appName }}-${{ values.environment }}.${{ values.ingressDomain }}
+      title: Frontend
+      icon: dashboard
+    - url: http://api.${{ values.appName }}-${{ values.environment }}.${{ values.ingressDomain }}/health
+      title: API Health
+      icon: cloud
+spec:
+  owner: ${{ values.owner }}
+  domain: engineering
+---
+# Frontend Component
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.appName }}-frontend
+  title: ${{ values.appName | title }} Frontend
+  description: React frontend for ${{ values.appName }}
+  annotations:
+    backstage.io/source-location: url:https://github.com/${{ values.repoOwner }}/${{ values.repoName }}
+    github.com/project-slug: ${{ values.repoOwner }}/${{ values.repoName }}
+    backstage.io/kubernetes-id: ${{ values.appName }}-frontend
+    backstage.io/kubernetes-namespace: ${{ values.namespace }}
+    argocd/app-name: ${{ values.appName }}-${{ values.environment }}
+    argocd/app-namespace: devtroncd
+  links:
+    - url: http://${{ values.appName }}-${{ values.environment }}.${{ values.ingressDomain }}
+      title: Open App
+      icon: dashboard
+spec:
+  type: website
+  lifecycle: ${{ values.environment }}
+  owner: ${{ values.owner }}
+  system: ${{ values.appName }}
+  dependsOn:
+    - component:default/${{ values.appName }}-backend
+---
+# Backend API Component
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.appName }}-backend
+  title: ${{ values.appName | title }} Backend API
+  description: Backend API service for ${{ values.appName }} (${{ values.backendLanguage }})
+  annotations:
+    backstage.io/source-location: url:https://github.com/${{ values.repoOwner }}/${{ values.repoName }}
+    github.com/project-slug: ${{ values.repoOwner }}/${{ values.repoName }}
+    backstage.io/kubernetes-id: ${{ values.appName }}-backend
+    backstage.io/kubernetes-namespace: ${{ values.namespace }}
+    argocd/app-name: ${{ values.appName }}-${{ values.environment }}
+    argocd/app-namespace: devtroncd
+  links:
+    - url: http://api.${{ values.appName }}-${{ values.environment }}.${{ values.ingressDomain }}/health
+      title: Health Check
+      icon: cloud
+    - url: http://api.${{ values.appName }}-${{ values.environment }}.${{ values.ingressDomain }}/api/items
+      title: API
+      icon: cloud
+spec:
+  type: service
+  lifecycle: ${{ values.environment }}
+  owner: ${{ values.owner }}
+  system: ${{ values.appName }}
+  providesApis:
+    - ${{ values.appName }}-api
+  dependsOn:
+    - resource:default/${{ values.appName }}-db
+---
+# API definition
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: ${{ values.appName }}-api
+  title: ${{ values.appName | title }} API
+  description: REST API for ${{ values.appName }}
+  annotations:
+    backstage.io/source-location: url:https://github.com/${{ values.repoOwner }}/${{ values.repoName }}
+  links:
+    - url: http://api.${{ values.appName }}-${{ values.environment }}.${{ values.ingressDomain }}
+      title: Base URL
+      icon: cloud
+spec:
+  type: openapi
+  lifecycle: ${{ values.environment }}
+  owner: ${{ values.owner }}
+  system: ${{ values.appName }}
+  definition: |
+    openapi: 3.0.0
+    info:
+      title: ${{ values.appName | title }} API
+      version: 1.0.0
+    servers:
+      - url: http://api.${{ values.appName }}-${{ values.environment }}.${{ values.ingressDomain }}
+    paths:
+      /health:
+        get:
+          summary: Health check
+          responses:
+            '200':
+              description: Service is healthy
+      /api/items:
+        get:
+          summary: List items
+          parameters:
+            - name: page
+              in: query
+              schema:
+                type: integer
+            - name: limit
+              in: query
+              schema:
+                type: integer
+            - name: search
+              in: query
+              schema:
+                type: string
+          responses:
+            '200':
+              description: Paginated list of items
+        post:
+          summary: Create item
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+                    description:
+                      type: string
+                    status:
+                      type: string
+                      enum: [active, inactive, archived]
+          responses:
+            '201':
+              description: Item created
+      /api/items/{id}:
+        get:
+          summary: Get item
+          parameters:
+            - name: id
+              in: path
+              required: true
+              schema:
+                type: string
+          responses:
+            '200':
+              description: Item details
+        put:
+          summary: Update item
+          parameters:
+            - name: id
+              in: path
+              required: true
+              schema:
+                type: string
+          responses:
+            '200':
+              description: Item updated
+        delete:
+          summary: Delete item
+          parameters:
+            - name: id
+              in: path
+              required: true
+              schema:
+                type: string
+          responses:
+            '204':
+              description: Item deleted
+---
+# Database Resource (CNPG)
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ values.appName }}-db
+  title: ${{ values.appName | title }} Database
+  description: CloudNativePG PostgreSQL cluster for ${{ values.appName }}
+  annotations:
+    backstage.io/source-location: url:https://github.com/${{ values.repoOwner }}/${{ values.repoName }}
+    backstage.io/kubernetes-id: ${{ values.appName }}-db
+    backstage.io/kubernetes-namespace: ${{ values.namespace }}
+spec:
+  type: database
+  lifecycle: ${{ values.environment }}
+  owner: ${{ values.owner }}
+  system: ${{ values.appName }}

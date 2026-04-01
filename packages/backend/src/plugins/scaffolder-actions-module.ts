@@ -6,6 +6,10 @@
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node';
 import { createLocalProvisionAction } from './scaffolder/actions/localProvision';
+import { createKubernetesApplyAction } from './scaffolder/actions/kubernetesApply';
+import { createPullSecretAction } from './scaffolder/actions/createPullSecret';
+import { createSetRepoSecretAction } from './scaffolder/actions/setRepoSecret';
+import { createGetIngressDomainAction } from './scaffolder/actions/getIngressDomain';
 
 export const scaffolderActionsModule = createBackendModule({
   pluginId: 'scaffolder',
@@ -17,8 +21,13 @@ export const scaffolderActionsModule = createBackendModule({
         discovery: coreServices.discovery,
       },
       async init({ scaffolder, discovery }) {
-        // Register custom actions with dependencies
-        scaffolder.addActions(createLocalProvisionAction({ discovery }));
+        scaffolder.addActions(
+          createLocalProvisionAction({ discovery }),
+          createKubernetesApplyAction(),
+          createPullSecretAction(),
+          createSetRepoSecretAction(),
+          createGetIngressDomainAction(),
+        );
       },
     });
   },

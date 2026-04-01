@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${{ values.namespace }}
+  labels:
+    managed-by: backstage
+    app.kubernetes.io/name: ${{ values.appName }}
+    environment: ${{ values.environment }}

@@ -1,0 +1,53 @@
+---
+# ArgoCD Application — uses Kustomize overlays for environment-specific config.
+# ArgoCD Image Updater watches GHCR for new tags and auto-deploys.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${{ values.appName }}-${{ values.environment }}
+  namespace: devtroncd
+  labels:
+    app.kubernetes.io/name: ${{ values.appName }}
+    environment: ${{ values.environment }}
+  annotations:
+    # ArgoCD Image Updater — watches GHCR for new image tags
+    argocd-image-updater.argoproj.io/image-list: >-
+      frontend=ghcr.io/${{ values.repoOwner }}/${{ values.repoName }}-frontend,
+      backend=ghcr.io/${{ values.repoOwner }}/${{ values.repoName }}-backend
+    argocd-image-updater.argoproj.io/frontend.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/backend.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/write-back-method: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/${{ values.repoOwner }}/${{ values.repoName }}.git
+    targetRevision: main
+    path: k8s/overlays/${{ values.environment }}
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ${{ values.appName }}-${{ values.environment }}
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: postgresql.cnpg.io
+      kind: Cluster
+      jqPathExpressions:
+        - .spec
+        - .status

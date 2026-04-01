@@ -1,0 +1,41 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: ${{ values.appName }}-db
+  labels:
+    app: ${{ values.appName }}-db
+    backstage.io/kubernetes-id: ${{ values.appName }}-db
+spec:
+  instances: ${{ values.dbInstances }}
+
+  postgresql:
+    pg_hba:
+      - host all all 10.0.0.0/8 md5
+
+  bootstrap:
+    initdb:
+      database: ${{ values.dbName }}
+      owner: ${{ values.appName }}
+
+  storage:
+    size: ${{ values.dbStorageSize }}
+    storageClass: longhorn
+
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://cnpg-backups/${{ values.appName }}-db
+      endpointURL: http://192.168.2.103:9000
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-minio-creds
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-minio-creds
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+        retention: '30d'
+    retentionPolicy: '30d'
+
+  monitoring:
+    enablePodMonitor: true
