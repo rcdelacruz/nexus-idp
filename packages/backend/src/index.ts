@@ -76,6 +76,9 @@ backend.add(
   import('@stratpoint/plugin-local-provisioner-backend').then(m => ({ default: m.localProvisionerPlugin }))
 );
 
+// cors proxy (enables SwaggerUI "Try it out" through server-side forwarding)
+backend.add(import('./plugins/cors-proxy'));
+
 // user management
 backend.add(
   import('@stratpoint/plugin-user-management-backend').then(m => ({ default: m.userManagementPlugin }))
