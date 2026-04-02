@@ -133,14 +133,14 @@ const entityWarningContent = (
 const overviewContent = (
   <Grid container spacing={3} alignItems="stretch">
     {entityWarningContent}
-    <Grid item md={6}>
+    <Grid item md={6} xs={12}>
       <EntityAboutCard />
     </Grid>
     <Grid item md={6} xs={12}>
       <EntityCatalogGraphCard height={400} />
     </Grid>
-    <Grid item md={6}>
-      <EntitySonarQubeCard variant="gridItem" />
+    <Grid item md={6} xs={12}>
+      <EntitySonarQubeCard variant="fullHeight" />
     </Grid>
     <Grid item md={6} xs={12}>
       <EntityLinksCard />

@@ -89,30 +89,39 @@ body[data-theme-mode='light'] {
    Used by: API tab, Dependencies tab (EntityRelationCard)
    ========================================================== */
 
-/* Card: add Geist border + tighter radius */
+/* bui-Card: match MuiPaper-root styling exactly */
 article[class*="bui-Card"] {
+  background: var(--surface) !important;
   border: 1px solid var(--border) !important;
   border-radius: 8px !important;
+  box-shadow: none !important;
+  height: 100% !important;
 }
 
-/* Card header: border-bottom separator, tighter padding */
+/* bui-CardHeader: match theme.ts MuiCardHeader */
 [class*="bui-CardHeader"] {
   border-bottom: 1px solid var(--border) !important;
-  padding: 12px 16px !important;
+  padding: 14px 20px !important;
 }
 
-/* Card header title (h3) */
+/* bui-CardHeader title: match theme.ts MuiCardHeader title */
 [class*="bui-CardHeader"] h3 {
   font-family: var(--font-sans) !important;
-  font-size: 0.8125rem !important;
+  font-size: 0.9375rem !important;
   font-weight: 600 !important;
-  letter-spacing: -0.006em !important;
+  line-height: 1.4 !important;
+  letter-spacing: -0.02em !important;
   color: var(--fg-primary) !important;
 }
 
-/* Card body: ensure padding for all cards */
+/* bui-CardBody: match theme.ts MuiCardContent padding, remove scroll shadow */
 [class*="bui-CardBody"] {
-  padding: 16px !important;
+  padding: 20px !important;
+}
+
+[class*="bui-CardBody"]::before,
+[class*="bui-CardBody"]::after {
+  display: none !important;
 }
 
 /* Table: clean full-width layout */
@@ -233,8 +242,8 @@ html, html.theme-dark, body[data-theme-mode='dark'] {
   --border:       #2e2e2e;
   --border-hover: #454545;
 
-  --surface:       #1a1a1a;
-  --surface-hover: #1f1f1f;
+  --surface:       #0a0a0a;
+  --surface-hover: #1a1a1a;
 
   --blue: #3291ff;
   --blue-dark: #0070f3;
@@ -330,7 +339,7 @@ pre *, code * {
 /* ==========================================================
    PAPER / CARDS
    ========================================================== */
-.MuiPaper-root {
+[class*="MuiPaper-root"] {
   background: var(--surface) !important;
   background-image: none !important;
   border: 1px solid var(--border) !important;
@@ -339,54 +348,71 @@ pre *, code * {
   color: var(--fg-primary) !important;
 }
 
-/* MUI Card — InfoCard, AboutCard, all entity page cards */
-.MuiCard-root {
-  background: var(--ds-background-100) !important;
-  background-image: none !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: none !important;
-}
-
-.MuiCardHeader-root {
-  padding: 12px 16px !important;
+/* MUI Card header: force consistent padding + border-bottom across all InfoCards.
+   Uses TWO attribute selectors (specificity 0,2,0) to beat JSS single-class rules (0,1,0)
+   that also use !important and inject after this file — this is why the 4px height gap persisted. */
+[class*="MuiCardHeader-root"][class*="MuiCardHeader"] {
+  padding: 12px 20px !important;
   border-bottom: 1px solid var(--border) !important;
   background: transparent !important;
 }
 
-.MuiCardHeader-title {
-  font-size: 0.875rem !important;
-  font-weight: 500 !important;
+/* Target both MuiCardHeader-title AND MuiTypography (which co-exist on the same element)
+   to ensure MUI InfoCard title matches bui-* EntityInfoCard title exactly. */
+[class*="MuiCardHeader-title"][class*="MuiTypography"],
+[class*="MuiCardHeader-root"][class*="MuiCardHeader"] [class*="MuiTypography-root"] {
+  font-family: var(--font-sans) !important;
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
   letter-spacing: -0.02em !important;
   color: var(--fg-primary) !important;
-  line-height: 1.4 !important;
 }
 
-.MuiCardHeader-subheader {
-  font-size: 0.8125rem !important;
-  color: var(--fg-tertiary) !important;
-  letter-spacing: -0.006em !important;
-  margin-top: 2px !important;
+[class*="MuiCardHeader-content"][class*="MuiCardHeader"] {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
 }
 
-.MuiCardContent-root {
-  padding: 16px !important;
+[class*="MuiCardContent-root"] {
+  font-family: var(--font-sans) !important;
+  padding: 20px !important;
   color: var(--fg-primary) !important;
 }
 
-.MuiCardContent-root:last-child {
-  padding-bottom: 16px !important;
+[class*="MuiCardContent-root"]:last-child {
+  padding-bottom: 20px !important;
 }
 
-.MuiCardActions-root {
+[class*="MuiCardActions-root"] {
   padding: 8px 16px !important;
   border-top: 1px solid var(--border) !important;
+}
+
+/* InfoCard renders a <Divider> between CardHeader and CardContent (divider=true by default).
+   CardHeader already has border-bottom — this extra Divider creates a double separator,
+   making the header area appear taller/different from bui-* cards. Hide it.
+   Using direct child selector (>) on MuiCard-root because the Divider is a direct child of the card,
+   not a sibling of the header (+ was less reliable). */
+[class*="MuiCard-root"] > [class*="MuiDivider-root"] {
+  display: none !important;
+}
+[class*="MuiCardHeader-root"] + [class*="MuiDivider-root"] {
+  display: none !important;
+}
+
+/* InfoCard variant="gridItem" sets height:calc(100%-10px) + marginBottom:10px via inline style.
+   Override so MUI cards fill their grid cells exactly like bui-* cards (height:100%). */
+[class*="MuiGrid-item"] [class*="MuiCard-root"] {
+  height: 100% !important;
+  margin-bottom: 0 !important;
 }
 
 /* ==========================================================
    BUTTONS — Geist spec
    ========================================================== */
-.MuiButton-root {
+[class*="MuiButton-root"] {
   font-family: var(--font-sans) !important;
   font-weight: 500 !important;
   font-size: 0.875rem !important;
@@ -400,52 +426,52 @@ pre *, code * {
   transition: background var(--duration) ease, border-color var(--duration) ease, color var(--duration) ease, transform var(--duration) ease !important;
 }
 
-.MuiButton-root:hover { box-shadow: none !important; }
-.MuiButton-root:active { transform: translateY(1px) !important; }
+[class*="MuiButton-root"]:hover { box-shadow: none !important; }
+[class*="MuiButton-root"]:active { transform: translateY(1px) !important; }
 
 /* Disable ripple */
-.MuiTouchRipple-root { display: none !important; }
+[class*="MuiTouchRipple-root"] { display: none !important; }
 
 /* Primary (filled) — Geist: ds-gray-1000 bg */
-.MuiButton-containedPrimary {
+[class*="MuiButton-containedPrimary"] {
   background: var(--ds-gray-1000) !important;
   color: var(--ds-background-200) !important;
   border: none !important;
 }
-.MuiButton-containedPrimary:hover {
+[class*="MuiButton-containedPrimary"]:hover {
   background: var(--ds-gray-700) !important;
 }
 
-html.theme-light .MuiButton-containedPrimary,
-body[data-theme-mode='light'] .MuiButton-containedPrimary {
+html.theme-light [class*="MuiButton-containedPrimary"],
+body[data-theme-mode='light'] [class*="MuiButton-containedPrimary"] {
   background: #171717 !important;
   color: #ffffff !important;
 }
-html.theme-light .MuiButton-containedPrimary:hover,
-body[data-theme-mode='light'] .MuiButton-containedPrimary:hover {
+html.theme-light [class*="MuiButton-containedPrimary"]:hover,
+body[data-theme-mode='light'] [class*="MuiButton-containedPrimary"]:hover {
   background: #383838 !important;
 }
 
 /* Secondary (outlined) — Geist: box-shadow border */
-.MuiButton-outlined,
-.MuiButton-outlinedPrimary {
+[class*="MuiButton-outlined"],
+[class*="MuiButton-outlinedPrimary"] {
   background: transparent !important;
   color: var(--fg-primary) !important;
   border: none !important;
   box-shadow: 0 0 0 1px var(--border) inset !important;
 }
-.MuiButton-outlined:hover,
-.MuiButton-outlinedPrimary:hover {
+[class*="MuiButton-outlined"]:hover,
+[class*="MuiButton-outlinedPrimary"]:hover {
   background: var(--ds-gray-alpha-100) !important;
   box-shadow: 0 0 0 1px var(--border-hover) inset !important;
 }
 
 /* Tertiary (text) */
-.MuiButton-text {
+[class*="MuiButton-text"] {
   color: var(--fg-secondary) !important;
   background: transparent !important;
 }
-.MuiButton-text:hover {
+[class*="MuiButton-text"]:hover {
   background: var(--ds-gray-alpha-100) !important;
   color: var(--fg-primary) !important;
 }
@@ -453,7 +479,7 @@ body[data-theme-mode='light'] .MuiButton-containedPrimary:hover {
 /* ==========================================================
    CHIPS
    ========================================================== */
-.MuiChip-root {
+[class*="MuiChip-root"] {
   font-family: var(--font-sans) !important;
   font-size: 0.75rem !important;
   font-weight: 500 !important;
@@ -467,7 +493,7 @@ body[data-theme-mode='light'] .MuiButton-containedPrimary:hover {
 /* ==========================================================
    TABLES
    ========================================================== */
-.MuiTableCell-root {
+[class*="MuiTableCell-root"] {
   font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
   letter-spacing: -0.006em !important;
@@ -477,7 +503,7 @@ body[data-theme-mode='light'] .MuiButton-containedPrimary:hover {
   line-height: 1.5 !important;
 }
 
-.MuiTableCell-head {
+[class*="MuiTableCell-head"] {
   background: var(--ds-background-100) !important;
   color: var(--fg-secondary) !important;
   font-size: 0.75rem !important;
@@ -488,14 +514,14 @@ body[data-theme-mode='light'] .MuiButton-containedPrimary:hover {
   padding: 12px 20px !important;
 }
 
-.MuiTableRow-root:hover > td {
+[class*="MuiTableRow-root"]:hover > td {
   background: var(--ds-gray-alpha-100) !important;
 }
 
 /* ==========================================================
    INPUTS
    ========================================================== */
-.MuiOutlinedInput-root {
+[class*="MuiOutlinedInput-root"] {
   border-radius: var(--radius) !important;
   background: var(--ds-background-100) !important;
   font-size: 0.875rem !important;
@@ -504,7 +530,7 @@ body[data-theme-mode='light'] .MuiButton-containedPrimary:hover {
 }
 
 /* Autocomplete — allow chips to wrap, clip overflow */
-.MuiAutocomplete-inputRoot.MuiOutlinedInput-root {
+[class*="MuiAutocomplete-inputRoot"][class*="MuiOutlinedInput-root"] {
   height: auto !important;
   flex-wrap: wrap !important;
   overflow: hidden !important;
@@ -515,30 +541,30 @@ body[data-theme-mode='light'] .MuiButton-containedPrimary:hover {
   box-sizing: border-box !important;
 }
 
-.MuiOutlinedInput-notchedOutline {
+[class*="MuiOutlinedInput-notchedOutline"] {
   border-color: var(--border) !important;
   border-width: 1px !important;
 }
 
-.MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+[class*="MuiOutlinedInput-root"]:hover [class*="MuiOutlinedInput-notchedOutline"] {
   border-color: var(--border-hover) !important;
 }
 
-.MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+[class*="MuiOutlinedInput-root"].Mui-focused [class*="MuiOutlinedInput-notchedOutline"] {
   border-color: var(--blue) !important;
   border-width: 1px !important;
 }
 
-.MuiOutlinedInput-root.Mui-focused {
+[class*="MuiOutlinedInput-root"].Mui-focused {
   box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.15) !important;
 }
 
-html.theme-light .MuiOutlinedInput-root.Mui-focused,
-body[data-theme-mode='light'] .MuiOutlinedInput-root.Mui-focused {
+html.theme-light [class*="MuiOutlinedInput-root"].Mui-focused,
+body[data-theme-mode='light'] [class*="MuiOutlinedInput-root"].Mui-focused {
   box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.12) !important;
 }
 
-.MuiInputBase-input::placeholder {
+[class*="MuiInputBase-input"]::placeholder {
   color: var(--fg-tertiary) !important;
   opacity: 1 !important;
 }
@@ -546,7 +572,7 @@ body[data-theme-mode='light'] .MuiOutlinedInput-root.Mui-focused {
 /* ==========================================================
    TABS
    ========================================================== */
-.MuiTab-root {
+[class*="MuiTab-root"] {
   font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
@@ -558,14 +584,14 @@ body[data-theme-mode='light'] .MuiOutlinedInput-root.Mui-focused {
   opacity: 1 !important;
 }
 
-.MuiTab-root.Mui-selected { color: var(--fg-primary) !important; }
-.MuiTabs-indicator { background: var(--fg-primary) !important; height: 1px !important; }
-.MuiTabs-root { border-bottom: 1px solid var(--border) !important; }
+[class*="MuiTab-root"].Mui-selected { color: var(--fg-primary) !important; }
+[class*="MuiTabs-indicator"] { background: var(--fg-primary) !important; height: 1px !important; }
+[class*="MuiTabs-root"] { border-bottom: 1px solid var(--border) !important; }
 
 /* ==========================================================
    DIVIDERS
    ========================================================== */
-.MuiDivider-root {
+[class*="MuiDivider-root"] {
   background: var(--border) !important;
   border-color: var(--border) !important;
 }
@@ -573,21 +599,21 @@ body[data-theme-mode='light'] .MuiOutlinedInput-root.Mui-focused {
 /* ==========================================================
    DIALOGS
    ========================================================== */
-.MuiDialog-paper {
+[class*="MuiDialog-paper"] {
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-lg) !important;
   box-shadow: 0 24px 64px rgba(0,0,0,0.6) !important;
 }
-html.theme-light .MuiDialog-paper,
-body[data-theme-mode='light'] .MuiDialog-paper {
+html.theme-light [class*="MuiDialog-paper"],
+body[data-theme-mode='light'] [class*="MuiDialog-paper"] {
   box-shadow: 0 24px 64px rgba(0,0,0,0.12) !important;
 }
 
 /* ==========================================================
    TOOLTIPS
    ========================================================== */
-.MuiTooltip-tooltip {
+[class*="MuiTooltip-tooltip"] {
   font-family: var(--font-sans) !important;
   font-size: 0.75rem !important;
   background: var(--ds-gray-1000) !important;
@@ -595,8 +621,8 @@ body[data-theme-mode='light'] .MuiDialog-paper {
   border-radius: var(--radius) !important;
   padding: 5px 10px !important;
 }
-html.theme-light .MuiTooltip-tooltip,
-body[data-theme-mode='light'] .MuiTooltip-tooltip {
+html.theme-light [class*="MuiTooltip-tooltip"],
+body[data-theme-mode='light'] [class*="MuiTooltip-tooltip"] {
   background: #171717 !important;
   color: #ffffff !important;
 }
@@ -604,21 +630,21 @@ body[data-theme-mode='light'] .MuiTooltip-tooltip {
 /* ==========================================================
    MENUS / POPOVERS
    ========================================================== */
-.MuiMenu-paper,
-.MuiPopover-paper {
+[class*="MuiMenu-paper"],
+[class*="MuiPopover-paper"] {
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-md) !important;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
 }
-html.theme-light .MuiMenu-paper,
-html.theme-light .MuiPopover-paper,
-body[data-theme-mode='light'] .MuiMenu-paper,
-body[data-theme-mode='light'] .MuiPopover-paper {
+html.theme-light [class*="MuiMenu-paper"],
+html.theme-light [class*="MuiPopover-paper"],
+body[data-theme-mode='light'] [class*="MuiMenu-paper"],
+body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
   box-shadow: 0 8px 32px rgba(0,0,0,0.1) !important;
 }
 
-.MuiMenuItem-root {
+[class*="MuiMenuItem-root"] {
   font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
   color: var(--fg-primary) !important;
@@ -627,39 +653,39 @@ body[data-theme-mode='light'] .MuiPopover-paper {
   border-radius: 4px !important;
   margin: 2px 4px !important;
 }
-.MuiMenuItem-root:hover { background: var(--ds-gray-alpha-100) !important; }
+[class*="MuiMenuItem-root"]:hover { background: var(--ds-gray-alpha-100) !important; }
 
 /* ==========================================================
    TYPOGRAPHY
    ========================================================== */
-.MuiTypography-h1, .MuiTypography-h2, .MuiTypography-h3,
-.MuiTypography-h4, .MuiTypography-h5, .MuiTypography-h6 {
+[class*="MuiTypography-h1"], [class*="MuiTypography-h2"], [class*="MuiTypography-h3"],
+[class*="MuiTypography-h4"], [class*="MuiTypography-h5"], [class*="MuiTypography-h6"] {
   color: var(--fg-primary) !important;
   font-family: var(--font-sans) !important;
 }
 
-.MuiTypography-body1 { color: var(--fg-primary) !important; }
-.MuiTypography-body2 { color: var(--fg-secondary) !important; }
-.MuiTypography-caption { color: var(--fg-tertiary) !important; }
+[class*="MuiTypography-body1"] { color: var(--fg-primary) !important; }
+[class*="MuiTypography-body2"] { color: var(--fg-secondary) !important; }
+[class*="MuiTypography-caption"] { color: var(--fg-tertiary) !important; }
 
 /* ==========================================================
    ACCORDION (Filter panels)
    ========================================================== */
-.MuiAccordion-root {
+[class*="MuiAccordion-root"] {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
 }
-.MuiAccordion-root::before { display: none !important; }
-.MuiAccordionSummary-root {
+[class*="MuiAccordion-root"]::before { display: none !important; }
+[class*="MuiAccordionSummary-root"] {
   font-size: 0.8125rem !important;
   font-weight: 500 !important;
   color: var(--fg-secondary) !important;
   min-height: 36px !important;
   padding: 0 8px !important;
 }
-.MuiAccordionSummary-content { margin: 8px 0 !important; }
-.MuiAccordionDetails-root {
+[class*="MuiAccordionSummary-content"] { margin: 8px 0 !important; }
+[class*="MuiAccordionDetails-root"] {
   padding: 4px 8px 12px !important;
   font-size: 0.875rem !important;
   color: var(--fg-primary) !important;
@@ -668,12 +694,12 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    PROGRESS
    ========================================================== */
-.MuiLinearProgress-root {
+[class*="MuiLinearProgress-root"] {
   background: var(--border) !important;
   border-radius: 99px !important;
   height: 2px !important;
 }
-.MuiLinearProgress-bar {
+[class*="MuiLinearProgress-bar"] {
   border-radius: 99px !important;
   background: var(--blue) !important;
 }
@@ -681,50 +707,50 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    STEPPER (Scaffolder wizard)
    ========================================================== */
-.MuiStepper-root {
+[class*="MuiStepper-root"] {
   background: transparent !important;
   padding: 16px 0 !important;
 }
-.MuiStepContent-root {
+[class*="MuiStepContent-root"] {
   border-left: 1px solid var(--border) !important;
   margin-left: 11px !important;
   padding: 8px 16px !important;
 }
-.MuiStepLabel-label {
+[class*="MuiStepLabel-label"] {
   font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
   color: var(--fg-secondary) !important;
 }
-.MuiStepLabel-label.MuiStepLabel-active {
+[class*="MuiStepLabel-label"][class*="MuiStepLabel-active"] {
   color: var(--fg-primary) !important;
   font-weight: 600 !important;
 }
-.MuiStepLabel-label.MuiStepLabel-completed {
+[class*="MuiStepLabel-label"][class*="MuiStepLabel-completed"] {
   color: var(--fg-secondary) !important;
 }
-.MuiStepIcon-root {
+[class*="MuiStepIcon-root"] {
   color: var(--ds-gray-400) !important;
 }
-.MuiStepIcon-root.MuiStepIcon-active {
+[class*="MuiStepIcon-root"][class*="MuiStepIcon-active"] {
   color: var(--blue) !important;
 }
-.MuiStepIcon-root.MuiStepIcon-completed {
+[class*="MuiStepIcon-root"][class*="MuiStepIcon-completed"] {
   color: var(--blue) !important;
 }
-.MuiStepIcon-text {
+[class*="MuiStepIcon-text"] {
   fill: var(--fg-primary) !important;
   font-family: var(--font-sans) !important;
   font-size: 0.625rem !important;
 }
-.MuiStepConnector-line {
+[class*="MuiStepConnector-line"] {
   border-color: var(--border) !important;
 }
 
 /* ==========================================================
    DRAWER (mobile filter)
    ========================================================== */
-.MuiDrawer-paper {
+[class*="MuiDrawer-paper"] {
   background: var(--surface) !important;
   border-right: 1px solid var(--border) !important;
   box-shadow: none !important;
@@ -733,8 +759,8 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    LINK COLORS
    ========================================================== */
-.MuiLink-root { color: var(--blue) !important; }
-.MuiLink-root:hover { color: var(--blue-dark) !important; }
+[class*="MuiLink-root"] { color: var(--blue) !important; }
+[class*="MuiLink-root"]:hover { color: var(--blue-dark) !important; }
 
 /* ==========================================================
    SELECTION
@@ -744,7 +770,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    ENTITY PAGES — About card subheader icon links (element-based, stable)
    ========================================================== */
-.MuiCardHeader-subheader nav {
+[class*="MuiCardHeader-subheader"] nav {
   justify-content: space-evenly !important;
   gap: 8px !important;
   column-gap: 8px !important;
@@ -757,7 +783,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
    ENTITY PAGES — MUI Alert (warning / error / info banners)
    EntityOrphanWarning, EntityProcessingErrorsPanel, etc.
    ========================================================== */
-.MuiAlert-root {
+[class*="MuiAlert-root"] {
   border-radius: var(--radius) !important;
   font-size: 0.875rem !important;
   font-family: var(--font-sans) !important;
@@ -765,35 +791,35 @@ body[data-theme-mode='light'] .MuiPopover-paper {
   border-style: solid !important;
 }
 
-.MuiAlert-standardWarning {
+[class*="MuiAlert-standardWarning"] {
   background: rgba(245, 166, 35, 0.06) !important;
   border-color: rgba(245, 166, 35, 0.35) !important;
   color: #f5a623 !important;
 }
-.MuiAlert-standardWarning .MuiAlert-icon { color: #f5a623 !important; }
+[class*="MuiAlert-standardWarning"] [class*="MuiAlert-icon"] { color: #f5a623 !important; }
 
-.MuiAlert-standardError {
+[class*="MuiAlert-standardError"] {
   background: rgba(255, 80, 80, 0.06) !important;
   border-color: rgba(255, 80, 80, 0.35) !important;
   color: #ff5050 !important;
 }
-.MuiAlert-standardError .MuiAlert-icon { color: #ff5050 !important; }
+[class*="MuiAlert-standardError"] [class*="MuiAlert-icon"] { color: #ff5050 !important; }
 
-.MuiAlert-standardInfo {
+[class*="MuiAlert-standardInfo"] {
   background: rgba(50, 145, 255, 0.06) !important;
   border-color: rgba(50, 145, 255, 0.35) !important;
   color: var(--blue) !important;
 }
-.MuiAlert-standardInfo .MuiAlert-icon { color: var(--blue) !important; }
+[class*="MuiAlert-standardInfo"] [class*="MuiAlert-icon"] { color: var(--blue) !important; }
 
-.MuiAlert-standardSuccess {
+[class*="MuiAlert-standardSuccess"] {
   background: rgba(80, 227, 194, 0.06) !important;
   border-color: rgba(80, 227, 194, 0.35) !important;
   color: #50e3c2 !important;
 }
-.MuiAlert-standardSuccess .MuiAlert-icon { color: #50e3c2 !important; }
+[class*="MuiAlert-standardSuccess"] [class*="MuiAlert-icon"] { color: #50e3c2 !important; }
 
-.MuiAlertTitle-root {
+[class*="MuiAlertTitle-root"] {
   font-weight: 600 !important;
   font-size: 0.875rem !important;
   margin-bottom: 4px !important;
@@ -802,7 +828,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    ENTITY PAGES — Grid card spacing (MUI stable class names)
    ========================================================== */
-.MuiGrid-spacing-xs-3 > .MuiGrid-item {
+[class*="MuiGrid-spacing-xs-3"] > [class*="MuiGrid-item"] {
   padding: 8px !important;
 }
 
@@ -811,11 +837,11 @@ body[data-theme-mode='light'] .MuiPopover-paper {
    ImageList sets gap via inline styles (margin on root, padding on items).
    !important overrides inline styles.
    ========================================================== */
-.MuiImageList-root {
+[class*="MuiImageList-root"] {
   margin: 0 !important;
 }
 
-.MuiImageListItem-root {
+[class*="MuiImageListItem-root"] {
   padding: 4px 0 !important;
   height: auto !important;
 }
@@ -868,16 +894,16 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    CATALOG — Filter checkboxes (Owner, Tag, etc.)
    ========================================================== */
-.MuiCheckbox-root {
+[class*="MuiCheckbox-root"] {
   color: var(--border-hover) !important;
   padding: 4px 8px !important;
 }
 
-.MuiCheckbox-root.Mui-checked {
+[class*="MuiCheckbox-root"].Mui-checked {
   color: var(--fg-primary) !important;
 }
 
-.MuiFormControlLabel-label {
+[class*="MuiFormControlLabel-label"] {
   font-size: 0.875rem !important;
   font-weight: 400 !important;
   letter-spacing: -0.006em !important;
@@ -933,28 +959,28 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    CATALOG — Lifecycle / type chips (colored badges)
    ========================================================== */
-.MuiChip-colorPrimary {
+[class*="MuiChip-colorPrimary"] {
   background: var(--ds-gray-200) !important;
   color: var(--fg-primary) !important;
   border-color: var(--border) !important;
 }
 
 /* Production lifecycle — green tint */
-.MuiChip-root[data-lifecycle="production"] {
+[class*="MuiChip-root"][data-lifecycle="production"] {
   background: rgba(80, 227, 194, 0.1) !important;
   border-color: rgba(80, 227, 194, 0.3) !important;
   color: #50e3c2 !important;
 }
 
 /* Experimental — amber tint */
-.MuiChip-root[data-lifecycle="experimental"] {
+[class*="MuiChip-root"][data-lifecycle="experimental"] {
   background: rgba(245, 166, 35, 0.1) !important;
   border-color: rgba(245, 166, 35, 0.3) !important;
   color: #f5a623 !important;
 }
 
 /* Deprecated — red tint */
-.MuiChip-root[data-lifecycle="deprecated"] {
+[class*="MuiChip-root"][data-lifecycle="deprecated"] {
   background: rgba(255, 80, 80, 0.1) !important;
   border-color: rgba(255, 80, 80, 0.3) !important;
   color: #ff5050 !important;
@@ -977,26 +1003,26 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    CATALOG — Select (KindPicker dropdown)
    ========================================================== */
-.MuiSelect-root,
-.MuiSelect-select {
+[class*="MuiSelect-root"],
+[class*="MuiSelect-select"] {
   font-size: 0.875rem !important;
   color: var(--fg-primary) !important;
   background: var(--ds-background-100) !important;
 }
 
-.MuiSelect-icon {
+[class*="MuiSelect-icon"] {
   color: var(--fg-tertiary) !important;
 }
 
-.MuiInputLabel-root,
-.MuiFormLabel-root {
+[class*="MuiInputLabel-root"],
+[class*="MuiFormLabel-root"] {
   font-size: 0.8125rem !important;
   color: var(--fg-tertiary) !important;
   letter-spacing: -0.006em !important;
 }
 
-.MuiInputLabel-shrink,
-.MuiFormLabel-root.Mui-focused {
+[class*="MuiInputLabel-shrink"],
+[class*="MuiFormLabel-root"].Mui-focused {
   color: var(--blue) !important;
 }
 
@@ -1015,7 +1041,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    CATALOG GRAPH — ToggleButton (Filters toggle)
    ========================================================== */
-.MuiToggleButton-root {
+[class*="MuiToggleButton-root"] {
   font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
@@ -1030,12 +1056,12 @@ body[data-theme-mode='light'] .MuiPopover-paper {
   padding: 0 16px !important;
 }
 
-.MuiToggleButton-root:hover {
+[class*="MuiToggleButton-root"]:hover {
   background: var(--ds-gray-alpha-100) !important;
   color: var(--fg-primary) !important;
 }
 
-.MuiToggleButton-root.Mui-selected {
+[class*="MuiToggleButton-root"].Mui-selected {
   background: var(--ds-gray-200) !important;
   color: var(--fg-primary) !important;
   box-shadow: 0 0 0 1px var(--border-hover) inset !important;
@@ -1094,8 +1120,8 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    CATALOG GRAPH — Filter panel labels
    ========================================================== */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiTypography-subtitle2,
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiFormLabel-root {
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiTypography-subtitle2"],
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiFormLabel-root"] {
   font-size: 0.6875rem !important;
   font-weight: 600 !important;
   letter-spacing: 0.06em !important;
@@ -1106,56 +1132,56 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    MUI SWITCH
    ========================================================== */
-.MuiSwitch-root {
+[class*="MuiSwitch-root"] {
   padding: 8px !important;
 }
 
-.MuiSwitch-track {
+[class*="MuiSwitch-track"] {
   background: var(--border-hover) !important;
   border-radius: 99px !important;
   opacity: 1 !important;
 }
 
-.MuiSwitch-thumb {
+[class*="MuiSwitch-thumb"] {
   background: var(--fg-tertiary) !important;
   box-shadow: none !important;
   width: 16px !important;
   height: 16px !important;
 }
 
-.MuiSwitch-switchBase {
+[class*="MuiSwitch-switchBase"] {
   color: var(--fg-tertiary) !important;
   padding: 10px !important;
 }
 
-.MuiSwitch-switchBase.Mui-checked {
+[class*="MuiSwitch-switchBase"].Mui-checked {
   color: var(--fg-primary) !important;
 }
 
-.MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track {
+[class*="MuiSwitch-switchBase"].Mui-checked + [class*="MuiSwitch-track"] {
   background: var(--blue) !important;
   opacity: 1 !important;
 }
 
-.MuiSwitch-switchBase.Mui-checked .MuiSwitch-thumb {
+[class*="MuiSwitch-switchBase"].Mui-checked [class*="MuiSwitch-thumb"] {
   background: #ffffff !important;
 }
 
 /* ==========================================================
    MUI AUTOCOMPLETE (SelectedKinds, SelectedRelations filters)
    ========================================================== */
-.MuiAutocomplete-popper .MuiPaper-root {
+[class*="MuiAutocomplete-popper"] [class*="MuiPaper-root"] {
   background: var(--surface) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius-md) !important;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
 }
 
-.MuiAutocomplete-listbox {
+[class*="MuiAutocomplete-listbox"] {
   padding: 4px !important;
 }
 
-.MuiAutocomplete-option {
+[class*="MuiAutocomplete-option"] {
   font-size: 0.875rem !important;
   font-weight: 400 !important;
   color: var(--fg-primary) !important;
@@ -1164,16 +1190,16 @@ body[data-theme-mode='light'] .MuiPopover-paper {
   min-height: 36px !important;
 }
 
-.MuiAutocomplete-option:hover,
-.MuiAutocomplete-option[data-focus="true"] {
+[class*="MuiAutocomplete-option"]:hover,
+[class*="MuiAutocomplete-option"][data-focus="true"] {
   background: var(--ds-gray-alpha-100) !important;
 }
 
-.MuiAutocomplete-option[aria-selected="true"] {
+[class*="MuiAutocomplete-option"][aria-selected="true"] {
   background: var(--ds-gray-200) !important;
 }
 
-.MuiAutocomplete-tag {
+[class*="MuiAutocomplete-tag"] {
   background: var(--ds-gray-200) !important;
   border: 1px solid var(--border) !important;
   color: var(--fg-primary) !important;
@@ -1182,7 +1208,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
   border-radius: 4px !important;
 }
 
-.MuiAutocomplete-inputRoot {
+[class*="MuiAutocomplete-inputRoot"] {
   height: auto !important;
   min-height: 40px !important;
   padding: 4px 8px !important;
@@ -1191,7 +1217,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
   box-sizing: border-box !important;
 }
 
-.MuiAutocomplete-endAdornment .MuiIconButton-root {
+[class*="MuiAutocomplete-endAdornment"] [class*="MuiIconButton-root"] {
   color: var(--fg-tertiary) !important;
   padding: 4px !important;
   height: auto !important;
@@ -1201,7 +1227,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    CATALOG GRAPH — Filter labels (Typography variant="button")
    ========================================================== */
-.MuiTypography-button {
+[class*="MuiTypography-button"] {
   font-size: 0.6875rem !important;
   font-weight: 600 !important;
   letter-spacing: 0.06em !important;
@@ -1231,7 +1257,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 
 /* MuiAutocomplete-root gets JSS maxWidth:300 but no width — anchor it.
    Target both the parent-scoped rule and the specific filter class names. */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiAutocomplete-root {
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiAutocomplete-root"] {
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -1247,7 +1273,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 }
 
 /* FormControl: block-level flex to fill Autocomplete-root width */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiFormControl-root {
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiFormControl-root"] {
   display: flex !important;
   flex-direction: column !important;
   width: 100% !important;
@@ -1257,7 +1283,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 }
 
 /* InputRoot: chips must wrap, not overflow */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiAutocomplete-inputRoot {
+[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiAutocomplete-inputRoot"] {
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -1274,12 +1300,12 @@ body[data-theme-mode='light'] .MuiPopover-paper {
    (Layout/overflow is handled by GlobalStyleOverrides.tsx
     which injects after JSS to win the cascade)
    ========================================================== */
-.MuiAutocomplete-option .MuiFormControlLabel-label {
+[class*="MuiAutocomplete-option"] [class*="MuiFormControlLabel-label"] {
   font-size: 0.8125rem !important;
   color: var(--fg-primary) !important;
 }
 
-.MuiAutocomplete-listbox {
+[class*="MuiAutocomplete-listbox"] {
   padding: 4px !important;
 }
 
@@ -1291,18 +1317,18 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    ENTITY PAGES — IconButton in card header action area
    ========================================================== */
-.MuiCardHeader-action {
+[class*="MuiCardHeader-action"] {
   margin: 0 !important;
   align-self: center !important;
 }
 
-.MuiCardHeader-action .MuiIconButton-root {
+[class*="MuiCardHeader-action"] [class*="MuiIconButton-root"] {
   color: var(--fg-tertiary) !important;
   padding: 6px !important;
   border-radius: var(--radius) !important;
 }
 
-.MuiCardHeader-action .MuiIconButton-root:hover {
+[class*="MuiCardHeader-action"] [class*="MuiIconButton-root"]:hover {
   background: var(--ds-gray-alpha-100) !important;
   color: var(--fg-secondary) !important;
 }
@@ -1311,18 +1337,18 @@ body[data-theme-mode='light'] .MuiPopover-paper {
    ENTITY PAGES — EntityLinksCard icon links (IconLink component)
    Renders as ImageList > ImageListItem > Box[flex] > Icon + Link
    ========================================================== */
-.MuiImageListItem-root {
+[class*="MuiImageListItem-root"] {
   display: flex !important;
   align-items: center !important;
 }
 
-.MuiImageListItem-root svg {
+[class*="MuiImageListItem-root"] svg {
   font-size: 1rem !important;
   color: var(--fg-secondary) !important;
   flex-shrink: 0 !important;
 }
 
-.MuiImageListItem-root a {
+[class*="MuiImageListItem-root"] a {
   font-size: 0.875rem !important;
   font-weight: 400 !important;
   letter-spacing: -0.006em !important;
@@ -1330,7 +1356,7 @@ body[data-theme-mode='light'] .MuiPopover-paper {
   text-decoration: none !important;
 }
 
-.MuiImageListItem-root a:hover {
+[class*="MuiImageListItem-root"] a:hover {
   color: var(--blue) !important;
   text-decoration: underline !important;
 }
@@ -1344,18 +1370,18 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 }
 
 /* Members list avatar size */
-.MuiListItemAvatar-root {
+[class*="MuiListItemAvatar-root"] {
   min-width: 40px !important;
 }
 
-.MuiAvatar-root {
+[class*="MuiAvatar-root"] {
   background: var(--ds-gray-200) !important;
   color: var(--fg-secondary) !important;
   border: 1px solid var(--border) !important;
 }
 
 /* Small avatars in list items (members card, etc.) */
-.MuiListItemAvatar-root .MuiAvatar-root {
+[class*="MuiListItemAvatar-root"] [class*="MuiAvatar-root"] {
   width: 28px !important;
   height: 28px !important;
   font-size: 0.75rem !important;
@@ -1364,18 +1390,18 @@ body[data-theme-mode='light'] .MuiPopover-paper {
 /* ==========================================================
    ENTITY PAGES — List items (EntityMembersListCard, etc.)
    ========================================================== */
-.MuiListItem-root {
+[class*="MuiListItem-root"] {
   padding: 6px 16px !important;
 }
 
-.MuiListItemText-primary {
+[class*="MuiListItemText-primary"] {
   font-size: 0.875rem !important;
   font-weight: 500 !important;
   letter-spacing: -0.006em !important;
   color: var(--fg-primary) !important;
 }
 
-.MuiListItemText-secondary {
+[class*="MuiListItemText-secondary"] {
   font-size: 0.75rem !important;
   letter-spacing: -0.006em !important;
   color: var(--fg-tertiary) !important;
@@ -1755,7 +1781,7 @@ html.theme-dark .swagger-ui .opblock-patch  { border-color: #7928ca !important; 
    ========================================================== */
 
 /* ToggleButtonGroup — segmented control (theme picker) */
-.MuiToggleButtonGroup-root {
+[class*="MuiToggleButtonGroup-root"] {
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
   overflow: hidden !important;
@@ -1763,7 +1789,7 @@ html.theme-dark .swagger-ui .opblock-patch  { border-color: #7928ca !important; 
 }
 
 /* Buttons inside a group lose individual box-shadow; borders are on the group */
-.MuiToggleButtonGroup-grouped.MuiToggleButton-root {
+[class*="MuiToggleButtonGroup-grouped"][class*="MuiToggleButton-root"] {
   box-shadow: none !important;
   border-radius: 0 !important;
   border: none !important;
@@ -1772,11 +1798,11 @@ html.theme-dark .swagger-ui .opblock-patch  { border-color: #7928ca !important; 
   padding: 0 12px !important;
 }
 
-.MuiToggleButtonGroup-grouped.MuiToggleButton-root:first-child {
+[class*="MuiToggleButtonGroup-grouped"][class*="MuiToggleButton-root"]:first-child {
   border-left: none !important;
 }
 
-.MuiToggleButtonGroup-grouped.MuiToggleButton-root.Mui-selected {
+[class*="MuiToggleButtonGroup-grouped"][class*="MuiToggleButton-root"].Mui-selected {
   background: var(--ds-gray-300) !important;
   color: var(--fg-primary) !important;
   box-shadow: none !important;
@@ -1787,20 +1813,20 @@ html.theme-dark .swagger-ui .opblock-patch  { border-color: #7928ca !important; 
 
 /* Identity card code/monospace text */
 [class*="UserSettingsIdentityCard"] code,
-[class*="UserSettingsIdentityCard"] .MuiTypography-root {
+[class*="UserSettingsIdentityCard"] [class*="MuiTypography-root"] {
   font-family: var(--font-sans) !important;
 }
 
 /* Settings page tabs alignment */
-[class*="BackstageRoutedTabs"] .MuiTab-root,
-.MuiTabs-root .MuiTab-root {
+[class*="BackstageRoutedTabs"] [class*="MuiTab-root"],
+[class*="MuiTabs-root"] [class*="MuiTab-root"] {
   font-family: var(--font-sans) !important;
 }
 
 /* ==========================================================
    DIALOGS — content text, title, actions
    ========================================================== */
-.MuiDialogTitle-root {
+[class*="MuiDialogTitle-root"] {
   font-family: var(--font-sans) !important;
   font-size: 1rem !important;
   font-weight: 600 !important;
@@ -1809,18 +1835,18 @@ html.theme-dark .swagger-ui .opblock-patch  { border-color: #7928ca !important; 
   padding: 20px 24px 12px !important;
 }
 
-.MuiDialogContent-root {
+[class*="MuiDialogContent-root"] {
   padding: 8px 24px 16px !important;
 }
 
-.MuiDialogContentText-root {
+[class*="MuiDialogContentText-root"] {
   font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
   color: var(--fg-secondary) !important;
   line-height: 1.5 !important;
 }
 
-.MuiDialogActions-root {
+[class*="MuiDialogActions-root"] {
   padding: 12px 24px 20px !important;
   border-top: 1px solid var(--border) !important;
   gap: 8px !important;
@@ -1858,16 +1884,16 @@ pre code {
 /* ==========================================================
    RADIO BUTTON
    ========================================================== */
-.MuiRadio-root {
+[class*="MuiRadio-root"] {
   color: var(--fg-secondary) !important;
   padding: 6px !important;
 }
 
-.MuiRadio-root.Mui-checked {
+[class*="MuiRadio-root"].Mui-checked {
   color: var(--blue) !important;
 }
 
-.MuiFormControlLabel-label {
+[class*="MuiFormControlLabel-label"] {
   font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
   color: var(--fg-primary) !important;
@@ -1876,7 +1902,7 @@ pre code {
 /* ==========================================================
    BUTTON — MUI contained/outlined/text
    ========================================================== */
-.MuiButton-root {
+[class*="MuiButton-root"] {
   font-family: var(--font-sans) !important;
   font-size: 0.8125rem !important;
   font-weight: 500 !important;
@@ -1886,60 +1912,60 @@ pre code {
   box-shadow: none !important;
 }
 
-.MuiButton-root:hover {
+[class*="MuiButton-root"]:hover {
   box-shadow: none !important;
 }
 
-.MuiButton-text {
+[class*="MuiButton-text"] {
   color: var(--fg-primary) !important;
   background: transparent !important;
 }
 
-.MuiButton-text:hover {
+[class*="MuiButton-text"]:hover {
   background: var(--ds-gray-alpha-100) !important;
 }
 
-.MuiButton-outlined {
+[class*="MuiButton-outlined"] {
   border: 1px solid var(--border) !important;
   color: var(--fg-primary) !important;
   background: transparent !important;
 }
 
-.MuiButton-outlined:hover {
+[class*="MuiButton-outlined"]:hover {
   border-color: var(--border-hover) !important;
   background: var(--ds-gray-alpha-100) !important;
 }
 
-.MuiButton-contained {
+[class*="MuiButton-contained"] {
   background: var(--ds-gray-1000) !important;
   color: var(--ds-background-200) !important;
   border: 1px solid transparent !important;
 }
 
-.MuiButton-contained:hover {
+[class*="MuiButton-contained"]:hover {
   background: var(--fg-secondary) !important;
 }
 
-.MuiButton-contained.Mui-disabled,
-.MuiButton-contained:disabled {
+[class*="MuiButton-contained"].Mui-disabled,
+[class*="MuiButton-contained"]:disabled {
   background: var(--ds-gray-400) !important;
   color: var(--fg-disabled) !important;
 }
 
-.MuiButton-containedPrimary {
+[class*="MuiButton-containedPrimary"] {
   background: var(--blue-dark) !important;
   color: #ffffff !important;
 }
 
-.MuiButton-containedPrimary:hover {
+[class*="MuiButton-containedPrimary"]:hover {
   background: var(--blue) !important;
 }
 
-.MuiButton-containedSecondary {
+[class*="MuiButton-containedSecondary"] {
   background: #dc2626 !important;
   color: #ffffff !important;
 }
 
-.MuiButton-containedSecondary:hover {
+[class*="MuiButton-containedSecondary"]:hover {
   background: #ef4444 !important;
 }

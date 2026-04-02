@@ -161,6 +161,7 @@ const css = `
     min-height: unset !important;
     padding: 4px !important;
   }
+
 `;
 
 /** Directly patch inline styles on filter-panel Autocomplete elements. */
