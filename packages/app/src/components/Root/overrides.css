@@ -357,10 +357,10 @@ pre *, code * {
   background: transparent !important;
 }
 
-/* Target both MuiCardHeader-title AND MuiTypography (which co-exist on the same element)
-   to ensure MUI InfoCard title matches bui-* EntityInfoCard title exactly. */
-[class*="MuiCardHeader-title"][class*="MuiTypography"],
-[class*="MuiCardHeader-root"][class*="MuiCardHeader"] [class*="MuiTypography-root"] {
+/* Only target the title slot — NOT all Typography inside the header.
+   The broad descendant selector caused subheaders (e.g. Kubernetes ContainerCard image name)
+   to inherit title styles, making title + subheader the same size and overlapping. */
+[class*="MuiCardHeader-title"][class*="MuiTypography"] {
   font-family: var(--font-sans) !important;
   font-size: 0.9375rem !important;
   font-weight: 600 !important;
@@ -369,9 +369,11 @@ pre *, code * {
   color: var(--fg-primary) !important;
 }
 
+
 [class*="MuiCardHeader-content"][class*="MuiCardHeader"] {
   display: flex !important;
-  align-items: center !important;
+  flex-direction: column !important;
+  justify-content: center !important;
   flex: 1 1 auto !important;
 }
 
@@ -403,10 +405,30 @@ pre *, code * {
 }
 
 /* InfoCard variant="gridItem" sets height:calc(100%-10px) + marginBottom:10px via inline style.
-   Override so MUI cards fill their grid cells exactly like bui-* cards (height:100%). */
+   Override so MUI cards fill their grid cells exactly like bui-* cards (height:100%).
+   overflow:hidden prevents content from spilling outside fixed-height cards (e.g. Kubernetes pod cards). */
 [class*="MuiGrid-item"] [class*="MuiCard-root"] {
   height: 100% !important;
   margin-bottom: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Cards whose content should scroll (e.g. Kubernetes pod tables) */
+[class*="MuiGrid-item"] [class*="MuiCard-root"] [class*="MuiCardContent-root"] {
+  overflow: auto !important;
+}
+
+/* ==========================================================
+   KUBERNETES — Pod cards
+   ItemCardGrid uses minmax(22em, 1fr) — increase min to give each card
+   more horizontal space so content doesn't overlap.
+   ========================================================== */
+
+
+[class*="BackstageItemCardGrid-root"] {
+  grid-template-columns: 1fr !important;
+  grid-auto-rows: auto !important;
+  overflow-y: auto !important;
 }
 
 /* ==========================================================
@@ -766,6 +788,11 @@ body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
    SELECTION
    ========================================================== */
 ::selection { background: rgba(0, 112, 243, 0.2); }
+
+/* CardHeader subheader: add spacing between title and subheader */
+[class*="MuiCardHeader-subheader"] {
+  margin-top: 4px !important;
+}
 
 /* ==========================================================
    ENTITY PAGES — About card subheader icon links (element-based, stable)
@@ -1134,6 +1161,7 @@ body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
    ========================================================== */
 [class*="MuiSwitch-root"] {
   padding: 8px !important;
+  overflow: visible !important;
 }
 
 [class*="MuiSwitch-track"] {
@@ -1151,7 +1179,7 @@ body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
 
 [class*="MuiSwitch-switchBase"] {
   color: var(--fg-tertiary) !important;
-  padding: 10px !important;
+  padding: 4px 9px 14px 9px !important;
 }
 
 [class*="MuiSwitch-switchBase"].Mui-checked {
@@ -1165,6 +1193,11 @@ body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
 
 [class*="MuiSwitch-switchBase"].Mui-checked [class*="MuiSwitch-thumb"] {
   background: #ffffff !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+[class*="MuiFormControlLabel-label"] {
+  margin-left: 12px !important;
 }
 
 /* ==========================================================
