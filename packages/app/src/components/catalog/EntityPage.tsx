@@ -142,7 +142,7 @@ const overviewContent = (
     <Grid item md={6}>
       <EntitySonarQubeCard variant="gridItem" />
     </Grid>
-    <Grid item md={4} xs={12}>
+    <Grid item md={6} xs={12}>
       <EntityLinksCard />
     </Grid>
     <Grid item md={8} xs={12}>
@@ -178,22 +178,22 @@ const serviceEntityPage = (
     </EntityLayout.Route>
 
     <EntityLayout.Route path="/api" title="API">
-      <Grid container spacing={3} alignItems="stretch">
-        <Grid item md={6}>
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
           <EntityProvidedApisCard />
         </Grid>
-        <Grid item md={6}>
+        <Grid item xs={12}>
           <EntityConsumedApisCard />
         </Grid>
       </Grid>
     </EntityLayout.Route>
 
     <EntityLayout.Route path="/dependencies" title="Dependencies">
-      <Grid container spacing={3} alignItems="stretch">
-        <Grid item md={6}>
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
           <EntityDependsOnComponentsCard />
         </Grid>
-        <Grid item md={6}>
+        <Grid item xs={12}>
           <EntityDependsOnResourcesCard />
         </Grid>
       </Grid>
@@ -232,11 +232,11 @@ const websiteEntityPage = (
     </EntityLayout.Route>
 
     <EntityLayout.Route path="/dependencies" title="Dependencies">
-      <Grid container spacing={3} alignItems="stretch">
-        <Grid item md={6}>
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
           <EntityDependsOnComponentsCard />
         </Grid>
-        <Grid item md={6}>
+        <Grid item xs={12}>
           <EntityDependsOnResourcesCard />
         </Grid>
       </Grid>

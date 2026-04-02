@@ -85,6 +85,99 @@ body[data-theme-mode='light'] {
 }
 
 /* ==========================================================
+   @backstage/ui Card + Table structural overrides
+   Used by: API tab, Dependencies tab (EntityRelationCard)
+   ========================================================== */
+
+/* Card: add Geist border + tighter radius */
+article[class*="bui-Card"] {
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+}
+
+/* Card header: border-bottom separator, tighter padding */
+[class*="bui-CardHeader"] {
+  border-bottom: 1px solid var(--border) !important;
+  padding: 12px 16px !important;
+}
+
+/* Card header title (h3) */
+[class*="bui-CardHeader"] h3 {
+  font-family: var(--font-sans) !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.006em !important;
+  color: var(--fg-primary) !important;
+}
+
+/* Card body: remove padding only when it wraps a table (API/Dependencies cards).
+   Leave padding intact for non-table cards (About, Links, etc.) */
+[class*="bui-CardBody"]:has(table[class*="bui-Table"]) {
+  padding: 0 !important;
+}
+
+/* Table: clean full-width layout */
+table[class*="bui-Table"] {
+  border-collapse: collapse !important;
+  width: 100% !important;
+}
+
+/* Column headers: Geist section label style */
+th[class*="bui-TableHead"] {
+  font-family: var(--font-sans) !important;
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--fg-secondary) !important;
+  padding: 8px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  white-space: nowrap !important;
+}
+
+/* Table rows */
+tr[class*="bui-TableRow"] {
+  border-bottom: 1px solid var(--border) !important;
+  transition: background 0.1s !important;
+}
+
+tr[class*="bui-TableRow"]:last-child {
+  border-bottom: none !important;
+}
+
+tr[class*="bui-TableRow"]:hover {
+  background: var(--bui-bg-neutral-1-hover) !important;
+}
+
+/* Table cells */
+td[class*="bui-TableCell"] {
+  font-family: var(--font-sans) !important;
+  font-size: 0.8125rem !important;
+  color: var(--fg-primary) !important;
+  padding: 10px 16px !important;
+  vertical-align: middle !important;
+}
+
+/* Entity name links */
+td[class*="bui-TableCell"] a {
+  color: var(--fg-primary) !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+}
+
+td[class*="bui-TableCell"] a:hover {
+  text-decoration: underline !important;
+  text-underline-offset: 3px !important;
+}
+
+/* Secondary text in cells (owner, lifecycle, type) */
+td[class*="bui-TableCell"] [class*="bui-fg-secondary"],
+td[class*="bui-TableCell"] span[class*="secondary"] {
+  color: var(--fg-secondary) !important;
+  font-size: 0.75rem !important;
+}
+
+/* ==========================================================
    CSS CUSTOM PROPERTIES — Geist design tokens
    ========================================================== */
 :root {
