@@ -110,10 +110,9 @@ article[class*="bui-Card"] {
   color: var(--fg-primary) !important;
 }
 
-/* Card body: remove padding only when it wraps a table (API/Dependencies cards).
-   Leave padding intact for non-table cards (About, Links, etc.) */
-[class*="bui-CardBody"]:has(table[class*="bui-Table"]) {
-  padding: 0 !important;
+/* Card body: ensure padding for all cards */
+[class*="bui-CardBody"] {
+  padding: 16px !important;
 }
 
 /* Table: clean full-width layout */
