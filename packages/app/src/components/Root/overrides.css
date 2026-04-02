@@ -419,12 +419,33 @@ pre *, code * {
 }
 
 /* ==========================================================
-   KUBERNETES — Pod cards
-   ItemCardGrid uses minmax(22em, 1fr) — increase min to give each card
-   more horizontal space so content doesn't overlap.
+   KUBERNETES — Layout + Pod cards
    ========================================================== */
 
+/* Accordion summary typography — applies to content accordions (Kubernetes, ArgoCD).
+   Exclude filter panel accordions via :not() scoping is not feasible, but these
+   variants (body1, subtitle1) are not used by Catalog filter summaries. */
+[class*="MuiAccordionSummary-root"] [class*="MuiTypography-body1"] {
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  color: var(--fg-primary) !important;
+  letter-spacing: -0.02em !important;
+}
 
+[class*="MuiAccordionSummary-root"] [class*="MuiTypography-subtitle1"] {
+  font-size: 0.75rem !important;
+  font-weight: 400 !important;
+  color: var(--fg-tertiary) !important;
+  letter-spacing: 0 !important;
+}
+
+[class*="MuiAccordionSummary-root"] [class*="MuiTypography-subtitle2"] {
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  color: var(--fg-secondary) !important;
+}
+
+/* ItemCardGrid (container cards in pod drawer) */
 [class*="BackstageItemCardGrid-root"] {
   grid-template-columns: 1fr !important;
   grid-auto-rows: auto !important;
@@ -691,26 +712,82 @@ body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
 [class*="MuiTypography-caption"] { color: var(--fg-tertiary) !important; }
 
 /* ==========================================================
-   ACCORDION (Filter panels)
+   ACCORDION
+   Default: flat/transparent (Catalog filter panels)
+   Grid-item direct children: card appearance (Kubernetes, ArgoCD)
+   Nested (inside AccordionDetails): flat with divider
    ========================================================== */
+
+/* Default: flat for all accordions */
 [class*="MuiAccordion-root"] {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+  margin-bottom: 0 !important;
 }
 [class*="MuiAccordion-root"]::before { display: none !important; }
+
+/* Top-level content accordions (Kubernetes cluster, ArgoCD app, etc.):
+   give a card appearance. These are NOT inside another AccordionDetails. */
+[class*="MuiGrid-item"] > [class*="MuiAccordion-root"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+  margin-bottom: 8px !important;
+}
+
+/* Inner accordions (inside AccordionDetails) — flat with a bottom divider only */
+[class*="MuiAccordionDetails-root"] [class*="MuiAccordion-root"] {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  margin-bottom: 0 !important;
+}
+[class*="MuiAccordionDetails-root"] [class*="MuiAccordion-root"]:last-child {
+  border-bottom: none !important;
+}
+
+/* Filter panel accordions: undo the Grid-item card rule (filter panels live in Grid items too) */
+[class*="CatalogFilterLayout"] [class*="MuiAccordion-root"],
+[class*="MuiDrawer-paper"] [class*="MuiAccordion-root"] {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  margin-bottom: 0 !important;
+  overflow: visible !important;
+}
+
 [class*="MuiAccordionSummary-root"] {
   font-size: 0.8125rem !important;
   font-weight: 500 !important;
   color: var(--fg-secondary) !important;
+  min-height: 40px !important;
+  padding: 0 16px !important;
+}
+[class*="MuiAccordionSummary-expandIcon"] {
+  color: var(--fg-tertiary) !important;
+}
+
+/* Filter panel accordion summaries: tighter */
+[class*="CatalogFilterLayout"] [class*="MuiAccordionSummary-root"],
+[class*="MuiDrawer-paper"] [class*="MuiAccordionSummary-root"] {
   min-height: 36px !important;
   padding: 0 8px !important;
 }
+
 [class*="MuiAccordionSummary-content"] { margin: 8px 0 !important; }
 [class*="MuiAccordionDetails-root"] {
-  padding: 4px 8px 12px !important;
+  padding: 12px 16px 16px !important;
   font-size: 0.875rem !important;
   color: var(--fg-primary) !important;
+}
+
+/* Filter panel details: tighter padding */
+[class*="CatalogFilterLayout"] [class*="MuiAccordionDetails-root"],
+[class*="MuiDrawer-paper"] [class*="MuiAccordionDetails-root"] {
+  padding: 4px 8px 12px !important;
 }
 
 /* ==========================================================
