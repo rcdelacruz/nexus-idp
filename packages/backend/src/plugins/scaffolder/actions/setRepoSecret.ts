@@ -54,6 +54,7 @@ function ghApi(path: string, method: string, token: string, body?: any): Promise
       hostname: 'api.github.com',
       path,
       method,
+      timeout: 30000,
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
@@ -73,6 +74,7 @@ function ghApi(path: string, method: string, token: string, body?: any): Promise
       });
     });
     req.on('error', reject);
+    req.on('timeout', () => { req.destroy(new Error(`GitHub API request timed out after 30s`)); });
     if (bodyStr) req.write(bodyStr);
     req.end();
   });

@@ -5,6 +5,7 @@ import { SidebarPage, useSidebarOpenState } from '@backstage/core-components';
 import { Sidebar } from '@backstage/core-components';
 import { useApi, identityApiRef, appThemeApiRef, githubAuthApiRef } from '@backstage/core-plugin-api';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
+import { DEPT_TEAM_IDS_JWT } from '@internal/plugin-onboarding';
 
 // Derived from DEPT_TEAM_IDS_JWT (onboarding plugin) — single source of truth for team names.
 // Leads follow the {name}-lead pattern; backstage-admins are always included as assigned users.
@@ -44,7 +45,7 @@ const useUserRole = () => {
         // - Newly registered user with stale JWT → catalog has web-team
         // - Catalog call fails → JWT has web-team (from signInWithCatalogUser on login)
         const entity = await catalogApi.getEntityByRef(identity.userEntityRef).catch(() => null);
-        const memberOf = ((entity?.spec as any)?.memberOf ?? []) as string[];
+        const memberOf = (Array.isArray(entity?.spec?.memberOf) ? entity.spec.memberOf : []) as string[];
         const hasDeptTeamCatalog = memberOf.some(g => DEPT_TEAM_NAMES.has(g));
         const hasDeptTeamJwt = identity.ownershipEntityRefs.some(ref => DEPT_TEAMS.includes(ref));
         const hasDeptTeam = hasDeptTeamCatalog || hasDeptTeamJwt;
@@ -78,7 +79,6 @@ import {
 import { NexusLogoMark } from './NexusLogo';
 import { engineeringDocsApiRef } from '@internal/plugin-engineering-docs';
 import { DocSource } from '@internal/plugin-engineering-docs';
-import { DEPT_TEAM_IDS_JWT } from '@internal/plugin-onboarding';
 
 
 const useStyles = makeStyles({
@@ -88,7 +88,7 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     width: '100%',
     height: '100%',
-    background: '#000',
+    background: 'var(--bui-bg-app)',
     overflow: 'hidden',
   },
 
@@ -100,7 +100,7 @@ const useStyles = makeStyles({
     padding: '0 16px',
     height: 72,
     boxSizing: 'border-box' as const,
-    borderBottom: '1px solid #2e2e2e',
+    borderBottom: '1px solid var(--bui-border-1)',
     textDecoration: 'none',
     flexShrink: 0,
   },
@@ -108,7 +108,7 @@ const useStyles = makeStyles({
     fontSize: '0.9375rem',
     fontWeight: 600,
     letterSpacing: '-0.02em',
-    color: '#ededed',
+    color: 'var(--bui-fg-primary)',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
   },
@@ -127,12 +127,12 @@ const useStyles = makeStyles({
     fontWeight: 600,
     letterSpacing: '0.06em',
     textTransform: 'uppercase',
-    color: '#454545',
+    color: 'var(--bui-fg-disabled)',
     whiteSpace: 'nowrap',
   },
   navDivider: {
     height: 1,
-    background: '#2e2e2e',
+    background: 'var(--bui-border-1)',
     margin: '8px 0',
     flexShrink: 0,
   },
@@ -147,7 +147,7 @@ const useStyles = makeStyles({
     height: 36,
     borderRadius: 6,
     textDecoration: 'none',
-    color: '#878787',
+    color: 'var(--bui-fg-secondary)',
     fontSize: '0.875rem',
     fontWeight: 500,
     letterSpacing: '-0.006em',
@@ -161,14 +161,14 @@ const useStyles = makeStyles({
     textAlign: 'left' as const,
     boxSizing: 'border-box' as const,
     '&:hover': {
-      color: '#ededed',
-      background: '#1a1a1a',
+      color: 'var(--bui-fg-primary)',
+      background: 'var(--bui-bg-neutral-1-hover)',
       textDecoration: 'none',
     },
   },
   navItemActive: {
-    color: '#ededed !important',
-    background: '#1f1f1f !important',
+    color: 'var(--bui-fg-primary) !important',
+    background: 'var(--bui-bg-neutral-1-pressed) !important',
   },
   navIcon: {
     flexShrink: 0,
@@ -191,23 +191,23 @@ const useStyles = makeStyles({
     height: 32,
     borderRadius: 6,
     textDecoration: 'none',
-    color: '#666',
+    color: 'var(--bui-fg-secondary)',
     fontSize: '0.8125rem',
     fontWeight: 500,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     transition: 'color 0.15s, background 0.15s',
     cursor: 'pointer',
-    '&:hover': { color: '#ededed', background: '#1a1a1a', textDecoration: 'none' },
+    '&:hover': { color: 'var(--bui-fg-primary)', background: 'var(--bui-bg-neutral-1-hover)', textDecoration: 'none' },
   },
   docsSubItemActive: {
-    color: '#ededed !important',
-    background: '#1f1f1f !important',
+    color: 'var(--bui-fg-primary) !important',
+    background: 'var(--bui-bg-neutral-1-pressed) !important',
   },
 
   // ---- Bottom area ----
   bottomArea: {
-    borderTop: '1px solid #2e2e2e',
+    borderTop: '1px solid var(--bui-border-1)',
     padding: '8px 0',
     flexShrink: 0,
   },
@@ -354,8 +354,8 @@ const DocsNavItem = () => {
             <span className={classes.navLabel}>Docs</span>
             {sources.length > 0 && (
               expanded
-                ? <ChevronDown size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: '#666' }} />
-                : <ChevronRight size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: '#666' }} />
+                ? <ChevronDown size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: 'var(--bui-fg-secondary)' }} />
+                : <ChevronRight size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: 'var(--bui-fg-secondary)' }} />
             )}
           </>
         )}
@@ -396,8 +396,8 @@ const ProjectsNavItem = () => {
           <>
             <span className={classes.navLabel}>Projects</span>
             {expanded
-              ? <ChevronDown size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: '#666' }} />
-              : <ChevronRight size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: '#666' }} />
+              ? <ChevronDown size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: 'var(--bui-fg-secondary)' }} />
+              : <ChevronRight size={13} strokeWidth={1.5} style={{ flexShrink: 0, color: 'var(--bui-fg-secondary)' }} />
             }
           </>
         )}

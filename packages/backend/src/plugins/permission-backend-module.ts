@@ -13,9 +13,10 @@ export default createBackendModule({
       deps: {
         policy: policyExtensionPoint,
         database: coreServices.database,
+        logger: coreServices.logger,
       },
-      async init({ policy, database }) {
-        policy.setPolicy(new CatalogPermissionPolicy(database));
+      async init({ policy, database, logger }) {
+        policy.setPolicy(new CatalogPermissionPolicy(database, logger));
       },
     });
   },

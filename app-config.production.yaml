@@ -4,11 +4,12 @@ app:
   env: production
 
 organization:
-  name: ${ORGANIZATION_NAME}
+  name: Stratpoint Technologies
 
 backend:
   logging:
     level: info
+  # Used for enabling authentication, secret is shared by all backend plugins
   auth:
     keys:
       - secret: ${BACKEND_SECRET}
@@ -20,41 +21,50 @@ backend:
   reading:
     allow:
       - host: github.com
+      - host: gitlab.coderstudio.co
       - host: gitlab.com
+      - host: file
   listen:
     port: ${PORT}
     host: '0.0.0.0'
   csp:
-    connect-src:
-      - "'self'"
-      - 'http:'
-      - 'https:'
-      - 'https://accounts.google.com'
-      - 'https://www.googleapis.com'
-    script-src:
-      - "'self'"
-      - "'unsafe-inline'"
-      - "'unsafe-eval'"
-      - 'https://accounts.google.com'
-      - 'https://apis.google.com'
-    style-src:
-      - "'self'"
-      - "'unsafe-inline'"
-      - 'https://fonts.googleapis.com'
-      - 'https://accounts.google.com'
-    img-src:
-      - "'self'"
-      - 'data:'
-      - 'https:'
-      - 'https://accounts.google.com'
+    connect-src: [
+      "'self'",
+      'https:',
+      'https://accounts.google.com',
+      'https://www.googleapis.com'
+    ]
+    # unsafe-inline and unsafe-eval are required by Backstage's webpack bundle and cannot be
+    # removed without a significant build-system change. This is a known, accepted risk.
+    script-src: [
+      "'self'",
+      "'unsafe-inline'",
+      "'unsafe-eval'",
+      'https://accounts.google.com',
+      'https://apis.google.com'
+    ]
+    style-src: [
+      "'self'",
+      "'unsafe-inline'",
+      'https://fonts.googleapis.com',
+      'https://accounts.google.com'
+    ]
+    img-src: [
+      "'self'",
+      'data:',
+      'https:',
+      'https://accounts.google.com'
+    ]
     worker-src: ["'self'", 'blob:']
-    font-src:
-      - "'self'"
-      - 'https://fonts.gstatic.com'
-      - 'data:'
-    frame-src:
-      - "'self'"
-      - 'https://accounts.google.com'
+    font-src: [
+      "'self'",
+      'https://fonts.gstatic.com',
+      'data:'
+    ]
+    frame-src: [
+      "'self'",
+      'https://accounts.google.com'
+    ]
     default-src: ["'self'"]
   cors:
     origin: '${APP_BASE_URL}'
@@ -68,6 +78,7 @@ backend:
       - Set-Cookie
   proxy:
     trustProxy: true
+  # Database configuration (supports both Coolify and Fly.io Postgres)
   database:
     client: pg
     connection:
@@ -76,60 +87,74 @@ backend:
       user: ${POSTGRES_USER}
       password: ${POSTGRES_PASSWORD}
       database: ${POSTGRES_DB}
+      # SSL disabled for in-cluster CNPG (k8s homelab). For RDS/ECS, override via app-config.ecs.yaml.
       ssl: false
+  # Cache configuration (Redis recommended for production)
   cache:
     store: ${CACHE_STORE}
     connection: ${REDIS_URL}
 
+# TechDocs configuration for production
 techdocs:
-  builder: 'local'
+  builder: 'local'  # Generate docs locally without Docker
   generator:
-    runIn: 'local'
+    runIn: 'local'  # Use local mkdocs instead of Docker
   publisher:
     type: 'local'
     local:
       publishDir: 'generated/docs'
 
+# Override integrations to only include GitHub (exclude GitLab for production)
 integrations:
   github:
     - host: github.com
       token: ${GITHUB_TOKEN}
-  gitlab: []
+  gitlab: []  # Explicitly disable GitLab integration
 
 auth:
   environment: production
   providers:
-    github: null
+    github:
+      production:
+        clientId: ${AUTH_GITHUB_CLIENT_ID}
+        clientSecret: ${AUTH_GITHUB_CLIENT_SECRET}
+        callbackUrl: ${APP_BASE_URL}/api/auth/github/handler/frame
     google:
       production:
         clientId: ${AUTH_GOOGLE_CLIENT_ID}
         clientSecret: ${AUTH_GOOGLE_CLIENT_SECRET}
         callbackUrl: ${APP_BASE_URL}/api/auth/google/handler/frame
-        allowedDomains:
-          - ${AUTH_GOOGLE_ALLOWED_DOMAINS}
+        allowedDomains: ['stratpoint.com']
         customHeaders:
           X-Requested-With: XMLHttpRequest
 
 catalog:
   locations:
-    # Your organization catalog
+    # Stratpoint Organization - Root catalog location
     - type: file
-      target: ./example-org/catalog-info.yaml
+      target: ./stratpoint/catalog-info.yaml
       rules:
         - allow: [Location, Component, System, API, Resource, Group, User]
 
-    # Backstage Agent CLI component
+    # Backstage Agent CLI
     - type: file
       target: ./packages/backstage-agent/catalog-info.yaml
       rules:
         - allow: [Component]
 
-    # Uncomment to load templates from GitHub:
-    # - type: url
-    #   target: https://github.com/<your-org>/backstage-templates/blob/main/catalog-info.yaml
-    #   rules:
-    #     - allow: [Template, Location, Component, System, Domain, Group]
+    # Production templates from engineering-standards repository
+    - type: url
+      target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/projects/catalog-info.yaml
+      rules:
+        - allow: [Template, Location, Component, System, Domain, Group]
 
+    # Training Templates - Kafka, databases, etc. for local development
+    - type: url
+      target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/training/catalog-info.yaml
+      rules:
+        - allow: [Template, Location]
+
+# see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:
   enabled: true
   # NOTE: All permission policy logic is in packages/backend/src/plugins/permission.ts
@@ -142,7 +167,7 @@ kubernetes:
   clusterLocatorMethods:
     - type: 'config'
       clusters:
-        - name: your-cluster
+        - name: talos-homelab
           url: https://kubernetes.default.svc
           authProvider: serviceAccount
           # In-cluster token: no serviceAccountToken or caData needed.
@@ -170,13 +195,23 @@ argocd:
 
 # Local Provisioner Configuration
 localProvisioner:
+  # Enable or disable the local provisioning feature
   enabled: true
+
+  # SSE heartbeat interval in seconds (keeps agent connections alive)
   sseHeartbeatInterval: 30
+
+  # Task retention period in days (cleanup old completed/failed tasks)
   taskRetentionDays: 30
+
+  # Supported resource types for local provisioning
   supportedResources:
     - kafka
     - postgres
     - redis
     - mongodb
+
+  # Agent configuration
   agent:
+    # Minimum required agent version
     minimumVersion: '1.0.0'

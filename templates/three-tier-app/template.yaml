@@ -99,6 +99,13 @@ spec:
           type: boolean
           default: true
           description: Adds a CNPG Pooler resource in transaction mode
+        minioEndpoint:
+          title: MinIO / S3 Backup Endpoint
+          type: string
+          description: >
+            S3-compatible endpoint for CNPG WAL backups (e.g. https://minio.example.com).
+            Must be reachable from the Kubernetes cluster. Update if your MinIO address changes.
+          default: 'http://192.168.2.103:9000'
 
   steps:
     - id: discover-ingress
@@ -126,6 +133,7 @@ spec:
           dbInstances: ${{ parameters.dbInstances }}
           dbStorageSize: ${{ parameters.dbStorageSize }}
           enableConnectionPooling: ${{ parameters.enableConnectionPooling }}
+          minioEndpoint: ${{ parameters.minioEndpoint }}
           namespace: ${{ parameters.appName }}-${{ parameters.environment }}
 
     - id: create-repo

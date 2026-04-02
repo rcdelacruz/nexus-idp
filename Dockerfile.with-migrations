@@ -65,7 +65,8 @@ RUN mkdir -p /tmp/newdeps && \
         @aws-sdk/client-sts \
         @aws-sdk/credential-providers \
         @mdx-js/mdx \
-        remark-gfm && \
+        remark-gfm \
+        @roadiehq/backstage-plugin-argo-cd-backend && \
     cp -rn node_modules/. /app/node_modules/ && \
     rm -rf /tmp/newdeps
 

@@ -10,7 +10,7 @@ spec:
 
   postgresql:
     pg_hba:
-      - host all all 10.0.0.0/8 md5
+      - host all all 10.0.0.0/8 scram-sha-256
 
   bootstrap:
     initdb:
@@ -24,7 +24,7 @@ spec:
   backup:
     barmanObjectStore:
       destinationPath: s3://cnpg-backups/${{ values.appName }}-db
-      endpointURL: http://192.168.2.103:9000
+      endpointURL: ${{ values.minioEndpoint }}
       s3Credentials:
         accessKeyId:
           name: cnpg-minio-creds

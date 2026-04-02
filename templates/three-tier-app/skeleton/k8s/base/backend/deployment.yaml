@@ -16,6 +16,9 @@ spec:
         app: ${{ values.appName }}-backend
         backstage.io/kubernetes-id: ${{ values.appName }}-backend
     spec:
+      # Bound total pod startup time including migrations (5 min).
+      # Prevents indefinite hang if the DB is unreachable or the build artifact is missing.
+      activeDeadlineSeconds: 300
       imagePullSecrets:
         - name: ghcr-pull-secret
       initContainers:

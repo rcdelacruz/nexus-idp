@@ -1,6 +1,6 @@
 import React from 'react';
 import { SignInPage, UserIdentity } from '@backstage/core-components';
-import { googleAuthApiRef, useApi } from '@backstage/core-plugin-api';
+import { googleAuthApiRef, useApi, configApiRef } from '@backstage/core-plugin-api';
 import { NexusLogoFull, NexusLogoHorizontal } from '../Root/NexusLogo';
 import {
   LayoutGrid, BookOpen, Code2, HardDrive, DollarSign,
@@ -29,6 +29,9 @@ const FEATURES = [
 
 export const CustomSignInPage = (props: any) => {
   const googleAuthApi = useApi(googleAuthApiRef);
+  const configApi = useApi(configApiRef);
+  const githubOwner = configApi.getOptionalString('organization.githubOwner') ?? 'stratpoint-engineering';
+  const orgDomain = configApi.getOptionalString('organization.domain') ?? 'stratpoint.com';
   const hiddenRef = React.useRef<HTMLDivElement>(null);
   const [checking, setChecking] = React.useState(true);
   const [ready, setReady] = React.useState(false);
@@ -320,7 +323,7 @@ export const CustomSignInPage = (props: any) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <a
-            href="https://github.com/stratpoint-engineering"
+            href={`https://github.com/${githubOwner}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{ fontSize: '0.75rem', color: '#878787', textDecoration: 'none' }}
@@ -328,12 +331,12 @@ export const CustomSignInPage = (props: any) => {
             GitHub
           </a>
           <a
-            href="https://stratpoint.com"
+            href={`https://${orgDomain}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{ fontSize: '0.75rem', color: '#878787', textDecoration: 'none' }}
           >
-            stratpoint.com
+            {orgDomain}
           </a>
         </div>
       </footer>

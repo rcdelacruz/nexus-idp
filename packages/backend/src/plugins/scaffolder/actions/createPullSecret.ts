@@ -136,6 +136,7 @@ function k8sRequest(url: string, method: string, body: any, config: ClusterConfi
       path: parsed.pathname + parsed.search, method,
       headers: { ...headers, 'Content-Length': Buffer.byteLength(bodyStr) },
       rejectUnauthorized: !!config.ca,
+      timeout: 30000,
       ...(config.ca ? { ca: config.ca } : {}),
       ...(config.clientCert ? { cert: config.clientCert } : {}),
       ...(config.clientKey ? { key: config.clientKey } : {}),
@@ -150,6 +151,7 @@ function k8sRequest(url: string, method: string, body: any, config: ClusterConfi
       });
     });
     req.on('error', reject);
+    req.on('timeout', () => { req.destroy(new Error(`K8s API request timed out after 30s`)); });
     req.write(bodyStr);
     req.end();
   });

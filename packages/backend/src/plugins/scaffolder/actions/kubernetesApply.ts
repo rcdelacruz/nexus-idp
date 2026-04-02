@@ -34,12 +34,15 @@ export function createKubernetesApplyAction() {
 
       const config = await getClusterConfig();
 
+      const errors: Array<{ resource: string; message: string }> = [];
+
       for (const doc of docs) {
         const apiVersion = doc.apiVersion;
         const kind = doc.kind;
         const metadata = doc.metadata;
         const namespace = metadata?.namespace;
         const name = metadata?.name;
+        const resource = `${kind}/${name}`;
 
         ctx.logger.info(`Applying ${kind} ${namespace ? namespace + '/' : ''}${name}`);
 
@@ -49,17 +52,28 @@ export function createKubernetesApplyAction() {
         // Try server-side apply (PATCH), fall back to POST (create)
         try {
           await k8sRequest(url, 'PATCH', doc, config);
-          ctx.logger.info(`  ${kind}/${name} configured`);
+          ctx.logger.info(`  ${resource} configured`);
         } catch (patchErr: any) {
           if (patchErr.statusCode === 404) {
-            const createPath = buildApiPath(apiVersion, kind, namespace);
-            const createUrl = `${config.server}${createPath}`;
-            await k8sRequest(createUrl, 'POST', doc, config);
-            ctx.logger.info(`  ${kind}/${name} created`);
+            try {
+              const createPath = buildApiPath(apiVersion, kind, namespace);
+              const createUrl = `${config.server}${createPath}`;
+              await k8sRequest(createUrl, 'POST', doc, config);
+              ctx.logger.info(`  ${resource} created`);
+            } catch (postErr: any) {
+              ctx.logger.error(`  ${resource} failed: ${postErr.message}`);
+              errors.push({ resource, message: postErr.message });
+            }
           } else {
-            throw patchErr;
+            ctx.logger.error(`  ${resource} failed: ${patchErr.message}`);
+            errors.push({ resource, message: patchErr.message });
           }
         }
+      }
+
+      if (errors.length > 0) {
+        const summary = errors.map(e => `${e.resource}: ${e.message}`).join('; ');
+        throw new Error(`${errors.length} manifest(s) failed to apply: ${summary}`);
       }
 
       ctx.logger.info('All manifests applied successfully');
@@ -186,6 +200,7 @@ function k8sRequest(url: string, method: string, body: any, config: ClusterConfi
       method,
       headers: { ...headers, 'Content-Length': Buffer.byteLength(bodyStr) },
       rejectUnauthorized: !!config.ca,
+      timeout: 30000,
       ...(config.ca ? { ca: config.ca } : {}),
       ...(config.clientCert ? { cert: config.clientCert } : {}),
       ...(config.clientKey ? { key: config.clientKey } : {}),
@@ -207,6 +222,7 @@ function k8sRequest(url: string, method: string, body: any, config: ClusterConfi
     });
 
     req.on('error', reject);
+    req.on('timeout', () => { req.destroy(new Error(`K8s API request timed out after 30s: ${method} ${url}`)); });
     req.write(bodyStr);
     req.end();
   });
