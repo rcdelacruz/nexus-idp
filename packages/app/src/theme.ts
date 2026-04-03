@@ -1408,6 +1408,11 @@ const makeComponents = (isDark: boolean) => {
           gridTemplateColumns: 'repeat(4, 1fr)',
           gridGap: 16,
           '& > *': { height: '100%' },
+          // Inside drawer (Kubernetes pod containers) — single column
+          '[class*="MuiDrawer-paper"] &': {
+            gridTemplateColumns: '1fr !important',
+            gridAutoRows: 'auto !important',
+          },
         },
       },
     },

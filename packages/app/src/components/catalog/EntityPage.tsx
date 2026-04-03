@@ -284,24 +284,22 @@ const componentPage = (
 const apiPage = (
   <EntityLayout>
     <EntityLayout.Route path="/" title="Overview">
-      <Grid container spacing={3}>
+      <Grid container spacing={3} alignItems="stretch">
         {entityWarningContent}
-        <Grid item md={6}>
+        <Grid item md={6} xs={12}>
           <EntityAboutCard />
         </Grid>
         <Grid item md={6} xs={12}>
           <EntityCatalogGraphCard height={400} />
         </Grid>
-        <Grid item md={4} xs={12}>
+        <Grid item md={6} xs={12}>
           <EntityLinksCard />
         </Grid>
-        <Grid container item md={12}>
-          <Grid item md={6}>
-            <EntityProvidingComponentsCard />
-          </Grid>
-          <Grid item md={6}>
-            <EntityConsumingComponentsCard />
-          </Grid>
+        <Grid item md={6} xs={12}>
+          <EntityProvidingComponentsCard />
+        </Grid>
+        <Grid item md={6} xs={12}>
+          <EntityConsumingComponentsCard />
         </Grid>
       </Grid>
     </EntityLayout.Route>

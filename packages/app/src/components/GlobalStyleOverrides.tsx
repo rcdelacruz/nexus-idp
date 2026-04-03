@@ -203,13 +203,11 @@ function patchFilterPanel(panel: Element) {
 /** Fix Kubernetes pod card grid: gridAutoRows:1fr squishes cards in the 80%-height drawer. */
 function patchKubernetesPodGrid() {
   document.querySelectorAll<HTMLElement>('[class*="BackstageItemCardGrid-root"]').forEach(el => {
+    if (!el.closest('[class*="MuiDrawer-paper"]')) return; // scaffolder templates are NOT in a drawer
     el.style.setProperty('grid-template-columns', '1fr', 'important');
     el.style.setProperty('grid-auto-rows', 'auto', 'important');
     el.style.setProperty('overflow-y', 'auto', 'important');
     el.style.setProperty('height', 'auto', 'important');
-  });
-  // Also make the parent content container scrollable
-  document.querySelectorAll<HTMLElement>('[class*="BackstageItemCardGrid-root"]').forEach(el => {
     const parent = el.parentElement;
     if (parent) {
       parent.style.setProperty('overflow-y', 'auto', 'important');

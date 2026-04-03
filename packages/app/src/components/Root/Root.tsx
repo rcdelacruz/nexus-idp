@@ -441,7 +441,7 @@ const AppSidebar = ({ isNewUser, isAdmin, isPM }: { isNewUser?: boolean; isAdmin
   const toggleTheme = () => appThemeApi.setActiveThemeId(isDark ? 'light' : 'dark');
 
   return (
-    <div className={classes.sidebarInner}>
+    <div className={`${classes.sidebarInner} sidebar-dark-theme`}>
       {/* Logo */}
       <Link to={isNewUser === true ? '/onboarding' : '/'} className={classes.logoArea}>
         <NexusLogoMark size={24} color="#ededed" />

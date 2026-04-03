@@ -84,6 +84,18 @@ body[data-theme-mode='light'] {
   --bui-shadow:               0 4px 16px rgba(0,0,0,0.08);
 }
 
+/* Force sidebar to always use dark tokens regardless of active theme */
+.sidebar-dark-theme {
+  --bui-bg-app:               #000000;
+  --bui-bg-neutral-1:         #0a0a0a;
+  --bui-bg-neutral-1-hover:   #1a1a1a;
+  --bui-bg-neutral-1-pressed: #1f1f1f;
+  --bui-fg-primary:           #ededed;
+  --bui-fg-secondary:         #a1a1a1;
+  --bui-fg-disabled:          #454545;
+  --bui-border-1:             #2e2e2e;
+}
+
 /* ==========================================================
    @backstage/ui Card + Table structural overrides
    Used by: API tab, Dependencies tab (EntityRelationCard)
@@ -168,7 +180,7 @@ td[class*="bui-TableCell"] {
 
 /* Entity name links */
 td[class*="bui-TableCell"] a {
-  color: var(--fg-primary) !important;
+  color: var(--ds-blue-900) !important;
   font-weight: 500 !important;
   text-decoration: none !important;
 }
@@ -445,8 +457,9 @@ pre *, code * {
   color: var(--fg-secondary) !important;
 }
 
+
 /* ItemCardGrid (container cards in pod drawer) */
-[class*="BackstageItemCardGrid-root"] {
+[class*="MuiDrawer-paper"] [class*="BackstageItemCardGrid-root"] {
   grid-template-columns: 1fr !important;
   grid-auto-rows: auto !important;
   overflow-y: auto !important;
@@ -858,8 +871,8 @@ body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
 /* ==========================================================
    LINK COLORS
    ========================================================== */
-[class*="MuiLink-root"] { color: var(--blue) !important; }
-[class*="MuiLink-root"]:hover { color: var(--blue-dark) !important; }
+[class*="MuiLink-root"] { color: var(--ds-blue-900) !important; }
+[class*="MuiLink-root"]:hover { color: var(--ds-blue-900) !important; }
 
 /* ==========================================================
    SELECTION
@@ -1057,6 +1070,10 @@ body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
 [class*="CatalogReactEntityDisplayName-root"] {
   color: var(--fg-primary) !important;
   font-weight: 500 !important;
+}
+a [class*="CatalogReactEntityDisplayName-root"],
+a[class*="CatalogReactEntityDisplayName-root"] {
+  color: var(--ds-blue-900) !important;
 }
 
 
@@ -1462,12 +1479,12 @@ body[data-theme-mode='light'] [class*="MuiPopover-paper"] {
   font-size: 0.875rem !important;
   font-weight: 400 !important;
   letter-spacing: -0.006em !important;
-  color: var(--fg-primary) !important;
+  color: var(--ds-blue-900) !important;
   text-decoration: none !important;
 }
 
 [class*="MuiImageListItem-root"] a:hover {
-  color: var(--blue) !important;
+  color: var(--ds-blue-900) !important;
   text-decoration: underline !important;
 }
 
