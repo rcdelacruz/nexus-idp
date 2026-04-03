@@ -1,77 +1,23 @@
 import { useLayoutEffect } from 'react';
 
 /**
- * Fixes catalog-graph filter panel layout via two mechanisms:
+ * Global CSS overrides and DOM patching for stable MUI class names.
  *
- * 1. CSS injected after JSS (useLayoutEffect → last style in <head>)
- * 2. MutationObserver that directly applies inline styles with !important
- *    whenever the filter panel enters the DOM — bypasses all CSS cascade.
+ * NOTE: Do NOT add [class*="PluginXxx*"] or [class*="BackstageXxx*"] selectors here.
+ * Those class names are hashed to jss4-NNN in production builds, so they BREAK.
+ * Plugin/Backstage component styles belong in theme.ts styleOverrides.
  *
- * The inline style approach is needed because MuiFormControl-root and
- * MuiAutocomplete-inputRoot are display:inline-flex with no explicit width.
- * They auto-size to max-content (all chips in one row), overflowing the
- * narrow filter column. Setting width:100% via inline style constrains
- * them to the column width so flex-wrap:wrap actually triggers.
+ * This file handles:
+ * 1. CSS injected after JSS (useLayoutEffect → last style in <head>) for MUI stable classes
+ * 2. Inline style patching via MutationObserver for Scaffolder filter drawer
+ * 3. Kubernetes pod grid layout fix (BackstageItemCardGrid inside MuiDrawer-paper)
  */
 const css = `
   /*
-   * ─── Catalog-graph filter panel ───────────────────────────────────────────
-   * The Grid item (lg=2) is a flex child. Without min-width:0 it expands past
-   * its flex-basis:16.667%, blowing the layout. The :has() selector targets
-   * the Grid item directly; the JS MutationObserver also patches parentElement.
+   * Catalog-graph filter panel styles were here but broke in production:
+   * [class*="PluginCatalogGraph*"] selectors don't match JSS-hashed jss4-NNN classes.
+   * Those styles have been moved to theme.ts (PluginCatalogGraphCatalogGraphPage.filters).
    */
-  .MuiGrid-item:has([class*="PluginCatalogGraphCatalogGraphPage-filters"]) {
-    min-width: 0 !important;
-    overflow: hidden !important;
-  }
-
-  [class*="PluginCatalogGraphCatalogGraphPage-filters"] {
-    min-width: 0 !important;
-    overflow: hidden !important;
-  }
-
-  /*
-   * Each filter widget (Box wrapper) must not overflow its parent column.
-   * min-width:0 prevents a block child from inheriting max-content width.
-   * overflow:hidden clips any residual overflow without hiding scrollbars.
-   */
-  [class*="PluginCatalogGraphCatalogGraphPage-filters"] > * {
-    min-width: 0 !important;
-    max-width: 100% !important;
-    overflow: visible !important;
-  }
-
-  /*
-   * MuiAutocomplete-root gets className={classes.formControl} which JSS
-   * gives maxWidth:300 but NO explicit width. As a block div it should
-   * fill its parent, but the JSS maxWidth can interact oddly with flex
-   * layout. Force width:100% + min-width:0 to anchor it to the column.
-   */
-  [class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiAutocomplete-root {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-  }
-
-  /* ─── FormControl: block-level to fill Autocomplete-root width ─── */
-  [class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiFormControl-root {
-    display: flex !important;
-    flex-direction: column !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    box-sizing: border-box !important;
-  }
-
-  /* ─── InputRoot: fill FormControl width, wrap chips to new lines ─── */
-  [class*="PluginCatalogGraphCatalogGraphPage-filters"] .MuiAutocomplete-inputRoot {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    flex-wrap: wrap !important;
-    height: auto !important;
-    box-sizing: border-box !important;
-  }
 
   /* ─── Drawer filter panel (Scaffolder, Catalog) ─── */
   .MuiDrawer-paper .MuiFormControl-root {
@@ -217,11 +163,10 @@ function patchKubernetesPodGrid() {
 }
 
 function findAndPatchFilterPanels() {
-  // Catalog-graph filter sidebar
-  document
-    .querySelectorAll<Element>('[class*="PluginCatalogGraphCatalogGraphPage-filters"]')
-    .forEach(patchFilterPanel);
-  // Scaffolder filter drawer (portaled to body, no unique class)
+  // Catalog-graph filter sidebar styles are handled in theme.ts (PluginCatalogGraphCatalogGraphPage.filters)
+  // because [class*="PluginCatalogGraph*"] selectors don't survive JSS class name hashing in production.
+
+  // Scaffolder filter drawer (portaled to body, no unique class — MuiDrawer-paper is a stable MUI class)
   document
     .querySelectorAll<Element>('.MuiDrawer-paper')
     .forEach(patchFilterPanel);

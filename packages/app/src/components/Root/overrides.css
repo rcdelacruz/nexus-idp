@@ -1191,64 +1191,71 @@ a[class*="CatalogReactEntityDisplayName-root"] {
 /* ==========================================================
    CATALOG GRAPH — Graph canvas
    SVG has fixed id="dependency-graph" — target directly.
+   Scoped per theme class (html.theme-dark / html.theme-light) so colors
+   are always correct regardless of CSS variable resolution timing.
    ========================================================== */
 
-/* Node rects — default */
-#dependency-graph rect {
-  fill: var(--ds-gray-300) !important;
-  stroke: var(--border-hover) !important;
+/* ── Dark mode ─────────────────────────────────────────── */
+html.theme-dark #dependency-graph rect {
+  fill: #292929 !important;
+  stroke: #454545 !important;
   stroke-width: 1 !important;
 }
-
-/* Primary node (focused/root entity) */
-#dependency-graph rect.primary {
-  fill: var(--blue-dark) !important;
-  stroke: var(--blue) !important;
+html.theme-dark #dependency-graph rect.primary {
+  fill: #0070f3 !important;
+  stroke: #3291ff !important;
 }
-
-/* Secondary node */
-#dependency-graph rect.secondary {
-  fill: var(--ds-gray-500) !important;
-  stroke: var(--border-hover) !important;
+html.theme-dark #dependency-graph rect.secondary {
+  fill: #454545 !important;
+  stroke: #454545 !important;
 }
-
-/* Node text labels */
-#dependency-graph text {
-  fill: var(--fg-primary) !important;
+html.theme-dark #dependency-graph text {
+  fill: #ededed !important;
   font-family: var(--font-sans) !important;
   font-size: 13px !important;
 }
-
-#dependency-graph text.primary {
+html.theme-dark #dependency-graph text.primary {
   fill: #ffffff !important;
 }
-
-/* Edge paths */
-#dependency-graph path[marker-end] {
-  stroke: var(--border-hover) !important;
+html.theme-dark #dependency-graph path[marker-end] {
+  stroke: #454545 !important;
+}
+html.theme-dark #dependency-graph marker path {
+  fill: #454545 !important;
+  stroke: #454545 !important;
 }
 
-#dependency-graph path[marker-end]:hover {
-  filter: drop-shadow(0 0 4px var(--blue)) !important;
+/* ── Light mode ─────────────────────────────────────────── */
+html.theme-light #dependency-graph rect {
+  fill: #e2e2e2 !important;
+  stroke: #c9c9c9 !important;
+  stroke-width: 1 !important;
+}
+html.theme-light #dependency-graph rect.primary {
+  fill: #0060df !important;
+  stroke: #0070f3 !important;
+}
+html.theme-light #dependency-graph rect.secondary {
+  fill: #c9c9c9 !important;
+  stroke: #c9c9c9 !important;
+}
+html.theme-light #dependency-graph text {
+  fill: #171717 !important;
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+}
+html.theme-light #dependency-graph text.primary {
+  fill: #ffffff !important;
+}
+html.theme-light #dependency-graph path[marker-end] {
+  stroke: #c9c9c9 !important;
+}
+html.theme-light #dependency-graph marker path {
+  fill: #c9c9c9 !important;
+  stroke: #c9c9c9 !important;
 }
 
-/* Arrow marker heads */
-#dependency-graph marker path {
-  fill: var(--border-hover) !important;
-  stroke: var(--border-hover) !important;
-}
-
-/* ==========================================================
-   CATALOG GRAPH — Filter panel labels
-   ========================================================== */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiTypography-subtitle2"],
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiFormLabel-root"] {
-  font-size: 0.6875rem !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.06em !important;
-  text-transform: uppercase !important;
-  color: var(--fg-tertiary) !important;
-}
+/* Filter panel labels are handled in theme.ts (PluginCatalogGraphCatalogGraphPage.filters) */
 
 /* ==========================================================
    MUI SWITCH
@@ -1364,63 +1371,9 @@ a[class*="CatalogReactEntityDisplayName-root"] {
 
 /* ==========================================================
    CATALOG GRAPH — Filter panel width containment
-   The filter div is a flex child of the Graph Grid container.
-   min-width:0 prevents it from expanding beyond its flex-basis (2/12).
+   Moved to theme.ts (PluginCatalogGraphCatalogGraphPage/SelectedKindsFilter/SelectedRelationsFilter)
+   because [class*="PluginCatalogGraph*"] selectors break in production (JSS hashes to jss4-NNN).
    ========================================================== */
-
-/* The filter Grid item itself — must not grow beyond its flex allocation */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] {
-  min-width: 0 !important;
-  overflow: hidden !important;
-}
-
-/* Direct children (Box wrappers per filter widget) */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] > * {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 4px !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-}
-
-/* MuiAutocomplete-root gets JSS maxWidth:300 but no width — anchor it.
-   Target both the parent-scoped rule and the specific filter class names. */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiAutocomplete-root"] {
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-}
-
-/* Target the formControl class directly on the Autocomplete root elements
-   (the className prop receives this JSS class — overrides maxWidth:300) */
-[class*="PluginCatalogGraphSelectedKindsFilter-formControl"],
-[class*="PluginCatalogGraphSelectedRelationsFilter-formControl"] {
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-}
-
-/* FormControl: block-level flex to fill Autocomplete-root width */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiFormControl-root"] {
-  display: flex !important;
-  flex-direction: column !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-  box-sizing: border-box !important;
-}
-
-/* InputRoot: chips must wrap, not overflow */
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] [class*="MuiAutocomplete-inputRoot"] {
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-  flex-wrap: wrap !important;
-  height: auto !important;
-}
-
-[class*="PluginCatalogGraphCatalogGraphPage-filters"] > *:last-child {
-  border-bottom: none;
-}
 
 /* ==========================================================
    CATALOG GRAPH — Autocomplete option label styling

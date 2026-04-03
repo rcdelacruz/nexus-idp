@@ -1546,6 +1546,84 @@ const makeComponents = (isDark: boolean) => {
         },
       },
     },
+
+    // ---- Catalog Graph plugin overrides ----
+    // Plugin component class names (PluginCatalogGraph*) are hashed to jss4-NNN in production.
+    // [class*="Plugin*"] selectors in overrides.css BREAK in prod — use styleOverrides here instead.
+    PluginCatalogGraphCatalogGraphPage: {
+      styleOverrides: {
+        // The Grid container: ensure the filters column (first child) doesn't overflow
+        container: {
+          '& > .MuiGrid-item:first-child': {
+            minWidth: 0,
+            overflow: 'hidden',
+          },
+        },
+        // The filters panel itself
+        filters: {
+          minWidth: 0,
+          overflow: 'hidden',
+          // Each filter widget row
+          '& > *': {
+            borderBottom: `1px solid ${c.border}`,
+            paddingBottom: 4,
+            minWidth: 0,
+            maxWidth: '100%',
+          },
+          '& > *:last-child': {
+            borderBottom: 'none',
+          },
+          // Autocomplete root has JSS maxWidth:300 but no width — anchor it
+          '& .MuiAutocomplete-root': {
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+          },
+          '& .MuiFormControl-root': {
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            boxSizing: 'border-box',
+          },
+          '& .MuiAutocomplete-inputRoot': {
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            flexWrap: 'wrap',
+            height: 'auto',
+          },
+          // Section labels inside filter panel
+          '& .MuiTypography-subtitle2, & .MuiFormLabel-root': {
+            fontSize: '0.6875rem',
+            fontWeight: 600,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: c.textTertiary,
+          },
+        },
+      },
+    },
+    // SelectedKindsFilter has a formControl class with maxWidth:300 — override to fill column
+    PluginCatalogGraphSelectedKindsFilter: {
+      styleOverrides: {
+        formControl: {
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
+        },
+      },
+    },
+    PluginCatalogGraphSelectedRelationsFilter: {
+      styleOverrides: {
+        formControl: {
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
+        },
+      },
+    },
   };
 };
 
