@@ -142,23 +142,17 @@ catalog:
       rules:
         - allow: [Component]
 
-    # Local templates (temporary — GitHub templates commented out)
-    - type: file
-      target: ./templates/three-tier-app/template.yaml
-      rules:
-        - allow: [Template]
-
     # Production templates from engineering-standards repository
-    # - type: url
-    #   target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/projects/catalog-info.yaml
-    #   rules:
-    #     - allow: [Template, Location, Component, System, Domain, Group]
+    - type: url
+      target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/projects/catalog-info.yaml
+      rules:
+        - allow: [Template, Location, Component, System, Domain, Group]
 
     # Training Templates - Kafka, databases, etc.
-    # - type: url
-    #   target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/training/catalog-info.yaml
-    #   rules:
-    #     - allow: [Template, Location]
+    - type: url
+      target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/training/catalog-info.yaml
+      rules:
+        - allow: [Template, Location]
 
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:
