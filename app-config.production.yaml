@@ -142,17 +142,6 @@ catalog:
       rules:
         - allow: [Component]
 
-    # Local templates (temporary — GitHub templates commented out)
-    - type: file
-      target: ./templates/three-tier-app/template.yaml
-      rules:
-        - allow: [Template]
-
-    - type: file
-      target: ./templates/documentation/template.yaml
-      rules:
-        - allow: [Template]
-
     # Production templates from engineering-standards repository
     - type: url
       target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/projects/catalog-info.yaml
