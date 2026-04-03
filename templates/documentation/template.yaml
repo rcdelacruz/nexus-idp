@@ -1,0 +1,304 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: documentation
+  title: Documentation Site
+  description: >
+    Register an existing docs repo in the Engineering Hub, or scaffold a new
+    documentation site (MkDocs, Nextra, or Docusaurus) for a new or existing project.
+  tags:
+    - documentation
+    - engineering-hub
+    - mkdocs
+    - nextra
+    - docusaurus
+spec:
+  owner: group:default/devops-team
+  type: documentation
+
+  parameters:
+    # ── Step 1: Intent + Repository ────────────────────────────────────────
+    - title: Repository
+      required: [action, repoOrg, repoName]
+      properties:
+        action:
+          title: What do you want to do?
+          type: string
+          enum: [register, create]
+          enumNames:
+            - 'Register an existing docs repo in the Engineering Hub'
+            - 'Create new documentation (scaffold boilerplate)'
+          default: register
+          ui:autofocus: true
+          ui:widget: radio
+        repoOrg:
+          title: GitHub Organization
+          type: string
+          enum: [stratpoint-engineering, strat-main-team]
+          enumNames:
+            - 'stratpoint-engineering — org-wide documentation'
+            - 'strat-main-team — project / team documentation'
+          default: strat-main-team
+        repoName:
+          title: Repository Name
+          type: string
+          description: GitHub repository name
+      dependencies:
+        action:
+          oneOf:
+            # ── Flow A: Register existing repo ──────────────────────────
+            - properties:
+                action:
+                  enum: [register]
+                docFormat:
+                  title: Documentation Format
+                  type: string
+                  description: Format used by the existing docs in this repo
+                  enum: [mkdocs, nextra, docusaurus]
+                  enumNames:
+                    - 'MkDocs'
+                    - 'Nextra'
+                    - 'Docusaurus'
+                  default: mkdocs
+                branch:
+                  title: Branch
+                  type: string
+                  description: Branch where docs live
+                  default: main
+                contentBase:
+                  title: Docs Folder Path
+                  type: string
+                  description: Path inside the repo where your docs content lives (e.g. docs, pages, src/content)
+                  default: docs
+              required: [docFormat, branch, contentBase]
+
+            # ── Flow B: Create new docs ──────────────────────────────────
+            - properties:
+                action:
+                  enum: [create]
+                docFormat:
+                  title: Documentation Format
+                  type: string
+                  enum: [mkdocs, nextra, docusaurus]
+                  enumNames:
+                    - 'MkDocs — Markdown, simple and widely used'
+                    - 'Nextra — MDX, supports React components'
+                    - 'Docusaurus — MDX + versioning, ideal for open-source style docs'
+                  default: mkdocs
+                target:
+                  title: Where should the docs go?
+                  type: string
+                  enum: [existing, new]
+                  enumNames:
+                    - 'Add to an existing project repo (opens a PR)'
+                    - 'Create a new dedicated docs repo'
+                  default: existing
+                  ui:widget: radio
+              required: [docFormat, target]
+              dependencies:
+                target:
+                  oneOf:
+                    - properties:
+                        target:
+                          enum: [existing]
+                    - properties:
+                        target:
+                          enum: [new]
+                        repoVisibility:
+                          title: Repository Visibility
+                          type: string
+                          enum: [public, private]
+                          enumNames: ['Public', 'Private']
+                          default: private
+                      required: [repoVisibility]
+
+    # ── Step 2: Documentation Details ──────────────────────────────────────
+    - title: Documentation Details
+      required: [docName, title, description, owner]
+      properties:
+        docName:
+          title: Doc Name (slug)
+          type: string
+          description: Lowercase letters and hyphens only. Used as the catalog entity name.
+          pattern: '^[a-z][a-z0-9-]{1,48}[a-z0-9]$'
+          ui:autofocus: true
+          ui:help: 'Example: payment-api-docs, platform-guide, onboarding'
+        title:
+          title: Title
+          type: string
+          description: Human-readable title shown in the Engineering Hub
+        description:
+          title: Description
+          type: string
+          description: Brief description of what this documentation covers
+        owner:
+          title: Owning Team
+          type: string
+          description: Team responsible for this documentation
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+
+  steps:
+    # ════════════════════════════════════════════════════════════════════════
+    # FLOW A — Register existing repo
+    # ════════════════════════════════════════════════════════════════════════
+
+    - id: fetch-register
+      name: Generate catalog-info.yaml
+      if: ${{ parameters.action === 'register' }}
+      action: fetch:template
+      input:
+        url: ./skeleton/register
+        values:
+          docName: ${{ parameters.docName }}
+          title: ${{ parameters.title }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          repoOrg: ${{ parameters.repoOrg }}
+          repoName: ${{ parameters.repoName }}
+          branch: ${{ parameters.branch }}
+          contentBase: ${{ parameters.contentBase }}
+          docFormat: ${{ parameters.docFormat }}
+
+    - id: pr-register
+      name: Open Pull Request to Register Docs
+      if: ${{ parameters.action === 'register' }}
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=${{ parameters.repoOrg }}&repo=${{ parameters.repoName }}
+        branchName: docs/register-engineering-hub
+        title: 'docs: register in Nexus Engineering Hub'
+        description: |
+          Adds `catalog-info.yaml` to register this repo in the **Nexus Engineering Hub** (Docs sidebar).
+
+          **Format:** ${{ parameters.docFormat }}
+          **Content base:** `${{ parameters.contentBase }}`
+          **Branch:** `${{ parameters.branch }}`
+
+          ### Next steps
+          1. Merge this PR
+          2. The docs will automatically appear in the Engineering Hub sidebar within ~30 minutes
+             (or trigger a manual catalog refresh in Backstage)
+
+    # ════════════════════════════════════════════════════════════════════════
+    # FLOW B — Create new docs
+    # ════════════════════════════════════════════════════════════════════════
+
+    # ── Common: catalog-info.yaml + README ──────────────────────────────────
+    - id: fetch-common
+      name: Generate Common Files
+      if: ${{ parameters.action === 'create' }}
+      action: fetch:template
+      input:
+        url: ./skeleton/common
+        values:
+          docName: ${{ parameters.docName }}
+          title: ${{ parameters.title }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          repoOrg: ${{ parameters.repoOrg }}
+          repoName: ${{ parameters.repoName }}
+          docFormat: ${{ parameters.docFormat }}
+
+    # ── MkDocs skeleton ───────────────────────────────────────────────────
+    - id: fetch-mkdocs
+      name: Generate MkDocs Structure
+      if: ${{ parameters.action === 'create' and parameters.docFormat === 'mkdocs' }}
+      action: fetch:template
+      input:
+        url: ./skeleton/mkdocs
+        values:
+          title: ${{ parameters.title }}
+          description: ${{ parameters.description }}
+
+    # ── Nextra skeleton ───────────────────────────────────────────────────
+    - id: fetch-nextra
+      name: Generate Nextra Structure
+      if: ${{ parameters.action === 'create' and parameters.docFormat === 'nextra' }}
+      action: fetch:template
+      input:
+        url: ./skeleton/nextra
+        values:
+          title: ${{ parameters.title }}
+          description: ${{ parameters.description }}
+
+    # ── Docusaurus skeleton ───────────────────────────────────────────────
+    - id: fetch-docusaurus
+      name: Generate Docusaurus Structure
+      if: ${{ parameters.action === 'create' and parameters.docFormat === 'docusaurus' }}
+      action: fetch:template
+      input:
+        url: ./skeleton/docusaurus
+        values:
+          title: ${{ parameters.title }}
+          description: ${{ parameters.description }}
+          repoOrg: ${{ parameters.repoOrg }}
+          repoName: ${{ parameters.repoName }}
+
+    # ── Create new repo ────────────────────────────────────────────────────
+    - id: create-repo
+      name: Create GitHub Repository
+      if: ${{ parameters.action === 'create' and parameters.target === 'new' }}
+      action: github:repo:create
+      input:
+        repoUrl: github.com?owner=${{ parameters.repoOrg }}&repo=${{ parameters.repoName }}
+        description: ${{ parameters.description }}
+        repoVisibility: ${{ parameters.repoVisibility }}
+        defaultBranch: main
+        topics:
+          - engineering-hub
+          - documentation
+          - ${{ parameters.docFormat }}
+
+    - id: push-new
+      name: Push to New Repository
+      if: ${{ parameters.action === 'create' and parameters.target === 'new' }}
+      action: github:repo:push
+      input:
+        repoUrl: github.com?owner=${{ parameters.repoOrg }}&repo=${{ parameters.repoName }}
+        defaultBranch: main
+
+    # ── PR into existing repo ─────────────────────────────────────────────
+    - id: pr-existing
+      name: Open Pull Request
+      if: ${{ parameters.action === 'create' and parameters.target === 'existing' }}
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=${{ parameters.repoOrg }}&repo=${{ parameters.repoName }}
+        branchName: docs/add-engineering-hub
+        title: 'docs: add Engineering Hub documentation structure'
+        description: |
+          Adds **${{ parameters.docFormat }}** documentation structure and registers this repo in the Nexus Engineering Hub.
+
+          ### What's included
+          - `catalog-info.yaml` — Engineering Hub annotations
+          - Documentation skeleton (`${{ parameters.docFormat }}` format)
+
+          ### Next steps
+          1. Merge this PR
+          2. Go to Backstage → **Create** → **Register existing component**
+             and point it to `catalog-info.yaml` in this repo
+
+    # ── Register in catalog (new repo only) ───────────────────────────────
+    - id: register
+      name: Register in Backstage Catalog
+      if: ${{ parameters.action === 'create' and parameters.target === 'new' }}
+      action: catalog:register
+      input:
+        catalogInfoUrl: https://github.com/${{ parameters.repoOrg }}/${{ parameters.repoName }}/blob/main/catalog-info.yaml
+
+  output:
+    links:
+      - title: GitHub Repository
+        url: https://github.com/${{ parameters.repoOrg }}/${{ parameters.repoName }}
+        icon: github
+      - title: Pull Request
+        url: ${{ steps['pr-register'].output.remoteUrl if parameters.action === 'register' else steps['pr-existing'].output.remoteUrl }}
+        icon: github
+        if: ${{ parameters.action === 'register' or (parameters.action === 'create' and parameters.target === 'existing') }}
+      - title: Open in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}
+        if: ${{ parameters.action === 'create' and parameters.target === 'new' }}

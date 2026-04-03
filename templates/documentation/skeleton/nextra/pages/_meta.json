@@ -1,0 +1,4 @@
+{
+  "index": "${{ values.title }}",
+  "getting-started": "Getting Started"
+}

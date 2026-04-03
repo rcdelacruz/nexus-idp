@@ -153,6 +153,11 @@ catalog:
       rules:
         - allow: [Template]
 
+    - type: file
+      target: ../../templates/documentation/template.yaml
+      rules:
+        - allow: [Template]
+
     # Stratpoint Templates - maintained in separate repository (private)
     # See app-config.local.yaml for development template references
     # Production templates loaded from: https://github.com/stratpoint-engineering/engineering-standards.git
