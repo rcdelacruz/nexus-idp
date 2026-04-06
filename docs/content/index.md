@@ -34,6 +34,7 @@ New users are auto-provisioned into `general-engineers` on first Google or GitHu
 - [Google OAuth Setup](google-oauth-setup.md) — configuring sign-in
 - [K8s + ArgoCD + CNPG Integration](k8s-argocd-cnpg-integration.md) — Kubernetes and GitOps setup
 
+- [Importing Projects](importing-projects.md) — register existing services, repos, and tools into the catalog
 - [Scaffolder Templates](scaffolder-templates.md) — template architecture, nextjs-fullstack guide, documentation template, custom actions, CI/CD setup, lessons learned
 - [Deployment Operations](deployment-operations.md) — k8s deploy procedure, Dockerfile rules, env vars, troubleshooting
 - [Design System](design-system.md) — Geist design tokens, components, and rules for contributors

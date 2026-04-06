@@ -149,6 +149,7 @@ spec:
           description: Team responsible for this documentation
           ui:field: OwnerPicker
           ui:options:
+            allowArbitraryValues: false
             catalogFilter:
               kind: Group
         tags:

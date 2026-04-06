@@ -154,6 +154,15 @@ export const CustomTemplateWizardPage = (props: TemplateWizardPageProps) => {
   const handleBack = useCallback(() => setActiveStep(s => s - 1), []);
 
   const handleNext = useCallback(async ({ formData = {} }: { formData?: Record<string, any> }) => {
+    // Guard against Enter-key form submission bypassing the disabled Next button
+    const schema = steps[activeStep]?.schema;
+    const required = (schema as any)?.required as string[] | undefined;
+    const hasEmpty = required?.some(field => {
+      const val = formData[field];
+      return val === undefined || val === null || val === '';
+    });
+    if (hasEmpty) return;
+
     setFormErrors(undefined);
     setIsValidating(true);
     const returnedValidation = await asyncValidation(formData);

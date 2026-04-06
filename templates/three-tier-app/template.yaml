@@ -52,6 +52,7 @@ spec:
           description: The team responsible for this application
           ui:field: OwnerPicker
           ui:options:
+            allowArbitraryValues: false
             catalogFilter:
               kind: Group
         tags:

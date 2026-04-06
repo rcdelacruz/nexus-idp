@@ -38,6 +38,7 @@ export const ProjectPickerField = ({
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [inputValue, setInputValue] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -59,6 +60,11 @@ export const ProjectPickerField = ({
 
   const selected = projects.find(p => p.id === formData) ?? null;
 
+  // Keep inputValue in sync when formData changes externally
+  useEffect(() => {
+    setInputValue(selected?.name ?? '');
+  }, [selected]);
+
   const getGroupLabel = (type: string) =>
     type === 'system' ? 'Default' : 'Client Projects';
 
@@ -75,7 +81,19 @@ export const ProjectPickerField = ({
         getOptionLabel={p => p.name}
         getOptionSelected={(a, b) => a.id === b.id}
         value={selected}
-        onChange={(_, val) => onChange(val?.id ?? '')}
+        inputValue={inputValue}
+        onInputChange={(_, val, reason) => {
+          // Allow typing to filter, but on blur/reset clear back to selected name
+          if (reason === 'input') setInputValue(val);
+        }}
+        onBlur={() => {
+          // Reset any free-typed text to the currently selected project name (or empty)
+          setInputValue(selected?.name ?? '');
+        }}
+        onChange={(_, val) => {
+          onChange(val?.id ?? '');
+          setInputValue(val?.name ?? '');
+        }}
         loading={loading}
         renderInput={params => (
           <TextField
