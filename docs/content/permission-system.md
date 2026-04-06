@@ -31,7 +31,7 @@ Nexus IDP uses a custom RBAC permission policy implemented in `packages/backend/
 
 Groups are resolved from the Backstage token's `ownershipEntityRefs` claim. There are two sources:
 
-1. **Catalog entity** (`example-org/org/users.yaml`) — only break-glass admin users are defined here. Their group memberships come from `memberOf` in the YAML.
+1. **Catalog entity** (`stratpoint/org/users.yaml`) — only break-glass admin users are defined here. Their group memberships come from `memberOf` in the YAML.
 
 2. **UserEntityProvider** (user-management plugin) — all other users are managed in the `backstage_plugin_user-management` PostgreSQL database. The `UserEntityProvider` reads this DB every 30 seconds and injects User entities into the catalog with their assigned teams.
 
@@ -41,7 +41,7 @@ When a new user signs in (Google or GitHub), they are auto-provisioned with `gen
 
 Add the user to `backstage-admins` via the User Management UI → Promote to Admin, or directly set `isAdmin: true` in the database.
 
-Only `admin.user` is defined in `example-org/org/users.yaml` as a break-glass admin — this user always has admin access even if the database is unavailable.
+Only `ronaldo.delacruz` is defined in `stratpoint/org/users.yaml` as a break-glass admin — this user always has admin access even if the database is unavailable.
 
 ## Implementation
 

@@ -71,7 +71,10 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
   // Auth + permission middleware — health is public, everything else requires
   // an authenticated user with finops.read permission (admin-only by policy).
   router.use(async (req, res, next) => {
-    if (req.path.startsWith('/health')) return next();
+    if (req.path.startsWith('/health')) {
+      next();
+      return;
+    }
 
     let credentials;
     try {

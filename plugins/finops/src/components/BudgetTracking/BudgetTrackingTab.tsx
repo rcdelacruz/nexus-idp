@@ -6,6 +6,7 @@ import {
   Grid, Card, CardContent, Typography, LinearProgress,
   CircularProgress, Box, Chip,
 } from '@material-ui/core';
+import { useColors, semantic } from '@stratpoint/theme-utils';
 
 const fmt = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
@@ -15,13 +16,14 @@ let _budgetCache: BudgetCache | null = null;
 
 export const BudgetTrackingTab = ({ refreshKey, accountId }: { refreshKey: number; accountId: string }) => {
   const api = useApi(finopsApiRef);
+  const c = useColors();
   const cached = (_budgetCache?.refreshKey === refreshKey && _budgetCache?.accountId === accountId) ? _budgetCache : null;
   const [budgets, setBudgets] = useState<Budget[]>(cached?.budgets ?? []);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (_budgetCache?.refreshKey === refreshKey && _budgetCache?.accountId === accountId) { setLoading(false); return; }
+    if (_budgetCache?.refreshKey === refreshKey && _budgetCache?.accountId === accountId) { setLoading(false); return undefined; }
     let mounted = true;
     setLoading(true);
     api.getBudgets(accountId)
@@ -44,7 +46,10 @@ export const BudgetTrackingTab = ({ refreshKey, accountId }: { refreshKey: numbe
     <Grid container spacing={3}>
       {budgets.map(b => {
         const pct = Math.min(b.usagePercent, 100);
-        const color = b.usagePercent >= 90 ? '#e53935' : b.usagePercent >= 75 ? '#fb8c00' : '#43a047';
+        let color: string;
+        if (b.usagePercent >= 90) { color = semantic.error; }
+        else if (b.usagePercent >= 75) { color = semantic.warning; }
+        else { color = semantic.success; }
         return (
           <Grid item xs={12} sm={6} md={4} key={b.name}>
             <Card variant="outlined">
@@ -63,7 +68,7 @@ export const BudgetTrackingTab = ({ refreshKey, accountId }: { refreshKey: numbe
                   <LinearProgress
                     variant="determinate"
                     value={pct}
-                    style={{ height: 10, borderRadius: 5, backgroundColor: '#2e2e2e' }}
+                    style={{ height: 10, borderRadius: 5, backgroundColor: c.progressTrack }}
                   />
                 </Box>
                 <Box display="flex" justifyContent="space-between">

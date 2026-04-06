@@ -19,6 +19,17 @@ spec:
   type: service
 
   parameters:
+    - title: Project
+      required: [projectId]
+      properties:
+        projectId:
+          title: Project
+          type: string
+          description: >
+            Associate this application with a project.
+            Use "Internal Tools" or "R&D / Experiments" for non-client work.
+          ui:field: ProjectPicker
+
     - title: Application Identity
       required: [appName, description, owner]
       properties:
@@ -43,6 +54,14 @@ spec:
           ui:options:
             catalogFilter:
               kind: Group
+        tags:
+          title: Tags
+          type: array
+          items:
+            type: string
+          description: Optional tags to categorize this application
+          ui:options:
+            orderable: false
 
     - title: Repository & Deployment
       required: [repoOwner, repoName, environment, backendLanguage]
@@ -119,9 +138,11 @@ spec:
       input:
         url: ./skeleton
         values:
+          projectId: ${{ parameters.projectId }}
           appName: ${{ parameters.appName }}
           description: ${{ parameters.description }}
           owner: ${{ parameters.owner }}
+          tags: ${{ parameters.tags if parameters.tags else [] }}
           repoOwner: ${{ parameters.repoOwner }}
           repoName: ${{ parameters.repoName }}
           environment: ${{ parameters.environment }}

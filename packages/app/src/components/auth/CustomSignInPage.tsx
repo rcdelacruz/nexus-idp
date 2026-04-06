@@ -74,6 +74,13 @@ export const CustomSignInPage = (props: any) => {
     btn?.click();
   };
 
+  let buttonBackground = 'transparent';
+  if (loading) {
+    buttonBackground = '#0a0a0a';
+  } else if (hovering) {
+    buttonBackground = '#1a1a1a';
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -113,7 +120,7 @@ export const CustomSignInPage = (props: any) => {
               padding: '0 16px',
               borderRadius: 6,
               border: `1px solid ${hovering && !loading ? '#454545' : '#2e2e2e'}`,
-              background: loading ? '#0a0a0a' : hovering ? '#1a1a1a' : 'transparent',
+              background: buttonBackground,
               color: loading ? '#454545' : '#ededed',
               fontSize: '0.875rem',
               fontWeight: 500,

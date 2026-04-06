@@ -15,11 +15,7 @@ import { CatalogFilterLayout } from '@backstage/plugin-catalog-react';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import { Grid, Box, Typography, FormControlLabel, Switch, Checkbox, TextField, FormControl, OutlinedInput, InputAdornment, IconButton, Paper } from '@material-ui/core';
 import Autocomplete from '@material-ui/lab/Autocomplete';
-import CheckBoxIcon from '@material-ui/icons/CheckBox';
-import CheckBoxOutlineBlankIcon from '@material-ui/icons/CheckBoxOutlineBlank';
-import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
-import ClearIcon from '@material-ui/icons/Clear';
-import ZoomOutMap from '@material-ui/icons/ZoomOutMap';
+import { CheckSquare, Square, ChevronDown, X, Maximize2 } from 'lucide-react';
 import useAsync from 'react-use/esm/useAsync';
 import {
   EntityRelationsGraph,
@@ -183,8 +179,8 @@ function KindsFilter({ value, onChange }: { value?: string[]; onChange: (v?: str
           <FormControlLabel
             control={
               <Checkbox
-                icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
-                checkedIcon={<CheckBoxIcon fontSize="small" />}
+                icon={<Square size={16} strokeWidth={1.5} />}
+                checkedIcon={<CheckSquare size={16} strokeWidth={1.5} />}
                 checked={selected}
               />
             }
@@ -192,7 +188,7 @@ function KindsFilter({ value, onChange }: { value?: string[]; onChange: (v?: str
           />
         )}
         size="small"
-        popupIcon={<ExpandMoreIcon />}
+        popupIcon={<ChevronDown size={16} strokeWidth={1.5} />}
         renderInput={params => <TextField {...params} variant="outlined" />}
       />
     </Box>
@@ -226,8 +222,8 @@ function RelationsFilter({
           <FormControlLabel
             control={
               <Checkbox
-                icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
-                checkedIcon={<CheckBoxIcon fontSize="small" />}
+                icon={<Square size={16} strokeWidth={1.5} />}
+                checkedIcon={<CheckSquare size={16} strokeWidth={1.5} />}
                 checked={selected}
               />
             }
@@ -235,7 +231,7 @@ function RelationsFilter({
           />
         )}
         size="small"
-        popupIcon={<ExpandMoreIcon />}
+        popupIcon={<ChevronDown size={16} strokeWidth={1.5} />}
         renderInput={params => <TextField {...params} variant="outlined" />}
       />
     </Box>
@@ -274,7 +270,7 @@ function MaxDepthFilterWidget({
                 onClick={() => { setCurrent(Number.POSITIVE_INFINITY); onChangeRef.current(Number.POSITIVE_INFINITY); }}
                 edge="end"
               >
-                <ClearIcon />
+                <X size={16} strokeWidth={1.5} />
               </IconButton>
             </InputAdornment>
           }
@@ -390,7 +386,7 @@ const CustomCatalogGraphPageInner = () => {
                 display="block"
                 style={{ position: 'absolute', bottom: 0, right: 0, padding: 8 }}
               >
-                <ZoomOutMap style={{ verticalAlign: 'bottom' }} /> Scroll to zoom
+                <Maximize2 size={16} strokeWidth={1.5} style={{ verticalAlign: 'bottom' }} /> Scroll to zoom
               </Typography>
               <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                 <EntityRelationsGraph

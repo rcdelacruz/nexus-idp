@@ -1,0 +1,20 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: kafka-training-docs
+  title: Kafka Training
+  description: Kafka training materials, guides, and exercises
+  annotations:
+    engineering-docs/source-id: kafka-training
+    github.com/project-slug: strat-training/kafka
+    backstage.io/source-location: url:https://github.com/strat-training/kafka
+  tags:
+    - documentation
+    - kafka
+    - training
+spec:
+  type: documentation
+  lifecycle: production
+  owner: cloud-team
+  system: internal-developer-platform

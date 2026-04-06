@@ -1,0 +1,1 @@
+export { projectRegistrationPlugin } from './plugin';

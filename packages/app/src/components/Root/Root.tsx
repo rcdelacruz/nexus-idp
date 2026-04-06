@@ -288,11 +288,12 @@ const NavItem = ({ icon: Icon, label, to, onClick, exact = false }: NavItemProps
   const { isOpen } = useSidebarOpenState();
   const location = useLocation();
 
-  const isActive = to
-    ? exact
+  let isActive = false;
+  if (to) {
+    isActive = exact
       ? location.pathname === to
-      : to !== '/' && location.pathname.startsWith(to)
-    : false;
+      : to !== '/' && location.pathname.startsWith(to);
+  }
 
   const className = `${classes.navItem} ${isActive ? classes.navItemActive : ''}`;
 
@@ -510,10 +511,6 @@ const PageTransition = ({ children }: PropsWithChildren<{}>) => {
   );
 };
 
-export const Root = ({ children }: PropsWithChildren<{}>) => (
-  <RootContent>{children}</RootContent>
-);
-
 const RootContent = ({ children }: PropsWithChildren<{}>) => {
   const appThemeApi = useApi(appThemeApiRef);
   const [themeId, setThemeIdState] = useState(() => appThemeApi.getActiveThemeId() ?? 'dark');
@@ -568,3 +565,7 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
     </SidebarPage>
   );
 };
+
+export const Root = ({ children }: PropsWithChildren<{}>) => (
+  <RootContent>{children}</RootContent>
+);

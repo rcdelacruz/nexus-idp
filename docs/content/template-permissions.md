@@ -99,14 +99,14 @@ Both components are defined in `packages/app/src/components/common/ConditionalRe
 
 Templates in Nexus IDP are loaded from the external `engineering-standards` GitHub repo. To add a new template:
 
-1. Create the template YAML in `https://github.com/your-org/engineering-standards`
+1. Create the template YAML in `https://github.com/stratpoint-engineering/engineering-standards`
 2. Add the URL to `catalog.locations` in `app-config.yaml`:
 
 ```yaml
 catalog:
   locations:
     - type: url
-      target: https://github.com/your-org/engineering-standards/blob/main/templates/my-template/template.yaml
+      target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/my-template/template.yaml
       rules:
         - allow: [Template]
 ```

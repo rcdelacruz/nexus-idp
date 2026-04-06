@@ -1,0 +1,6 @@
+test-scan.js
+test-active-regions.mjs
+test-regions.mjs
+test-resource-service.mjs
+test-s3-real.mjs
+test-scan-real.mjs

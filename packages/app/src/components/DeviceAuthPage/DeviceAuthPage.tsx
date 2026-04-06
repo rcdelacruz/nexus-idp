@@ -4,60 +4,14 @@ import {
   Button,
   TextField,
   Typography,
-  Paper,
   CircularProgress,
 } from '@material-ui/core';
-import { Alert } from '@material-ui/lab';
-import { makeStyles } from '@material-ui/core/styles';
-import CheckCircleIcon from '@material-ui/icons/CheckCircle';
 import { useApi, googleAuthApiRef, identityApiRef, discoveryApiRef } from '@backstage/core-plugin-api';
-
-const useStyles = makeStyles(theme => ({
-  root: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    padding: theme.spacing(2),
-  },
-  paper: {
-    padding: theme.spacing(4),
-    maxWidth: 500,
-    width: '100%',
-    textAlign: 'center',
-  },
-  title: {
-    marginBottom: theme.spacing(2),
-    fontWeight: 600,
-  },
-  subtitle: {
-    marginBottom: theme.spacing(3),
-    color: theme.palette.text.secondary,
-  },
-  codeInput: {
-    marginBottom: theme.spacing(3),
-    '& input': {
-      textAlign: 'center',
-      fontSize: '1.5rem',
-      letterSpacing: '0.2em',
-      fontFamily: 'monospace',
-      textTransform: 'uppercase',
-    },
-  },
-  button: {
-    marginTop: theme.spacing(2),
-    padding: theme.spacing(1.5),
-  },
-  successIcon: {
-    fontSize: 64,
-    color: theme.palette.success.main,
-    marginBottom: theme.spacing(2),
-  },
-}));
+import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { useColors, semantic } from '@stratpoint/theme-utils';
 
 export const DeviceAuthPage = () => {
-  const classes = useStyles();
+  const c = useColors();
   const googleAuthApi = useApi(googleAuthApiRef);
   const identityApi = useApi(identityApiRef);
   const discoveryApi = useApi(discoveryApiRef);
@@ -69,50 +23,58 @@ export const DeviceAuthPage = () => {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check authentication status
+  const card: React.CSSProperties = {
+    background: c.surface,
+    border: `1px solid ${c.border}`,
+    borderRadius: 8,
+    padding: '20px 24px',
+    maxWidth: 480,
+    width: '100%',
+    textAlign: 'center',
+  };
+
+  const sectionLabel: React.CSSProperties = {
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: c.textMuted,
+    marginBottom: 12,
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
         await identityApi.getBackstageIdentity();
         setIsAuthenticated(true);
         setCheckingAuth(false);
-
-        // If we have oauth-redirect stored, we just came back from OAuth
         const redirectPath = sessionStorage.getItem('oauth-redirect');
         if (redirectPath === '/device') {
           sessionStorage.removeItem('oauth-redirect');
         }
-      } catch (err) {
+      } catch {
         setIsAuthenticated(false);
         setCheckingAuth(false);
       }
     };
-
     checkAuth();
   }, [identityApi]);
 
   const handleSignIn = async () => {
     try {
       setLoading(true);
-      // Store current URL before OAuth
       sessionStorage.setItem('oauth-redirect', window.location.pathname);
-
       await googleAuthApi.getAccessToken(['openid', 'profile', 'email']);
-
-      // After OAuth completes, check if we're back on the right page
       const redirectPath = sessionStorage.getItem('oauth-redirect');
       if (redirectPath && window.location.pathname !== redirectPath) {
         window.location.href = redirectPath;
         return;
       }
-
       sessionStorage.removeItem('oauth-redirect');
-
-      // Refresh auth state
       await identityApi.getBackstageIdentity();
       setIsAuthenticated(true);
       setError('');
-    } catch (err: any) {
+    } catch {
       setError('Failed to sign in. Please try again.');
     } finally {
       setLoading(false);
@@ -123,29 +85,21 @@ export const DeviceAuthPage = () => {
     event.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      // Get Backstage auth token
       const { token } = await identityApi.getCredentials();
-
-      // Get proper backend URL for local-provisioner plugin
       const baseUrl = await discoveryApi.getBaseUrl('local-provisioner');
-      const apiUrl = `${baseUrl}/agent/device/authorize`;
-
-      const response = await fetch(apiUrl, {
+      const response = await fetch(`${baseUrl}/agent/device/authorize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`, // CRITICAL: Backstage auth token
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ user_code: code.trim().toUpperCase() }),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Authorization failed');
       }
-
       setSuccess(true);
     } catch (err: any) {
       setError(err.message || 'Failed to authorize device. Please check the code and try again.');
@@ -155,151 +109,159 @@ export const DeviceAuthPage = () => {
   };
 
   const handleCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
-    setCode(value);
+    setCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''));
   };
 
-  // Show loading while checking authentication
+  const ErrorAlert = ({ message }: { message: string }) => (
+    <Box
+      role="alert"
+      display="flex"
+      alignItems="flex-start"
+      style={{
+        gap: 10,
+        background: semantic.errorBg,
+        border: `1px solid ${semantic.error}33`,
+        borderRadius: 8,
+        padding: '12px 14px',
+        marginBottom: 16,
+        textAlign: 'left',
+      }}
+    >
+      <AlertCircle size={16} strokeWidth={1.5} color={semantic.error} style={{ marginTop: 2, flexShrink: 0 }} aria-hidden="true" />
+      <Typography style={{ fontSize: '0.8125rem', color: semantic.error, lineHeight: 1.5 }}>
+        {message}
+      </Typography>
+    </Box>
+  );
+
   if (checkingAuth) {
     return (
-      <Box className={classes.root}>
-        <Paper className={classes.paper}>
-          <CircularProgress size={64} style={{ marginBottom: 16 }} />
-          <Typography variant="h5" className={classes.title}>
+      <Box style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.bg, padding: 16 }}>
+        <Box style={card}>
+          <Loader size={32} strokeWidth={1.5} color={c.textMuted} style={{ margin: '0 auto 16px', display: 'block' }} aria-hidden="true" />
+          <Typography style={{ fontSize: '1.25rem', fontWeight: 600, color: c.text, marginBottom: 8 }}>
             Checking authentication...
           </Typography>
-          <Typography variant="body2" color="textSecondary">
-            If not logged in, you'll be redirected to Google sign-in
+          <Typography style={{ fontSize: '0.875rem', color: c.textSecondary }}>
+            If not logged in, you'll be redirected to Google sign-in.
           </Typography>
-        </Paper>
+        </Box>
       </Box>
     );
   }
 
   if (success) {
     return (
-      <Box className={classes.root}>
-        <Paper className={classes.paper}>
-          <CheckCircleIcon className={classes.successIcon} />
-          <Typography variant="h4" className={classes.title}>
-            Device Authorized!
+      <Box style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.bg, padding: 16 }}>
+        <Box style={card}>
+          <Box
+            style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: semantic.successBg,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}
+          >
+            <CheckCircle size={28} strokeWidth={1.5} color={semantic.success} />
+          </Box>
+          <Typography style={{ fontSize: '1.25rem', fontWeight: 600, color: c.text, marginBottom: 8 }}>
+            Device Authorized
           </Typography>
-          <Typography variant="body1" className={classes.subtitle}>
+          <Typography style={{ fontSize: '0.875rem', color: c.textSecondary, marginBottom: 12 }}>
             You can now close this window and return to your terminal.
           </Typography>
-          <Typography variant="body2" color="textSecondary">
+          <Typography style={{ fontSize: '0.75rem', color: c.textMuted }}>
             Your Backstage agent is now authenticated and ready to use.
           </Typography>
-        </Paper>
+        </Box>
       </Box>
     );
   }
 
-  // Show sign-in prompt if not authenticated
   if (!isAuthenticated) {
     return (
-      <Box className={classes.root}>
-        <Paper className={classes.paper}>
-          <Typography variant="h4" className={classes.title}>
+      <Box style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.bg, padding: 16 }}>
+        <Box style={card}>
+          <p style={sectionLabel}>Device Authorization</p>
+          <Typography style={{ fontSize: '1.25rem', fontWeight: 600, color: c.text, marginBottom: 8 }}>
             Sign In Required
           </Typography>
-          <Typography variant="body1" className={classes.subtitle}>
+          <Typography style={{ fontSize: '0.875rem', color: c.textSecondary, marginBottom: 24 }}>
             Please sign in with your Google account to authorize this device.
           </Typography>
-
-          {error && (
-            <Alert severity="error" style={{ marginBottom: 16 }}>
-              {error}
-            </Alert>
-          )}
-
+          {error && <ErrorAlert message={error} />}
           <Button
-            variant="contained"
-            color="primary"
-            fullWidth
-            size="large"
+            variant="contained" color="primary" fullWidth size="large"
             onClick={handleSignIn}
             disabled={loading}
-            className={classes.button}
+            aria-label="Sign in with Google"
           >
             {loading ? (
-              <>
-                <CircularProgress size={24} style={{ marginRight: 8 }} />
+              <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CircularProgress size={16} style={{ color: 'inherit' }} />
                 Signing in...
-              </>
-            ) : (
-              'Sign in with Google'
-            )}
+              </Box>
+            ) : 'Sign in with Google'}
           </Button>
-
-          <Box mt={3}>
-            <Typography variant="caption" color="textSecondary">
-              You'll be redirected to Google to sign in, then returned here to enter your device code.
-            </Typography>
-          </Box>
-        </Paper>
+          <Typography style={{ fontSize: '0.75rem', color: c.textMuted, marginTop: 20 }}>
+            You'll be redirected to Google to sign in, then returned here to enter your device code.
+          </Typography>
+        </Box>
       </Box>
     );
   }
 
   return (
-    <Box className={classes.root}>
-      <Paper className={classes.paper}>
-        <Typography variant="h4" className={classes.title}>
+    <Box style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.bg, padding: 16 }}>
+      <Box style={card}>
+        <p style={sectionLabel}>Device Authorization</p>
+        <Typography style={{ fontSize: '1.25rem', fontWeight: 600, color: c.text, marginBottom: 8 }}>
           Authorize Device
         </Typography>
-        <Typography variant="body1" className={classes.subtitle}>
+        <Typography style={{ fontSize: '0.875rem', color: c.textSecondary, marginBottom: 24 }}>
           Enter the code displayed in your terminal to authorize this device.
         </Typography>
-
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <TextField
-            fullWidth
-            variant="outlined"
+            fullWidth variant="outlined" size="small"
             placeholder="XXXX-XXXX"
             value={code}
             onChange={handleCodeChange}
-            className={classes.codeInput}
             disabled={loading}
-            autoFocus
             inputProps={{
               maxLength: 9,
               'aria-label': 'Device authorization code',
+              style: {
+                textAlign: 'center',
+                fontSize: '1.375rem',
+                letterSpacing: '0.2em',
+                fontFamily: '"Geist Mono", monospace',
+                textTransform: 'uppercase',
+                padding: '12px 14px',
+                color: c.text,
+              },
             }}
+            InputProps={{ style: { height: 'auto' } }}
+            style={{ marginBottom: 20 }}
           />
-
-          {error && (
-            <Alert severity="error" style={{ marginBottom: 16 }}>
-              {error}
-            </Alert>
-          )}
-
+          {error && <ErrorAlert message={error} />}
           <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            fullWidth
-            size="large"
+            type="submit" variant="contained" color="primary" fullWidth size="large"
             disabled={!code || loading}
-            className={classes.button}
+            aria-label="Authorize device"
           >
             {loading ? (
-              <>
-                <CircularProgress size={24} style={{ marginRight: 8 }} />
+              <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CircularProgress size={16} style={{ color: 'inherit' }} />
                 Authorizing...
-              </>
-            ) : (
-              'Authorize Device'
-            )}
+              </Box>
+            ) : 'Authorize Device'}
           </Button>
         </form>
-
-        <Box mt={3}>
-          <Typography variant="caption" color="textSecondary">
-            If you didn't request this authorization, you can safely close this page.
-          </Typography>
-        </Box>
-      </Paper>
+        <Typography style={{ fontSize: '0.75rem', color: c.textMuted, marginTop: 20 }}>
+          If you didn't request this authorization, you can safely close this page.
+        </Typography>
+      </Box>
     </Box>
   );
 };

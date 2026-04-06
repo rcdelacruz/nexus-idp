@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRouteRef, useApp } from '@backstage/core-plugin-api';
+import { useColors } from '@stratpoint/theme-utils';
 import {
   Page,
   Header,
@@ -45,6 +46,7 @@ interface Props {
 }
 
 export const CustomScaffolderListPage = (props: Props) => {
+  const c = useColors();
   const {
     TemplateCardComponent,
     groups: givenGroups = [],
@@ -148,11 +150,11 @@ export const CustomScaffolderListPage = (props: Props) => {
                   display: 'inline-flex',
                   alignItems: 'center',
                   padding: '6px 14px',
-                  borderRadius: 'var(--radius)',
-                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  border: `1px solid ${c.border}`,
                   fontSize: '0.8125rem',
                   fontWeight: 500,
-                  color: 'var(--fg-primary)',
+                  color: c.text,
                   textDecoration: 'none',
                   background: 'transparent',
                 }}

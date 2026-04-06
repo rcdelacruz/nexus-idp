@@ -1,10 +1,10 @@
 .hp-inner {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 48px 32px 64px;
+  width: 100%;
+  padding: 48px clamp(24px, 4vw, 64px) 64px;
   display: flex;
   flex-direction: column;
   gap: 48px;
+  box-sizing: border-box;
 }
 
 .hp-title {
@@ -41,9 +41,8 @@
 }
 
 /* ── Tablet ────────────────────────────────── */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .hp-inner {
-    padding: 36px 24px 56px;
     gap: 36px;
   }
 
@@ -61,10 +60,7 @@
     gap: 24px;
   }
 
-  .hp-grid-3 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
+  .hp-grid-3,
   .hp-grid-4 {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -73,7 +69,6 @@
 /* ── Mobile ────────────────────────────────── */
 @media (max-width: 480px) {
   .hp-inner {
-    padding: 24px 16px 40px;
     gap: 28px;
   }
 

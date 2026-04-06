@@ -2,7 +2,7 @@
  * Database migration: Create provisioning_tasks and agent_registrations tables
  */
 
-exports.up = async function(knex) {
+exports.up = async function up(knex) {
   // Create provisioning_tasks table
   await knex.schema.createTable('provisioning_tasks', table => {
     table
@@ -116,7 +116,7 @@ exports.up = async function(knex) {
   });
 };
 
-exports.down = async function(knex) {
+exports.down = async function down(knex) {
   await knex.schema.dropTableIfExists('agent_registrations');
   await knex.schema.dropTableIfExists('provisioning_tasks');
 };

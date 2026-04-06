@@ -26,9 +26,10 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
     if (req.path.startsWith('/health')) return next();
     try {
       await httpAuth.credentials(req as any, { allow: ['user'] });
-      next();
+      return next();
     } catch {
       res.status(401).json({ error: 'Unauthorized' });
+      return undefined;
     }
   });
 
@@ -52,9 +53,9 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
 
   // Entity inline-repo routes: /docs/entity/nav|content?repo=owner/repo&branch=main&base=docs
   router.use('/docs/entity', (req: any, res, next) => {
-    const repo = (req.query['repo'] as string) ?? '';
-    const branch = (req.query['branch'] as string) ?? 'main';
-    const contentBase = (req.query['base'] as string) ?? 'docs';
+    const repo = (req.query.repo as string) ?? '';
+    const branch = (req.query.branch as string) ?? 'main';
+    const contentBase = (req.query.base as string) ?? 'docs';
     const [repoOwner, repoName] = repo.split('/');
     if (!repoOwner || !repoName) {
       res.status(400).json({ error: 'Missing or invalid ?repo=owner/repo query param' });

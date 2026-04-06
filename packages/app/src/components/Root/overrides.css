@@ -261,6 +261,46 @@ html, html.theme-dark, body[data-theme-mode='dark'] {
   --blue-dark: #0070f3;
 }
 
+/* ── Geist color scale — light mode ───────────────────────────────────────── */
+/* Source: vercel.com badge CSS (badge-module CSS). Shades used by badge():   */
+/*   subtle: -200 bg, -900 text  |  solid: -800/-900 bg, contrast-fg text    */
+html, html.theme-light, body[data-theme-mode='light'] {
+  --ds-contrast-fg: #fff;
+  /* Blue */
+  --ds-blue-200: hsl(210, 100%, 96%);  --ds-blue-800: hsl(212, 100%, 41%);  --ds-blue-900: hsl(211, 100%, 42%);
+  /* Red */
+  --ds-red-200:  hsl(0,   100%, 96%);  --ds-red-800:  hsl(358,  70%, 52%);  --ds-red-900:  hsl(358,  66%, 48%);
+  /* Amber */
+  --ds-amber-200: hsl(44, 100%, 92%);  --ds-amber-700: hsl(39,  100%, 57%);  --ds-amber-900: hsl(30, 100%, 32%);
+  /* Green */
+  --ds-green-200: hsl(120,  60%, 95%);  --ds-green-800: hsl(132,  43%, 39%);  --ds-green-900: hsl(133,  50%, 32%);
+  /* Teal */
+  --ds-teal-200: hsl(167,  70%, 94%);  --ds-teal-300: hsl(168,  70%, 90%);  --ds-teal-800: hsl(173,  83%, 30%);  --ds-teal-900: hsl(174,  91%, 25%);
+  /* Purple */
+  --ds-purple-200: hsl(277,  87%, 97%);  --ds-purple-800: hsl(272,  47%, 45%);  --ds-purple-900: hsl(274,  71%, 43%);
+  /* Pink */
+  --ds-pink-200: hsl(340,  90%, 96%);  --ds-pink-300: hsl(340,  82%, 94%);  --ds-pink-800: hsl(336,  74%, 51%);  --ds-pink-900: hsl(336,  65%, 45%);
+}
+
+/* ── Geist color scale — dark mode overrides ──────────────────────────────── */
+html, html.theme-dark, body[data-theme-mode='dark'] {
+  --ds-contrast-fg: #fff;
+  /* Blue */
+  --ds-blue-200: hsl(214,  59%, 15%);  --ds-blue-800: hsl(212, 100%, 41%);  --ds-blue-900: hsl(210, 100%, 66%);
+  /* Red */
+  --ds-red-200:  hsl(357,  46%, 16%);  --ds-red-800:  hsl(358,  69%, 52%);  --ds-red-900:  hsl(358, 100%, 69%);
+  /* Amber */
+  --ds-amber-200: hsl(32,  100%, 10%);  --ds-amber-700: hsl(39,  100%, 57%);  --ds-amber-900: hsl(39,   90%, 50%);
+  /* Green */
+  --ds-green-200: hsl(137,  50%, 12%);  --ds-green-800: hsl(132,  43%, 39%);  --ds-green-900: hsl(131,  43%, 57%);
+  /* Teal */
+  --ds-teal-200: hsl(170,  74%,  9%);  --ds-teal-300: hsl(171,  75%, 13%);  --ds-teal-800: hsl(173,  83%, 30%);  --ds-teal-900: hsl(174,  90%, 41%);
+  /* Purple */
+  --ds-purple-200: hsl(281,  38%, 16%);  --ds-purple-800: hsl(272,  47%, 45%);  --ds-purple-900: hsl(275,  80%, 71%);
+  /* Pink */
+  --ds-pink-200: hsl(335,  43%, 16%);  --ds-pink-300: hsl(335,  47%, 21%);  --ds-pink-800: hsl(336,  74%, 51%);  --ds-pink-900: hsl(341,  90%, 67%);
+}
+
 /* Light mode tokens */
 html.theme-light, body[data-theme-mode='light'] {
   --ds-background-100: #ffffff;

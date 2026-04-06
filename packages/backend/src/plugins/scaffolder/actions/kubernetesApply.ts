@@ -44,7 +44,7 @@ export function createKubernetesApplyAction() {
         const name = metadata?.name;
         const resource = `${kind}/${name}`;
 
-        ctx.logger.info(`Applying ${kind} ${namespace ? namespace + '/' : ''}${name}`);
+        ctx.logger.info(`Applying ${kind} ${namespace ? `${namespace}/` : ''}${name}`);
 
         const apiPath = buildApiPath(apiVersion, kind, namespace, name);
         const url = `${config.server}${apiPath}?fieldManager=backstage-scaffolder&force=true`;
@@ -173,7 +173,7 @@ function kindToResource(kind: string): string {
     Cluster: 'clusters',
     Pooler: 'poolers',
   };
-  return map[kind] ?? kind.toLowerCase() + 's';
+  return map[kind] ?? `${kind.toLowerCase()}s`;
 }
 
 /** Make HTTPS request to K8s API */

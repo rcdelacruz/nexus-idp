@@ -36,7 +36,7 @@ export const ConditionalRender = ({
         const permitted = permissions.includes(requiredPermission);
         setHasPermission(permitted);
       } catch (error) {
-        console.error('Error checking permission:', error);
+        // Permission check failed; deny access silently
         setHasPermission(false);
       }
     };
@@ -86,7 +86,7 @@ export const PermissionButton = ({
         const permitted = permissions.includes(requiredPermission);
         setHasPermission(permitted);
       } catch (error) {
-        console.error('Error checking permission:', error);
+        // Permission check failed; deny access silently
         setHasPermission(false);
       }
     };

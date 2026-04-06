@@ -1,12 +1,12 @@
 # User & Group Management
 
-Nexus IDP manages users through a combination of auto-provisioning on first sign-in and admin assignment to department teams. **Users are NOT managed via `example-org/org/users.yaml`** — that file is reserved for break-glass admin accounts only.
+Nexus IDP manages users through a combination of auto-provisioning on first sign-in and admin assignment to department teams. **Users are NOT managed via `stratpoint/org/users.yaml`** — that file is reserved for break-glass admin accounts only.
 
 ## How User Provisioning Works
 
 ### First Sign-In (Auto-Provisioning)
 
-When a new `@yourcompany.com` user signs in via Google or GitHub for the first time:
+When a new `@stratpoint.com` user signs in via Google or GitHub for the first time:
 
 1. The auth module checks if a catalog entity (`user:default/<name>`) exists
 2. If not found, the user is issued a token with `general-engineers` membership
@@ -35,7 +35,7 @@ New users remain in `general-engineers` (limited access) until a platform admin 
 | AI | `group:default/ai-team` |
 | QA | `group:default/qa-team` |
 
-All teams are defined in `example-org/org/groups.yaml`.
+All teams are defined in `stratpoint/org/groups.yaml`.
 
 ## GitHub Account Linking
 
@@ -44,7 +44,7 @@ Users can link their GitHub username during onboarding or later. Linking enables
 - Correct `github.com/user-login` annotations on the catalog entity
 
 Two methods:
-- **Auto-link**: the system searches GitHub for the user's `@yourcompany.com` email (only works if the email is set as the public GitHub email)
+- **Auto-link**: the system searches GitHub for the user's `@stratpoint.com` email (only works if the email is set as the public GitHub email)
 - **Manual link**: user enters their GitHub username; the backend verifies ownership via OAuth token or checks the account's public email
 
 ## Admin Operations (User Management UI)
@@ -61,12 +61,12 @@ Platform admins (`backstage-admins`) can perform the following in the **User Man
 
 ## Break-Glass Admin (users.yaml)
 
-`example-org/org/users.yaml` contains only `admin.user` — the break-glass admin whose catalog entity is defined statically. This ensures at least one admin exists even if the database is empty or unavailable.
+`stratpoint/org/users.yaml` contains only `ronaldo.delacruz` — the break-glass admin whose catalog entity is defined statically. This ensures at least one admin exists even if the database is empty or unavailable.
 
 To add another break-glass admin:
 
 ```yaml
-# example-org/org/users.yaml
+# stratpoint/org/users.yaml
 ---
 apiVersion: backstage.io/v1alpha1
 kind: User
@@ -74,14 +74,14 @@ metadata:
   name: firstname.lastname
 spec:
   profile:
-    email: firstname.lastname@yourcompany.com
+    email: firstname.lastname@stratpoint.com
     displayName: Firstname Lastname
   memberOf: [backstage-admins]
 ```
 
 ## Adding a Team
 
-Edit `example-org/org/groups.yaml`:
+Edit `stratpoint/org/groups.yaml`:
 
 ```yaml
 ---
@@ -106,5 +106,5 @@ Then add `new-team` to the `DEPT_TEAMS` constant in:
 |---------|-------|-----|
 | User stuck on `/onboarding` after registering | `UserEntityProvider` hasn't synced yet | Wait ~30s; check `user-management-backend` logs |
 | User sees limited access after being assigned a team | Token not refreshed yet | User should sign out and sign back in |
-| "Only @yourcompany.com users may register" error | `organization.domain` config mismatch | Verify `app-config.yaml: organization.domain: yourcompany.com` |
+| "Only @stratpoint.com users may register" error | `organization.domain` config mismatch | Verify `app-config.yaml: organization.domain: stratpoint.com` |
 | Ghost row with `teams=[]` | User started onboarding but didn't finish | Admin can reassign or delete via User Management UI |

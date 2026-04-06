@@ -191,7 +191,9 @@ argocd:
       instances:
         - name: argocd
           url: ${ARGOCD_URL}
+          frontendUrl: ${ARGOCD_FRONTEND_URL}
           token: ${ARGOCD_TOKEN}
+          rejectUnauthorized: false
 
 # Local Provisioner Configuration
 localProvisioner:

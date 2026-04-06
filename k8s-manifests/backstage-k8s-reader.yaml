@@ -1,0 +1,110 @@
+# Backstage Kubernetes Plugin — ServiceAccount + RBAC
+# Apply: kubectl apply -f k8s-manifests/backstage-k8s-reader.yaml
+#
+# In-cluster token approach (preferred, Kubernetes 1.24+):
+#   1. Apply this manifest (creates SA + ClusterRole + ClusterRoleBinding)
+#   2. In your Helm values, set the Backstage pod to run as this SA:
+#        serviceAccountName: backstage-k8s-reader
+#   3. No K8S_SA_TOKEN or K8S_SA_CA_DATA secrets needed — the pod's projected
+#      token at /var/run/secrets/kubernetes.io/serviceaccount/token is used automatically.
+#   4. In app-config, use authProvider: serviceAccount with no explicit token or caData.
+#
+# The long-lived kubernetes.io/service-account-token Secret has been removed.
+# Projected tokens are automatically rotated by Kubernetes and are the recommended
+# approach since Kubernetes 1.24.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backstage-k8s-reader
+  namespace: backstage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-k8s-reader
+rules:
+  - apiGroups: ['']
+    resources:
+      - pods
+      - pods/log
+      - services
+      - configmaps
+      - limitranges
+      - resourcequotas
+      - persistentvolumeclaims
+      - namespaces
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['apps']
+    resources:
+      - deployments
+      - replicasets
+      - statefulsets
+      - daemonsets
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['batch']
+    resources: ['jobs', 'cronjobs']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['networking.k8s.io']
+    resources: ['ingresses']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['autoscaling']
+    resources: ['horizontalpodautoscalers']
+    verbs: ['get', 'list', 'watch']
+  - apiGroups: ['metrics.k8s.io']
+    resources: ['pods', 'nodes']
+    verbs: ['get', 'list']
+  # CNPG resources — shows database cluster status in the K8s tab
+  - apiGroups: ['postgresql.cnpg.io']
+    resources: ['clusters', 'poolers', 'scheduledbackups', 'backups']
+    verbs: ['get', 'list', 'watch']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-k8s-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-k8s-reader
+subjects:
+  - kind: ServiceAccount
+    name: backstage-k8s-reader
+    namespace: backstage
+---
+# Scaffolder writer — allows the scaffolder actions (kubernetes:apply,
+# kubernetes:create-pull-secret, kubernetes:create-app-secrets) to create
+# and patch resources in scaffolded namespaces.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backstage-scaffolder-writer
+rules:
+  - apiGroups: ['']
+    resources: ['namespaces', 'secrets', 'configmaps', 'services', 'serviceaccounts']
+    verbs: ['get', 'create', 'patch', 'update']
+  - apiGroups: ['apps']
+    resources: ['deployments', 'statefulsets']
+    verbs: ['get', 'create', 'patch', 'update']
+  - apiGroups: ['networking.k8s.io']
+    resources: ['ingresses']
+    verbs: ['get', 'create', 'patch', 'update']
+  - apiGroups: ['rbac.authorization.k8s.io']
+    resources: ['roles', 'rolebindings', 'clusterroles', 'clusterrolebindings']
+    verbs: ['get', 'create', 'patch', 'update']
+  - apiGroups: ['argoproj.io']
+    resources: ['applications', 'appprojects']
+    verbs: ['get', 'create', 'patch', 'update']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backstage-scaffolder-writer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backstage-scaffolder-writer
+subjects:
+  - kind: ServiceAccount
+    name: backstage-k8s-reader
+    namespace: backstage

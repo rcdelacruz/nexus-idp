@@ -12,9 +12,9 @@ Documentation lives in the `docs/` directory. Edit `.md` files to update content
 Documentation lives in the `pages/` directory. Edit `.mdx` files to update content.
 {% endif %}
 
-## Viewing in Engineering Hub
+## Viewing in Nexus IDP
 
-This documentation is available in the [Stratpoint IDP](https://portal.stratpoint.io) under **Engineering Hub**.
+This documentation is available in the [Stratpoint IDP](https://portal.stratpoint.io) under the **Docs** sidebar.
 
 ## Local Preview
 

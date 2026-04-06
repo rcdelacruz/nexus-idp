@@ -41,6 +41,22 @@ import { CustomTemplateCard } from './components/scaffolder/CustomTemplateCard';
 import { CustomScaffolderListPage } from './components/scaffolder/CustomScaffolderListPage';
 import { CustomTemplateWizardPage } from './components/scaffolder/CustomTemplateWizardPage';
 import { CustomTaskPage } from './components/scaffolder/CustomTaskPage';
+import { ProjectPickerField } from './components/scaffolder/ProjectPickerField';
+import { DeploymentTargetPicker } from './components/scaffolder/DeploymentTargetPicker';
+import type { TemplateWizardPageProps } from '@backstage/plugin-scaffolder/alpha';
+
+// Injects ProjectPicker field extension into the wizard without needing
+// ScaffolderFieldExtensions children mechanism (avoids Extension<T> JSX issues).
+const CustomTemplateWizardPageWithExtensions = (props: TemplateWizardPageProps) => (
+  <CustomTemplateWizardPage
+    {...props}
+    customFieldExtensions={[
+      ...(props.customFieldExtensions ?? []),
+      { name: 'ProjectPicker', component: ProjectPickerField as any },
+      { name: 'DeploymentTargetPicker', component: DeploymentTargetPicker as any },
+    ]}
+  />
+);
 import { ProjectRegistrationPage, ProjectListPage } from '@internal/backstage-plugin-project-registration';
 import { EngineeringDocsPage } from '@internal/plugin-engineering-docs';
 import { FinOpsPage } from '@internal/plugin-finops';
@@ -112,7 +128,7 @@ const routes = (
       path="/docs/:namespace/:kind/:name/*"
       element={<TechDocsRedirect />}
     />
-    <Route path="/create" element={<ScaffolderPage components={{ TemplateCardComponent: CustomTemplateCard as any, TaskPageComponent: CustomTaskPage, EXPERIMENTAL_TemplateListPageComponent: (props: any) => <CustomScaffolderListPage {...props} TemplateCardComponent={CustomTemplateCard as any} />, EXPERIMENTAL_TemplateWizardPageComponent: CustomTemplateWizardPage }} />} />
+    <Route path="/create" element={<ScaffolderPage components={{ TemplateCardComponent: CustomTemplateCard as any, TaskPageComponent: CustomTaskPage, EXPERIMENTAL_TemplateListPageComponent: (props: any) => <CustomScaffolderListPage {...props} TemplateCardComponent={CustomTemplateCard as any} />, EXPERIMENTAL_TemplateWizardPageComponent: CustomTemplateWizardPageWithExtensions }} />} />
     <Route path="/api-docs" element={<CustomApiExplorerPage />} />
     <Route
       path="/catalog-import"

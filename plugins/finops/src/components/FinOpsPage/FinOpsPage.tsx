@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Page, Header, Content } from '@backstage/core-components';
 import { Tab, Tabs, Box, IconButton, Tooltip, CircularProgress, Select, MenuItem, FormControl } from '@material-ui/core';
-import { RefreshOutlined } from '@material-ui/icons';
+import { RefreshCw } from 'lucide-react';
 import { useApi } from '@backstage/core-plugin-api';
 import { finopsApiRef } from '../../api/FinOpsClient';
 import { AwsAccount } from '../../api/types';
+import { useColors } from '@stratpoint/theme-utils';
 import { CostOverviewTab } from '../CostOverview/CostOverviewTab';
 import { BudgetTrackingTab } from '../BudgetTracking/BudgetTrackingTab';
 import { UnusedResourcesTab } from '../UnusedResources/UnusedResourcesTab';
@@ -19,7 +20,7 @@ const getStoredRefreshKey = (id: string): number => {
   try { return parseInt(sessionStorage.getItem(skRefresh(id)) ?? '0', 10); } catch { return 0; }
 };
 const setStoredRefreshKey = (id: string, key: number) => {
-  try { sessionStorage.setItem(skRefresh(id), String(key)); } catch {}
+  try { sessionStorage.setItem(skRefresh(id), String(key)); } catch { /* intentional */ }
 };
 const getStoredAccount = (): string => {
   try { return sessionStorage.getItem(SK_ACCOUNT) ?? ''; } catch { return ''; }
@@ -31,10 +32,11 @@ const setStoredFetchedAt = (id: string, ts: string | null) => {
   try {
     if (ts) sessionStorage.setItem(skFetchedAt(id), ts);
     else sessionStorage.removeItem(skFetchedAt(id));
-  } catch {}
+  } catch { /* intentional */ }
 };
 
 export const FinOpsPage = () => {
+  const c = useColors();
   const [tab, setTab] = useState<number>(() => {
     try { return parseInt(sessionStorage.getItem(SK_TAB) ?? '0', 10); } catch { return 0; }
   });
@@ -61,9 +63,9 @@ export const FinOpsPage = () => {
         setAccountId(chosen);
         setRefreshKey(getStoredRefreshKey(chosen));
         setFetchedAt(getStoredFetchedAt(chosen));
-        try { sessionStorage.setItem(SK_ACCOUNT, chosen); } catch {}
+        try { sessionStorage.setItem(SK_ACCOUNT, chosen); } catch { /* intentional */ }
       }
-    }).catch(() => {});
+    }).catch(() => { /* intentional */ });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -75,14 +77,14 @@ export const FinOpsPage = () => {
 
   const handleAccountChange = (newId: string) => {
     setAccountId(newId);
-    try { sessionStorage.setItem(SK_ACCOUNT, newId); } catch {}
+    try { sessionStorage.setItem(SK_ACCOUNT, newId); } catch { /* intentional */ }
     setFetchedAt(getStoredFetchedAt(newId));
     setRefreshKey(getStoredRefreshKey(newId));
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    try { await finopsApi.invalidateCache(accountId); } catch (e: any) { console.error('invalidateCache failed:', e?.message ?? e); }
+    try { await finopsApi.invalidateCache(accountId); } catch { /* intentional */ }
     const now = new Date().toISOString();
     const newKey = getStoredRefreshKey(accountId) + 1;
     setStoredRefreshKey(accountId, newKey);
@@ -109,7 +111,7 @@ export const FinOpsPage = () => {
             <Select
               value={accountId}
               onChange={e => handleAccountChange(e.target.value as string)}
-              style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)', fontSize: '0.875rem' }}
+              style={{ color: 'inherit', borderColor: 'rgba(255,255,255,0.3)', fontSize: '0.875rem' }}
             >
               {accounts.map(a => (
                 <MenuItem key={a.id} value={a.id}>{a.name}</MenuItem>
@@ -118,14 +120,14 @@ export const FinOpsPage = () => {
           </FormControl>
         )}
         {accounts.length === 1 && selectedAccount && (
-          <span style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)', marginRight: 12 }}>
+          <span style={{ fontSize: '0.875rem', color: 'inherit', opacity: 0.7, marginRight: 12 }}>
             {selectedAccount.name}
           </span>
         )}
         <Tooltip title="Refresh data (clears cache)">
           <span>
-            <IconButton onClick={handleRefresh} disabled={refreshing} color="inherit">
-              {refreshing ? <CircularProgress size={20} color="inherit" /> : <RefreshOutlined />}
+            <IconButton onClick={handleRefresh} disabled={refreshing} color="inherit" aria-label="Refresh data">
+              {refreshing ? <CircularProgress size={20} color="inherit" /> : <RefreshCw size={16} strokeWidth={1.5} />}
             </IconButton>
           </span>
         </Tooltip>
@@ -133,10 +135,10 @@ export const FinOpsPage = () => {
       <Content>
         <Tabs
           value={tab}
-          onChange={(_e, v) => { setTab(v); try { sessionStorage.setItem(SK_TAB, String(v)); } catch {} }}
+          onChange={(_e, v) => { setTab(v); try { sessionStorage.setItem(SK_TAB, String(v)); } catch { /* intentional */ } }}
           indicatorColor="primary"
           textColor="primary"
-          style={{ marginBottom: 24, borderBottom: '1px solid #2e2e2e' }}
+          style={{ marginBottom: 24, borderBottom: `1px solid ${c.border}` }}
         >
           <Tab label="Cost Overview" />
           <Tab label="Budgets" />

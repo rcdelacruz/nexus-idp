@@ -17,7 +17,19 @@ spec:
   type: documentation
 
   parameters:
-    # ── Step 1: Intent + Repository ────────────────────────────────────────
+    # ── Step 1: Project Association ─────────────────────────────────────────
+    - title: Project
+      required: [projectId]
+      properties:
+        projectId:
+          title: Project
+          type: string
+          description: >
+            Associate this documentation with a project.
+            Use "Internal Tools" or "R&D / Experiments" for non-client work.
+          ui:field: ProjectPicker
+
+    # ── Step 2: Intent + Repository ─────────────────────────────────────────
     - title: Repository
       required: [action, repoOrg, repoName]
       properties:
@@ -112,7 +124,7 @@ spec:
                           default: private
                       required: [repoVisibility]
 
-    # ── Step 2: Documentation Details ──────────────────────────────────────
+    # ── Step 3: Documentation Details ──────────────────────────────────────
     - title: Documentation Details
       required: [docName, title, description, owner]
       properties:
@@ -139,6 +151,14 @@ spec:
           ui:options:
             catalogFilter:
               kind: Group
+        tags:
+          title: Tags
+          type: array
+          items:
+            type: string
+          description: Optional additional tags (documentation and format are added automatically)
+          ui:options:
+            orderable: false
 
   steps:
     # ════════════════════════════════════════════════════════════════════════
@@ -152,6 +172,7 @@ spec:
       input:
         url: ./skeleton/register
         values:
+          projectId: ${{ parameters.projectId }}
           docName: ${{ parameters.docName }}
           title: ${{ parameters.title }}
           description: ${{ parameters.description }}
@@ -161,6 +182,7 @@ spec:
           branch: ${{ parameters.branch }}
           contentBase: ${{ parameters.contentBase }}
           docFormat: ${{ parameters.docFormat }}
+          tags: ${{ parameters.tags if parameters.tags else [] }}
 
     - id: pr-register
       name: Open Pull Request to Register Docs
@@ -171,7 +193,7 @@ spec:
         branchName: docs/register-engineering-hub
         title: 'docs: register in Nexus Engineering Hub'
         description: |
-          Adds `catalog-info.yaml` to register this repo in the **Nexus Engineering Hub** (Docs sidebar).
+          Adds `catalog-info.yaml` to register this repo in the **Engineering Hub** (Docs sidebar).
 
           **Format:** ${{ parameters.docFormat }}
           **Content base:** `${{ parameters.contentBase }}`
@@ -194,6 +216,7 @@ spec:
       input:
         url: ./skeleton/common
         values:
+          projectId: ${{ parameters.projectId }}
           docName: ${{ parameters.docName }}
           title: ${{ parameters.title }}
           description: ${{ parameters.description }}
@@ -201,6 +224,7 @@ spec:
           repoOrg: ${{ parameters.repoOrg }}
           repoName: ${{ parameters.repoName }}
           docFormat: ${{ parameters.docFormat }}
+          tags: ${{ parameters.tags if parameters.tags else [] }}
 
     # ── MkDocs skeleton ───────────────────────────────────────────────────
     - id: fetch-mkdocs
@@ -237,11 +261,11 @@ spec:
           repoOrg: ${{ parameters.repoOrg }}
           repoName: ${{ parameters.repoName }}
 
-    # ── Create new repo ────────────────────────────────────────────────────
-    - id: create-repo
-      name: Create GitHub Repository
+    # ── Create new repo + push (atomic) ──────────────────────────────────
+    - id: publish-new
+      name: Create Repository and Push
       if: ${{ parameters.action === 'create' and parameters.target === 'new' }}
-      action: github:repo:create
+      action: publish:github
       input:
         repoUrl: github.com?owner=${{ parameters.repoOrg }}&repo=${{ parameters.repoName }}
         description: ${{ parameters.description }}
@@ -251,14 +275,6 @@ spec:
           - engineering-hub
           - documentation
           - ${{ parameters.docFormat }}
-
-    - id: push-new
-      name: Push to New Repository
-      if: ${{ parameters.action === 'create' and parameters.target === 'new' }}
-      action: github:repo:push
-      input:
-        repoUrl: github.com?owner=${{ parameters.repoOrg }}&repo=${{ parameters.repoName }}
-        defaultBranch: main
 
     # ── PR into existing repo ─────────────────────────────────────────────
     - id: pr-existing
@@ -295,10 +311,14 @@ spec:
         url: https://github.com/${{ parameters.repoOrg }}/${{ parameters.repoName }}
         icon: github
       - title: Pull Request
-        url: ${{ steps['pr-register'].output.remoteUrl if parameters.action === 'register' else steps['pr-existing'].output.remoteUrl }}
+        url: ${{ steps['pr-register'].output.remoteUrl | default('') }}
         icon: github
-        if: ${{ parameters.action === 'register' or (parameters.action === 'create' and parameters.target === 'existing') }}
+        if: ${{ parameters.action === 'register' }}
+      - title: Pull Request
+        url: ${{ steps['pr-existing'].output.remoteUrl | default('') }}
+        icon: github
+        if: ${{ parameters.action === 'create' and parameters.target === 'existing' }}
       - title: Open in Catalog
         icon: catalog
-        entityRef: ${{ steps['register'].output.entityRef }}
+        entityRef: ${{ steps['register'].output.entityRef | default('') }}
         if: ${{ parameters.action === 'create' and parameters.target === 'new' }}

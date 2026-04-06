@@ -3,76 +3,77 @@ import {
   Content,
   Header,
   Page,
-  ContentHeader,
-  SupportButton,
-  InfoCard,
-  Progress,
   ErrorBoundary,
 } from '@backstage/core-components';
 import { useApi, fetchApiRef, discoveryApiRef } from '@backstage/core-plugin-api';
 import { UserPickerField, CatalogUser } from './UserPickerField';
 import {
+  Box,
   Grid,
   Button,
   TextField,
   MenuItem,
-  Paper,
   Typography,
-  Step,
-  Stepper,
-  StepLabel,
-  makeStyles,
 } from '@material-ui/core';
 import { Alert } from '@material-ui/lab';
-import PersonAddIcon from '@material-ui/icons/PersonAdd';
-import GroupAddIcon from '@material-ui/icons/GroupAdd';
-import AssignmentIcon from '@material-ui/icons/Assignment';
+import {
+  CheckCircle, ClipboardList, Users, Eye,
+  UserPlus, Minus, Loader, Plus,
+} from 'lucide-react';
+import { useColors, semantic } from '@stratpoint/theme-utils';
 
-const useStyles = makeStyles((theme) => ({
-  root: {
-    width: '100%',
-  },
-  button: {
-    marginRight: theme.spacing(1),
-  },
-  stepper: {
-    padding: theme.spacing(3, 0, 5),
-  },
-  formControl: {
-    margin: theme.spacing(1),
-    minWidth: 120,
-  },
-  buttonGroup: {
-    marginTop: theme.spacing(3),
-    display: 'flex',
-    justifyContent: 'space-between',
-  },
-  memberCard: {
-    padding: theme.spacing(2),
-    marginBottom: theme.spacing(2),
-  },
-  addButton: {
-    marginTop: theme.spacing(2),
-  },
-}));
+interface TeamMember {
+  fullName: string;
+  email: string;
+  role: string;
+  accessLevel: string;
+}
+
+const PM_TOOL_LABELS: Record<string, string> = {
+  none: 'None',
+  jira: 'Jira',
+  github: 'GitHub Projects',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  developer: 'Developer',
+  'tech-lead': 'Tech Lead',
+  'product-manager': 'Product Manager',
+  designer: 'Designer',
+};
+
+const ACCESS_LABELS: Record<string, string> = {
+  member: 'Team Member',
+  lead: 'Team Lead',
+  admin: 'Admin',
+};
+
+const STEPS = [
+  { label: 'Project Details', icon: ClipboardList },
+  { label: 'Team Setup', icon: Users },
+  { label: 'Review', icon: Eye },
+] as const;
+
+const INITIAL_FORM = {
+  name: '',
+  description: '',
+  client_name: '',
+  start_date: '',
+  end_date: '',
+  pm_tool: 'none',
+  jira_key: '',
+  jira_template: 'scrum',
+  team_name: '',
+  team_members: [{ fullName: '', email: '', role: '', accessLevel: 'member' }] as TeamMember[],
+};
 
 export const ProjectRegistrationPage = () => {
-  const classes = useStyles();
   const fetchApi = useApi(fetchApiRef);
   const discoveryApi = useApi(discoveryApiRef);
+  const c = useColors();
+
   const [activeStep, setActiveStep] = useState(0);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    client_name: '',
-    start_date: '',
-    end_date: '',
-    pm_tool: 'none',
-    jira_key: '',
-    jira_template: 'scrum',
-    team_name: '',
-    team_members: [{ fullName: '', email: '', role: '', accessLevel: 'member' }],
-  });
+  const [formData, setFormData] = useState({ ...INITIAL_FORM });
 
   const [submitStatus, setSubmitStatus] = useState({
     loading: false,
@@ -81,14 +82,14 @@ export const ProjectRegistrationPage = () => {
     projectId: null as string | null,
   });
 
-  const handleNext = () => setActiveStep((prevStep) => prevStep + 1);
-  const handleBack = () => setActiveStep((prevStep) => prevStep - 1);
+  const [selectedUsers, setSelectedUsers] = useState<(CatalogUser | null)[]>([null]);
+
+  const handleNext = () => setActiveStep(s => s + 1);
+  const handleBack = () => setActiveStep(s => s - 1);
 
   const handleChange = (field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [field]: event.target.value });
   };
-
-  const [selectedUsers, setSelectedUsers] = useState<(CatalogUser | null)[]>([null]);
 
   const handleTeamMemberChange = (index: number, field: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const newTeamMembers = [...formData.team_members];
@@ -124,7 +125,6 @@ export const ProjectRegistrationPage = () => {
 
   const handleSubmit = async () => {
     setSubmitStatus({ loading: true, error: null, success: false, projectId: null });
-
     try {
       const baseUrl = await discoveryApi.getBaseUrl('project-registration');
       const response = await fetchApi.fetch(`${baseUrl}/projects`, {
@@ -143,12 +143,10 @@ export const ProjectRegistrationPage = () => {
           team_members: formData.team_members.filter(m => m.fullName || m.email),
         }),
       });
-
       if (!response.ok) {
         const body = await response.json();
         throw new Error(body.error || `Request failed with status ${response.status}`);
       }
-
       const project = await response.json();
       setSubmitStatus({ loading: false, error: null, success: true, projectId: project.id });
     } catch (error: any) {
@@ -156,120 +154,141 @@ export const ProjectRegistrationPage = () => {
     }
   };
 
-  const getStepContent = (step: number) => {
-    switch (step) {
-      case 0:
-        return (
-          <InfoCard title="Project Details">
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Project Name"
-                  value={formData.name}
-                  onChange={handleChange('name')}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  label="Project Description"
-                  value={formData.description}
-                  onChange={handleChange('description')}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Client Name"
-                  value={formData.client_name}
-                  onChange={handleChange('client_name')}
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Start Date"
-                  InputLabelProps={{ shrink: true }}
-                  value={formData.start_date}
-                  onChange={handleChange('start_date')}
-                />
-              </Grid>
-              <Grid item xs={6}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="Expected End Date"
-                  InputLabelProps={{ shrink: true }}
-                  value={formData.end_date}
-                  onChange={handleChange('end_date')}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  select
-                  label="Project Management Tool"
-                  value={formData.pm_tool}
-                  onChange={handleChange('pm_tool')}
-                  helperText="Optional — select your team's PM tool"
-                >
-                  <MenuItem value="none">None</MenuItem>
-                  <MenuItem value="jira">Jira</MenuItem>
-                  <MenuItem value="github">GitHub Projects</MenuItem>
-                </TextField>
-              </Grid>
-              {formData.pm_tool === 'jira' && (
-                <>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="Jira Project Key"
-                      helperText="2-10 uppercase letters (e.g., PROJ)"
-                      value={formData.jira_key}
-                      onChange={handleChange('jira_key')}
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      select
-                      label="Jira Template"
-                      value={formData.jira_template}
-                      onChange={handleChange('jira_template')}
-                    >
-                      <MenuItem value="scrum">Scrum</MenuItem>
-                      <MenuItem value="kanban">Kanban</MenuItem>
-                      <MenuItem value="basic">Basic</MenuItem>
-                    </TextField>
-                  </Grid>
-                </>
-              )}
-            </Grid>
-          </InfoCard>
-        );
+  const handleStartAnother = () => {
+    setFormData({ ...INITIAL_FORM, team_members: [{ fullName: '', email: '', role: '', accessLevel: 'member' }] });
+    setSelectedUsers([null]);
+    setActiveStep(0);
+    setSubmitStatus({ loading: false, error: null, success: false, projectId: null });
+  };
 
-      case 1:
-        return (
-          <InfoCard title="Team Setup">
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Team Name"
-                  value={formData.team_name}
-                  onChange={handleChange('team_name')}
-                  helperText="Optional — leave blank to assign a team later"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" style={{ marginBottom: 8 }}>Team Members</Typography>
-              </Grid>
+  // ── Styles ──────────────────────────────────────────────────────────────────
+
+  const card = {
+    background: c.surface,
+    border: `1px solid ${c.border}`,
+    borderRadius: 8,
+    padding: '20px 24px',
+  } as const;
+
+  const sectionLabel: React.CSSProperties = {
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: c.textMuted,
+    marginBottom: 12,
+  };
+
+  const reviewRow: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: '10px 0',
+    borderBottom: `1px solid ${c.border}`,
+  };
+
+  const reviewLabel: React.CSSProperties = {
+    fontSize: '0.8125rem',
+    color: c.textMuted,
+    fontWeight: 500,
+    minWidth: 140,
+    flexShrink: 0,
+  };
+
+  const reviewValue: React.CSSProperties = {
+    fontSize: '0.875rem',
+    color: c.text,
+    textAlign: 'right',
+  };
+
+  const canProceed = activeStep === 0
+    ? Boolean(formData.name && formData.client_name)
+    : true;
+
+  // ── Step renderers ──────────────────────────────────────────────────────────
+
+  const renderProjectDetails = () => (
+    <Box style={card}>
+      <Typography style={sectionLabel}>Project Details</Typography>
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <TextField
+            required fullWidth variant="outlined" size="small"
+            label="Project Name"
+            value={formData.name}
+            onChange={handleChange('name')}
+          />
+        </Grid>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth multiline minRows={3} variant="outlined" size="small"
+            label="Project Description"
+            value={formData.description}
+            onChange={handleChange('description')}
+            InputProps={{ style: { height: 'auto' } }}
+          />
+        </Grid>
+        <Grid item xs={12}>
+          <TextField
+            required fullWidth variant="outlined" size="small"
+            label="Client Name"
+            value={formData.client_name}
+            onChange={handleChange('client_name')}
+          />
+        </Grid>
+        <Grid item xs={6}>
+          <TextField
+            fullWidth type="date" variant="outlined" size="small"
+            label="Start Date"
+            InputLabelProps={{ shrink: true }}
+            value={formData.start_date}
+            onChange={handleChange('start_date')}
+          />
+        </Grid>
+        <Grid item xs={6}>
+          <TextField
+            fullWidth type="date" variant="outlined" size="small"
+            label="Expected End Date"
+            InputLabelProps={{ shrink: true }}
+            value={formData.end_date}
+            onChange={handleChange('end_date')}
+          />
+        </Grid>
+        <Grid item xs={12}>
+          <TextField
+            fullWidth select variant="outlined" size="small"
+            label="Project Management Tool"
+            value={formData.pm_tool}
+            onChange={handleChange('pm_tool')}
+            helperText="Optional — select your team's PM tool"
+          >
+            <MenuItem value="none">None</MenuItem>
+            <MenuItem value="jira">Jira</MenuItem>
+            <MenuItem value="github">GitHub Projects</MenuItem>
+          </TextField>
+        </Grid>
+        {formData.pm_tool === 'jira' && (
+          <>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth variant="outlined" size="small"
+                label="Jira Project Key"
+                helperText="2-10 uppercase letters (e.g., PROJ)"
+                value={formData.jira_key}
+                onChange={handleChange('jira_key')}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth select variant="outlined" size="small"
+                label="Jira Template"
+                value={formData.jira_template}
+                onChange={handleChange('jira_template')}
+              >
+                <MenuItem value="scrum">Scrum</MenuItem>
+                <MenuItem value="kanban">Kanban</MenuItem>
+                <MenuItem value="basic">Basic</MenuItem>
+              </TextField>
             </Grid>
           </>
         )}
@@ -491,99 +510,162 @@ export const ProjectRegistrationPage = () => {
                 </Box>
               </Box>
             ))}
-            <Button
-              type="button"
-              variant="outlined"
-              color="primary"
-              fullWidth
-              onClick={addTeamMember}
-              className={classes.addButton}
-              startIcon={<PersonAddIcon />}
-            >
-              Add Team Member
-            </Button>
-          </InfoCard>
-        );
-
-      default:
-        return null;
-    }
+          </div>
+        ) : (
+          <div style={{ ...reviewRow, borderBottom: 'none' }}>
+            <span style={reviewLabel}>Members</span>
+            <span style={{ ...reviewValue, color: c.textMuted }}>None added</span>
+          </div>
+        )}
+      </Box>
+    );
   };
 
-  const steps = [
-    { label: 'Project Details', icon: <AssignmentIcon /> },
-    { label: 'Team Setup', icon: <GroupAddIcon /> },
-  ];
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <ErrorBoundary>
       <Page themeId="tool">
         <Header title="Project Registration" subtitle="Register a new project and team" />
         <Content>
-          <ContentHeader title="">
-            <SupportButton>
-              Register a new project with optional Jira or GitHub Projects integration
-            </SupportButton>
-          </ContentHeader>
+          <Box style={{ maxWidth: 960, width: '100%', margin: '0 auto' }}>
 
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Stepper activeStep={activeStep} className={classes.stepper}>
-                {steps.map(({ label, icon }) => (
-                  <Step key={label}>
-                    <StepLabel StepIconComponent={() => icon}>{label}</StepLabel>
-                  </Step>
-                ))}
-              </Stepper>
+            {/* Step indicator */}
+            <Box display="flex" alignItems="flex-start" style={{ marginBottom: 24 }}>
+              {STEPS.map(({ label, icon: Icon }, idx) => {
+                const isDone = submitStatus.success || idx < activeStep;
+                const isActive = !submitStatus.success && idx === activeStep;
 
-              {submitStatus.success ? (
-                <Alert severity="success">
-                  Project created successfully! ID: {submitStatus.projectId}
-                </Alert>
-              ) : (
-                <div>
-                  {getStepContent(activeStep)}
+                let stepBg = 'transparent';
+                if (isDone) stepBg = semantic.successBg;
+                else if (isActive) stepBg = c.surface;
 
-                  {submitStatus.error && (
-                    <Alert severity="error" style={{ marginTop: 16 }}>
-                      {submitStatus.error}
-                    </Alert>
-                  )}
+                let stepBorder = c.border;
+                if (isDone) stepBorder = semantic.success;
+                else if (isActive) stepBorder = c.blue;
 
-                  <div className={classes.buttonGroup}>
+                let stepColor = c.textMuted;
+                if (isDone) stepColor = c.textSecondary;
+                else if (isActive) stepColor = c.text;
+
+                return (
+                  <React.Fragment key={label}>
+                    <Box display="flex" flexDirection="column" alignItems="center" style={{ flex: 0, minWidth: 60 }}>
+                      <Box
+                        display="flex" alignItems="center" justifyContent="center"
+                        style={{
+                          width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                          background: stepBg,
+                          border: `2px solid ${stepBorder}`,
+                        }}
+                      >
+                        {isDone
+                          ? <CheckCircle size={16} color={semantic.success} strokeWidth={2} />
+                          : <Icon size={14} strokeWidth={1.5} color={isActive ? c.blue : c.textMuted} />
+                        }
+                      </Box>
+                      <Typography style={{
+                        fontSize: '0.75rem',
+                        fontWeight: isActive ? 600 : 500,
+                        color: stepColor,
+                        marginTop: 6,
+                        textAlign: 'center',
+                        lineHeight: 1.3,
+                        maxWidth: 100,
+                      }}>
+                        {label}
+                      </Typography>
+                    </Box>
+                    {idx < STEPS.length - 1 && (
+                      <Box style={{
+                        flex: 1, height: 2, minWidth: 16, marginTop: 15,
+                        background: isDone ? `${semantic.success}33` : c.border,
+                        borderRadius: 1,
+                      }} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </Box>
+
+            {/* Success state */}
+            {submitStatus.success ? (
+              <Box style={{ ...card, textAlign: 'center', padding: '32px 24px' }}>
+                <CheckCircle
+                  size={40} color={semantic.success} strokeWidth={1.5}
+                  style={{ margin: '0 auto 12px', display: 'block' }}
+                  aria-hidden="true"
+                />
+                <Typography style={{ fontSize: '1rem', fontWeight: 600, color: c.text, marginBottom: 6 }}>
+                  Project created!
+                </Typography>
+                <Typography style={{ fontSize: '0.8125rem', color: c.textSecondary, marginBottom: 20 }}>
+                  Your project has been registered successfully.
+                </Typography>
+                <Box display="flex" justifyContent="center" style={{ gap: 10 }}>
+                  <Button
+                    variant="outlined" size="small"
+                    href="/projects/manage"
+                  >
+                    View Projects
+                  </Button>
+                  <Button
+                    variant="contained" color="primary" size="small"
+                    onClick={handleStartAnother}
+                    startIcon={<Plus size={14} strokeWidth={1.5} />}
+                  >
+                    Register Another
+                  </Button>
+                </Box>
+              </Box>
+            ) : (
+              <>
+                {/* Form steps */}
+                {activeStep === 0 && renderProjectDetails()}
+                {activeStep === 1 && renderTeamSetup()}
+                {activeStep === 2 && renderReview()}
+
+                {/* Error */}
+                {submitStatus.error && (
+                  <Alert severity="error" style={{ marginTop: 16 }}>
+                    {submitStatus.error}
+                  </Alert>
+                )}
+
+                {/* Actions */}
+                <Box display="flex" justifyContent="space-between" style={{ marginTop: 20 }}>
+                  <Button
+                    variant="outlined" size="small"
+                    disabled={activeStep === 0}
+                    onClick={handleBack}
+                  >
+                    Back
+                  </Button>
+                  {activeStep === STEPS.length - 1 ? (
                     <Button
-                      disabled={activeStep === 0}
-                      onClick={handleBack}
-                      className={classes.button}
+                      variant="contained" color="primary" size="small"
+                      onClick={handleSubmit}
+                      disabled={submitStatus.loading}
+                      startIcon={submitStatus.loading
+                        ? <Loader size={14} strokeWidth={1.5} />
+                        : undefined
+                      }
                     >
-                      Back
+                      {submitStatus.loading ? 'Creating...' : 'Create Project'}
                     </Button>
-                    <div>
-                      {activeStep === steps.length - 1 ? (
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          onClick={handleSubmit}
-                          disabled={submitStatus.loading || !formData.name || !formData.client_name}
-                        >
-                          {submitStatus.loading ? <Progress /> : 'Create Project'}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          onClick={handleNext}
-                          disabled={activeStep === 0 && (!formData.name || !formData.client_name)}
-                        >
-                          Next
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </Grid>
-          </Grid>
+                  ) : (
+                    <Button
+                      variant="contained" color="primary" size="small"
+                      onClick={handleNext}
+                      disabled={!canProceed}
+                    >
+                      Next
+                    </Button>
+                  )}
+                </Box>
+              </>
+            )}
+          </Box>
         </Content>
       </Page>
     </ErrorBoundary>

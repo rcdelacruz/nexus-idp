@@ -263,7 +263,7 @@ The `isArgocdAvailable` guard hides the ArgoCD card when this annotation is abse
 
 #### backstage-portal (2026-03-22 fix)
 
-The `argocd/app-name: backstage` annotation was initially added to `example-org/components/backstage-portal.yaml` but had to be removed. Backstage itself is deployed via Helm, not ArgoCD — no `Application` CRD named `backstage` exists. The annotation caused the ArgoCD card to error on every page load. After removing the annotation, rebuilding the image, and redeploying, the card was hidden correctly.
+The `argocd/app-name: backstage` annotation was initially added to `stratpoint/components/backstage-portal.yaml` but had to be removed. Backstage itself is deployed via Helm, not ArgoCD — no `Application` CRD named `backstage` exists. The annotation caused the ArgoCD card to error on every page load. After removing the annotation, rebuilding the image, and redeploying, the card was hidden correctly.
 
 ### Important: No ArgoCD Application CRDs yet
 
@@ -275,7 +275,7 @@ Only then should you add `argocd/app-name` to the corresponding catalog entity.
 
 ## Step 3: CNPG Resources in Catalog
 
-**Created** `example-org/systems/platform-databases.yaml` — auto-discovered via `example-org/catalog-info.yaml` → `targets: ./systems/*.yaml`.
+**Created** `stratpoint/systems/platform-databases.yaml` — auto-discovered via `stratpoint/catalog-info.yaml` → `targets: ./systems/*.yaml`.
 
 | Entity name | Kind | Type | Description |
 |-------------|------|------|-------------|
@@ -311,7 +311,7 @@ templates/three-tier-app/
 
 When a user fills out the form in Backstage Scaffolder, it:
 
-1. **Creates a GitHub repo** in `your-org` org (private)
+1. **Creates a GitHub repo** in `stratpoint-engineering` org (private)
 2. **Generates all skeleton files** with values substituted (Nunjucks templating)
 3. **Registers 4 catalog entities:** `System` + `Component` (website) + `Component` (service) + `Resource` (database)
 4. **Generates K8s manifests** ready for ArgoCD to sync from `k8s/` directory
@@ -359,7 +359,7 @@ spec:
 
 ### How to rebuild and redeploy after any config/catalog change
 
-The config files and `example-org/` catalog are **baked into the Docker image**. Any change to these files requires a rebuild.
+The config files and `stratpoint/` catalog are **baked into the Docker image**. Any change to these files requires a rebuild.
 
 ```bash
 cd /root/Projects/backstage-main
@@ -507,7 +507,7 @@ Devtron manages its own deployments internally. The ArgoCD API returns `items: n
 **Root cause:** The `argocd/app-name` annotation was present on the entity, so `isArgocdAvailable` returned `true` and rendered the card. But the `Application` CRD with that name did not exist, so every API call to ArgoCD failed.
 
 **Fix:**
-1. Remove `argocd/app-name` from the entity's `catalog-info.yaml` (or `example-org/` YAML)
+1. Remove `argocd/app-name` from the entity's `catalog-info.yaml` (or `stratpoint/` YAML)
 2. Rebuild + redeploy the image (config is baked in)
 3. Force a catalog refresh from the entity page
 4. The card is hidden — `isArgocdAvailable` returns `false` when annotation is absent
@@ -520,10 +520,49 @@ If the command returns nothing, do not add the annotation.
 
 ---
 
+## ArgoCD Non-Expiring Service Account Token (2026-04-05)
+
+The original `ARGOCD_TOKEN` was an admin session JWT that expired after ~24 hours, breaking the ArgoCD history tab silently.
+
+**Fix:** Created a dedicated `backstage` service account in ArgoCD with a non-expiring API key token.
+
+```bash
+# 1. Add backstage account to argocd-cm
+kubectl patch configmap argocd-cm -n devtroncd --kubeconfig ~/.kube/config-talos \
+  --type merge -p '{"data":{"accounts.backstage":"apiKey"}}'
+
+# 2. Get admin password
+ARGOCD_PASS=$(kubectl get secret argocd-initial-admin-secret -n devtroncd \
+  --kubeconfig ~/.kube/config-talos -o jsonpath='{.data.password}' | base64 -d)
+
+# 3. Login as admin to get a temporary session token
+ADMIN_TOKEN=$(curl -s -X POST https://argocd.coderstudio.co/api/v1/session \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"admin\",\"password\":\"${ARGOCD_PASS}\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+# 4. Generate non-expiring API key for the backstage account
+BACKSTAGE_TOKEN=$(curl -s -X POST https://argocd.coderstudio.co/api/v1/account/backstage/token \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+  -d '{"name":"backstage-idp"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+echo $BACKSTAGE_TOKEN
+```
+
+The generated token has no `exp` field — it never expires. Update `.env`:
+
+```
+ARGOCD_TOKEN=<backstage token>
+ARGOCD_AUTH_TOKEN="argocd.token=<backstage token>"
+```
+
+> The default RBAC policy is `role:admin` so the `backstage` account inherits full access automatically. No additional RBAC rules needed.
+
+---
+
 ## Pending Items
 
 | Item | Status |
 |------|--------|
-| ArgoCD token — create dedicated `backstage` SA instead of admin token | Pending |
+| ArgoCD token — dedicated `backstage` SA with non-expiring API key | ✅ Done 2026-04-05 |
 | CNPG barmanObjectStore → barman-cloud migration | Pending (before CNPG 1.29+) |
-| ArgoCD Application CRDs will appear after first 3-tier app deploy | Waiting on usage |

@@ -1,0 +1,15 @@
+---
+# Internal Developer Platform system — groups all platform engineering components
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: internal-developer-platform
+  title: Internal Developer Platform
+  description: >
+    Stratpoint's Internal Developer Platform (IDP), built on Nexus IDP and
+    Backstage. Provides the software catalog, self-service scaffolding,
+    engineering docs, FinOps dashboards, Kubernetes visibility, and ArgoCD
+    integration for all Stratpoint engineering teams.
+spec:
+  owner: cloud-team
+  domain: platform-engineering

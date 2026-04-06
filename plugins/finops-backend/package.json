@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-budgets": "^3.0.0",
+    "@aws-sdk/types": "^3.0.0",
+    "@aws-sdk/client-cloudfront": "^3.1015.0",
     "@aws-sdk/client-cloudwatch": "^3.0.0",
     "@aws-sdk/client-cost-explorer": "^3.0.0",
     "@aws-sdk/client-ec2": "^3.0.0",
@@ -45,7 +47,8 @@
     "@backstage/plugin-permission-node": "^0.10.11",
     "@types/express": "*",
     "express": "^4.21.2",
-    "express-promise-router": "^4.1.0"
+    "express-promise-router": "^4.1.0",
+    "knex": "^3.0.0"
   },
   "devDependencies": {
     "@backstage/backend-test-utils": "^1.11.1",

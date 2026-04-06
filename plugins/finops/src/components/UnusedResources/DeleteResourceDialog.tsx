@@ -4,10 +4,8 @@ import {
   DialogActions, Button, Typography, Box, CircularProgress, List, ListItem, ListItemIcon, ListItemText,
   FormControlLabel, Checkbox,
 } from '@material-ui/core';
-import ErrorOutlineIcon from '@material-ui/icons/ErrorOutline';
-import WarningIcon from '@material-ui/icons/Warning';
-import CheckCircleOutlineIcon from '@material-ui/icons/CheckCircleOutline';
-import InfoOutlinedIcon from '@material-ui/icons/InfoOutlined';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { semantic, useColors } from '@stratpoint/theme-utils';
 import { useApi } from '@backstage/core-plugin-api';
 import { finopsApiRef } from '../../api/FinOpsClient';
 import { UnusedResource } from '../../api/types';
@@ -40,7 +38,7 @@ export const DeleteResourceDialog = ({ resource, accountId, onConfirm, onCancel,
     api.checkDependencies(resource.resourceType, resource.resourceId, resource.region, accountId)
       .then(d => { setDeps(d); setChecking(false); })
       .catch(() => { setDeps({ blockers: [], warnings: ['Could not check dependencies.'], info: [], safe: true }); setChecking(false); });
-  }, [resource, api]);
+  }, [resource, api, accountId]);
 
   if (!resource) return null;
 
@@ -50,6 +48,17 @@ export const DeleteResourceDialog = ({ resource, accountId, onConfirm, onCancel,
 
   const hasBlockers = (deps?.blockers ?? []).length > 0;
   const canDelete = !checking && (!hasBlockers || forceDelete);
+
+  let deleteButtonLabel: string;
+  if (deleting) {
+    deleteButtonLabel = 'Deleting...';
+  } else if (!canDelete && hasBlockers) {
+    deleteButtonLabel = 'Cannot Delete';
+  } else if (forceDelete) {
+    deleteButtonLabel = 'Force Delete';
+  } else {
+    deleteButtonLabel = 'Delete';
+  }
 
   return (
     <Dialog open onClose={onCancel} maxWidth="sm" fullWidth>
@@ -74,22 +83,22 @@ export const DeleteResourceDialog = ({ resource, accountId, onConfirm, onCancel,
           {deps && !checking && (
             <>
               {deps.blockers.length === 0 && deps.warnings.length === 0 && (
-                <Box display="flex" alignItems="center" style={{ gap: 8, color: '#2e7d32' }}>
-                  <CheckCircleOutlineIcon fontSize="small" />
+                <Box display="flex" alignItems="center" style={{ gap: 8, color: semantic.success }}>
+                  <CheckCircle2 size={16} strokeWidth={1.5} />
                   <Typography variant="body2">No blockers found — safe to delete.</Typography>
                 </Box>
               )}
 
               {deps.blockers.length > 0 && (
                 <Box mb={1}>
-                  <Typography variant="body2" style={{ fontWeight: 600, color: '#c62828', marginBottom: 4 }}>
+                  <Typography variant="body2" style={{ fontWeight: 600, color: semantic.error, marginBottom: 4 }}>
                     Blockers — must resolve before deleting:
                   </Typography>
                   <List dense disablePadding>
                     {deps.blockers.map((b, i) => (
                       <ListItem key={i} disableGutters>
                         <ListItemIcon style={{ minWidth: 28 }}>
-                          <ErrorOutlineIcon fontSize="small" style={{ color: '#c62828' }} />
+                          <AlertCircle size={16} strokeWidth={1.5} style={{ color: semantic.error }} />
                         </ListItemIcon>
                         <ListItemText primary={<Typography variant="body2">{b}</Typography>} />
                       </ListItem>
@@ -100,14 +109,14 @@ export const DeleteResourceDialog = ({ resource, accountId, onConfirm, onCancel,
 
               {deps.warnings.length > 0 && (
                 <Box>
-                  <Typography variant="body2" style={{ fontWeight: 600, color: '#e65100', marginBottom: 4 }}>
+                  <Typography variant="body2" style={{ fontWeight: 600, color: semantic.warning, marginBottom: 4 }}>
                     Warnings — review before proceeding:
                   </Typography>
                   <List dense disablePadding>
                     {deps.warnings.map((w, i) => (
                       <ListItem key={i} disableGutters>
                         <ListItemIcon style={{ minWidth: 28 }}>
-                          <WarningIcon fontSize="small" style={{ color: '#e65100' }} />
+                          <AlertTriangle size={16} strokeWidth={1.5} style={{ color: semantic.warning }} />
                         </ListItemIcon>
                         <ListItemText primary={<Typography variant="body2">{w}</Typography>} />
                       </ListItem>
@@ -122,9 +131,9 @@ export const DeleteResourceDialog = ({ resource, accountId, onConfirm, onCancel,
                     {deps.info.map((note, i) => (
                       <ListItem key={i} disableGutters>
                         <ListItemIcon style={{ minWidth: 28 }}>
-                          <InfoOutlinedIcon fontSize="small" style={{ color: '#1976d2' }} />
+                          <Info size={16} strokeWidth={1.5} style={{ color: semantic.info }} />
                         </ListItemIcon>
-                        <ListItemText primary={<Typography variant="body2" style={{ color: '#1976d2' }}>{note}</Typography>} />
+                        <ListItemText primary={<Typography variant="body2" style={{ color: semantic.info }}>{note}</Typography>} />
                       </ListItem>
                     ))}
                   </List>
@@ -156,7 +165,7 @@ export const DeleteResourceDialog = ({ resource, accountId, onConfirm, onCancel,
         )}
 
         {canDelete && (
-          <Typography variant="body2" style={{ color: '#e53935', marginTop: 16 }}>
+          <Typography variant="body2" style={{ color: semantic.error, marginTop: 16 }}>
             This action <strong>cannot be undone</strong>.
           </Typography>
         )}
@@ -167,9 +176,9 @@ export const DeleteResourceDialog = ({ resource, accountId, onConfirm, onCancel,
           onClick={() => onConfirm(forceDelete)}
           disabled={!canDelete || deleting}
           variant="contained"
-          style={canDelete ? { background: '#e53935', color: '#fff' } : {}}
+          style={canDelete ? { background: semantic.error, color: '#fff' } : {}}
         >
-          {deleting ? 'Deleting...' : !canDelete && hasBlockers ? 'Cannot Delete' : forceDelete ? 'Force Delete' : 'Delete'}
+          {deleteButtonLabel}
         </Button>
       </DialogActions>
     </Dialog>

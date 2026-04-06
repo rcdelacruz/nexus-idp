@@ -7,14 +7,19 @@ import {
   LinearProgress, Table, TableBody, TableCell,
   TableHead, TableRow, Typography,
 } from '@material-ui/core';
+import { useColors, semantic } from '@stratpoint/theme-utils';
 
 const fmt = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 
 const CoverageGauge = ({ label, data }: { label: string; data: CoverageData | null }) => {
+  const c = useColors();
   if (!data) return null;
   const pct = Math.min(data.coveragePercent, 100);
-  const color = pct >= 70 ? '#43a047' : pct >= 40 ? '#fb8c00' : '#e53935';
+  let color: string;
+  if (pct >= 70) { color = semantic.success; }
+  else if (pct >= 40) { color = semantic.warning; }
+  else { color = semantic.error; }
   return (
     <Card variant="outlined">
       <CardContent>
@@ -25,7 +30,7 @@ const CoverageGauge = ({ label, data }: { label: string; data: CoverageData | nu
           <LinearProgress
             variant="determinate"
             value={pct}
-            style={{ height: 12, borderRadius: 6, backgroundColor: '#2e2e2e' }}
+            style={{ height: 12, borderRadius: 6, backgroundColor: c.progressTrack }}
           />
         </Box>
         <Box mt={1} display="flex" justifyContent="space-between">
@@ -75,7 +80,7 @@ export const RecommendationsTab = ({ refreshKey, accountId }: { refreshKey: numb
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (_recsCache?.refreshKey === refreshKey && _recsCache?.accountId === accountId) { setLoading(false); return; }
+    if (_recsCache?.refreshKey === refreshKey && _recsCache?.accountId === accountId) { setLoading(false); return undefined; }
     let mounted = true;
     setLoading(true);
     Promise.all([
@@ -117,7 +122,7 @@ export const RecommendationsTab = ({ refreshKey, accountId }: { refreshKey: numb
               <Typography variant="subtitle1"><strong>Rightsizing Recommendations</strong></Typography>
               {rightsizing.length > 0 && (
                 <Typography variant="body2" color="textSecondary">
-                  Potential savings: <strong style={{ color: '#43a047' }}>{fmt(totalSavings)}/mo</strong>
+                  Potential savings: <strong style={{ color: semantic.success }}>{fmt(totalSavings)}/mo</strong>
                 </Typography>
               )}
             </Box>
@@ -151,7 +156,7 @@ export const RecommendationsTab = ({ refreshKey, accountId }: { refreshKey: numb
                       <TableCell>{r.region}</TableCell>
                       <TableCell>{r.currentType}</TableCell>
                       <TableCell>{r.targetType}</TableCell>
-                      <TableCell style={{ color: '#43a047' }}>{fmt(r.estimatedMonthlySavings)}</TableCell>
+                      <TableCell style={{ color: semantic.success }}>{fmt(r.estimatedMonthlySavings)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

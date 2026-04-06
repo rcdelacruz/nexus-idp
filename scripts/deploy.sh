@@ -16,6 +16,9 @@ docker build . -f Dockerfile.with-migrations --tag 192.168.2.101:5000/backstage:
 echo "==> Pushing image to registry..."
 docker push 192.168.2.101:5000/backstage:latest
 
+echo "==> Applying deployment manifest..."
+kubectl apply -f k8s-manifests/backstage-deployment.yaml
+
 echo "==> Restarting deployment..."
 kubectl rollout restart deployment/backstage -n backstage
 kubectl rollout status deployment/backstage -n backstage --timeout=120s

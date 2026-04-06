@@ -23,10 +23,12 @@ export class UserManagementApi {
     const res = await this.request('POST', path, body);
     const data = await res.json() as { ok?: boolean; message?: string; error?: { message?: string } | string } & Record<string, unknown>;
     if (!res.ok) {
-      const errMsg =
-        typeof data.error === 'object' ? (data.error as any)?.message :
-        typeof data.error === 'string' ? data.error :
-        `Request failed: ${res.status}`;
+      let errMsg: string | undefined;
+      if (typeof data.error === 'object') {
+        errMsg = (data.error as any)?.message;
+      } else if (typeof data.error === 'string') {
+        errMsg = data.error;
+      }
       throw new Error(errMsg ?? `Request failed: ${res.status}`);
     }
     return data as T;

@@ -26,15 +26,7 @@ import {
   Button,
 } from '@material-ui/core';
 import { AgentRegistration } from '../../api/types';
-import CheckCircleIcon from '@material-ui/icons/CheckCircle';
-import OfflineBoltIcon from '@material-ui/icons/OfflineBolt';
-import ComputerIcon from '@material-ui/icons/Computer';
-import FilterListIcon from '@material-ui/icons/FilterList';
-import MoreVertIcon from '@material-ui/icons/MoreVert';
-import StopIcon from '@material-ui/icons/Stop';
-import DeleteIcon from '@material-ui/icons/Delete';
-import PlayArrowIcon from '@material-ui/icons/PlayArrow';
-import InfoIcon from '@material-ui/icons/Info';
+import { CheckCircle, ZapOff, Monitor, Filter, MoreVertical, Square, Trash2, Play, Info } from 'lucide-react';
 
 /**
  * Format a date as "X time ago" (e.g., "5 minutes ago", "2 hours ago")
@@ -162,9 +154,9 @@ export const AgentList = ({
 
   const getStatusIcon = (isConnected: boolean) => {
     return isConnected ? (
-      <CheckCircleIcon fontSize="small" />
+      <CheckCircle size={16} strokeWidth={1.5} />
     ) : (
-      <OfflineBoltIcon fontSize="small" />
+      <ZapOff size={16} strokeWidth={1.5} />
     );
   };
 
@@ -179,7 +171,7 @@ export const AgentList = ({
 
   const getDisplayName = (agent: AgentRegistration): string => {
     // Prefer hostname, fallback to machine name, then agent ID
-    return agent.hostname || agent.machineName || agent.id.substring(0, 16) + '...';
+    return agent.hostname || agent.machineName || `${agent.id.substring(0, 16)}...`;
   };
 
   const getPlatformDisplay = (agent: AgentRegistration): string => {
@@ -278,7 +270,7 @@ export const AgentList = ({
         <CardHeader title="My Agents" />
         <CardContent>
           <div className={classes.noAgent}>
-            <ComputerIcon style={{ fontSize: 48, marginBottom: 16 }} />
+            <Monitor size={16} strokeWidth={1.5} style={{ fontSize: 48, marginBottom: 16 }} />
             <Typography variant="h6" gutterBottom>
               No Agents Registered
             </Typography>
@@ -305,7 +297,7 @@ export const AgentList = ({
             {selectedAgentId && (
               <Chip
                 label="Filtered"
-                icon={<FilterListIcon />}
+                icon={<Filter size={16} strokeWidth={1.5} />}
                 size="small"
                 onDelete={handleShowAll}
                 color="primary"
@@ -327,7 +319,7 @@ export const AgentList = ({
                   onClick={() => handleAgentClick(agent.id)}
                 >
                   <Avatar className={classes.agentAvatar}>
-                    <ComputerIcon />
+                    <Monitor size={16} strokeWidth={1.5} />
                   </Avatar>
                   <ListItemText
                     primary={
@@ -371,7 +363,7 @@ export const AgentList = ({
                       onClick={(e) => handleMenuOpen(e, agent)}
                       size="small"
                     >
-                      <MoreVertIcon />
+                      <MoreVertical size={16} strokeWidth={1.5} />
                     </IconButton>
                   </ListItemSecondaryAction>
                 </ListItem>
@@ -393,7 +385,7 @@ export const AgentList = ({
           disabled={selectedAgentForAction?.isConnected}
         >
           <ListItemIcon>
-            <PlayArrowIcon fontSize="small" />
+            <Play size={16} strokeWidth={1.5} />
           </ListItemIcon>
           <Typography>Start Agent</Typography>
         </MenuItem>
@@ -402,14 +394,14 @@ export const AgentList = ({
           disabled={!selectedAgentForAction?.isConnected}
         >
           <ListItemIcon>
-            <StopIcon fontSize="small" />
+            <Square size={16} strokeWidth={1.5} />
           </ListItemIcon>
           <Typography>Stop Agent</Typography>
         </MenuItem>
         <Divider />
         <MenuItem onClick={handleRevokeClick}>
           <ListItemIcon>
-            <DeleteIcon fontSize="small" />
+            <Trash2 size={16} strokeWidth={1.5} />
           </ListItemIcon>
           <Typography>Logout & Revoke</Typography>
         </MenuItem>
@@ -516,7 +508,7 @@ export const AgentList = ({
       >
         <DialogTitle>
           <Box display="flex" alignItems="center">
-            <PlayArrowIcon style={{ marginRight: 8 }} />
+            <Play size={16} strokeWidth={1.5} style={{ marginRight: 8 }} />
             Start Agent
           </Box>
         </DialogTitle>
@@ -551,7 +543,7 @@ export const AgentList = ({
 
           <Box mt={2} mb={1} p={2} bgcolor="info.light" borderRadius={4}>
             <Box display="flex" alignItems="flex-start">
-              <InfoIcon fontSize="small" style={{ marginRight: 8, marginTop: 2 }} color="primary" />
+              <Info size={16} strokeWidth={1.5} style={{ marginRight: 8, marginTop: 2 }} />
               <Typography variant="body2" color="textPrimary">
                 The agent runs in the background. Pressing Ctrl+C after starting will NOT stop the agent.
                 Use the "Stop Agent" button in the UI or run <code>backstage-agent stop</code> to stop it.

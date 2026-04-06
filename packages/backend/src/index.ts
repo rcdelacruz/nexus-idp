@@ -7,8 +7,12 @@
  */
 
 import { createBackend } from '@backstage/backend-defaults';
+import { fsUrlReaderServiceFactory } from './plugins/fsUrlReaderModule';
 
 const backend = createBackend();
+
+// Register file:// URL reader for local dev skeleton loading
+backend.add(fsUrlReaderServiceFactory);
 
 backend.add(import('@backstage/plugin-app-backend'));
 backend.add(import('@backstage/plugin-proxy-backend'));
@@ -20,9 +24,9 @@ backend.add(import('@backstage/plugin-techdocs-backend'));
 
 // auth plugin
 backend.add(import('@backstage/plugin-auth-backend'));
-// Custom Google module: auto-provisions org users to general-engineers on first login
+// Custom Google module: auto-provisions @stratpoint.com users to general-engineers on first login
 backend.add(import('./plugins/google-auto-provision'));
-// Custom GitHub module: enforces verified org email on GitHub account before sign-in
+// Custom GitHub module: enforces verified @stratpoint.com email on GitHub account before sign-in
 backend.add(import('./plugins/github-email-enforcement'));
 
 // catalog plugin
@@ -71,6 +75,11 @@ backend.add(
   import('@stratpoint/plugin-finops-backend').then(m => ({ default: m.finopsPlugin }))
 );
 
+// project registration
+backend.add(
+  import('@stratpoint/plugin-project-registration-backend').then(m => ({ default: m.projectRegistrationPlugin }))
+);
+
 // local provisioner
 backend.add(
   import('@stratpoint/plugin-local-provisioner-backend').then(m => ({ default: m.localProvisionerPlugin }))
@@ -78,6 +87,9 @@ backend.add(
 
 // cors proxy (enables SwaggerUI "Try it out" through server-side forwarding)
 backend.add(import('./plugins/cors-proxy'));
+
+// scaffolder targets API — exposes app-config targets for DeploymentTargetPicker field
+backend.add(import('./plugins/scaffolderTargetsApi'));
 
 // user management
 backend.add(

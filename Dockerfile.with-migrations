@@ -1,6 +1,8 @@
 # Build from the working base image and add migration runner
 FROM 192.168.2.101:5000/backstage:latest
 
+WORKDIR /app
+
 USER root
 
 # Fix /app directory permissions (base image has it as root:root 700)
@@ -87,6 +89,9 @@ RUN chmod 755 /app && \
     chown -R node:node /app/scripts
 
 USER node
+
+# Copy backend config schema (needed by Backstage config schema loader at startup)
+COPY --chown=node:node packages/backend/config.d.ts /app/packages/backend/config.d.ts
 
 # Copy updated config files with OAuth fix
 COPY --chown=node:node app-config.yaml /app/

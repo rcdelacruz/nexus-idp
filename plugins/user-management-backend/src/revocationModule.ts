@@ -41,24 +41,25 @@ export const sessionRevocationModule = createBackendModule({
         // This prevents any startup race condition from blocking login or API calls.
         rootHttpRouter.use('/api', (req, res, next) => {
           const authHeader = req.headers.authorization;
-          if (!authHeader?.startsWith('Bearer ')) return next();
+          if (!authHeader?.startsWith('Bearer ')) { next(); return undefined; }
 
           const token = authHeader.slice(7);
           const sub = decodeJwtSub(token);
-          if (!sub) return next();
+          if (!sub) { next(); return undefined; }
 
           const store = getRevocationStore();
-          if (!store) return next(); // Plugin not ready yet — skip revocation check
+          if (!store) { next(); return undefined; } // Plugin not ready yet — skip revocation check
 
           if (store.isRevoked(sub)) {
             logger.info(`Blocked revoked session for: ${sub}`);
             res.status(401).json({
               error: 'Your session has been revoked. Please sign in again.',
             });
-            return;
+            return undefined;
           }
 
           next();
+          return undefined;
         });
 
         logger.info('Session revocation middleware mounted at /api');

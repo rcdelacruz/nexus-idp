@@ -21,10 +21,12 @@
   "dependencies": {
     "@backstage/core-components": "^0.18.8",
     "@backstage/core-plugin-api": "^1.12.4",
+    "@backstage/plugin-catalog-react": "^2.1.0",
     "@backstage/theme": "^0.7.2",
     "@material-ui/core": "^4.9.13",
-    "@material-ui/icons": "^4.9.1",
     "@mdx-js/mdx": "^3.1.1",
+    "@stratpoint/theme-utils": "*",
+    "lucide-react": "0.577.0",
     "mermaid": "^11.4.1",
     "react-markdown": "^8.0.7",
     "react-syntax-highlighter": "^15.5.0",
@@ -33,7 +35,9 @@
     "remark-gfm": "^3.0.1"
   },
   "peerDependencies": {
-    "react": "^16.13.1 || ^17.0.0 || ^18.0.0"
+    "react": "^16.13.1 || ^17.0.0 || ^18.0.0",
+    "react-dom": "^16.13.1 || ^17.0.0 || ^18.0.0",
+    "react-router-dom": "^6.0.0"
   },
   "devDependencies": {
     "@backstage/cli": "^0.36.0",

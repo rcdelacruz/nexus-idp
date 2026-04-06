@@ -1,4 +1,4 @@
-import { DatabaseService } from '@backstage/backend-plugin-api';
+import { DatabaseService, resolvePackagePath } from '@backstage/backend-plugin-api';
 import { Knex } from 'knex';
 
 export interface Project {
@@ -42,6 +42,9 @@ export interface CreateProjectInput {
   created_by: string;
 }
 
+/** DB row representation — team_members is stored as a JSON string column. */
+type ProjectRow = Omit<Project, 'team_members'> & { team_members?: string };
+
 const TABLE = 'project_registration_projects';
 
 function slugify(str: string): string {
@@ -62,7 +65,7 @@ export class ProjectStore {
   static async create(database: DatabaseService): Promise<ProjectStore> {
     const client = await database.getClient();
     await client.migrate.latest({
-      directory: `${__dirname}/../database/migrations`,
+      directory: resolvePackagePath('@stratpoint/plugin-project-registration-backend', 'src/database/migrations'),
     });
     return new ProjectStore(client);
   }
@@ -87,7 +90,7 @@ export class ProjectStore {
     const aws_tag_client = input.aws_tag_client || slugify(input.client_name);
     const aws_tag_team = input.aws_tag_team || slugify(input.team_name || input.client_name);
 
-    const [project] = await this.db<Project>(TABLE)
+    const [project] = await this.db<ProjectRow>(TABLE)
       .insert({
         name: input.name,
         description: input.description,
@@ -102,12 +105,12 @@ export class ProjectStore {
         jira_key: input.jira_key,
         jira_template: input.jira_template,
         team_name: input.team_name,
-        team_members: input.team_members != null ? JSON.stringify(input.team_members) : undefined,
+        team_members: input.team_members !== null ? JSON.stringify(input.team_members) : undefined,
         status: 'active',
         created_by: input.created_by,
       })
       .returning('*');
-    return project;
+    return project as unknown as Project;
   }
 
   async archiveProject(id: string): Promise<void> {
@@ -130,13 +133,17 @@ export class ProjectStore {
     const project = await this.getProject(id);
     if (!project) throw new Error(`Project ${id} not found`);
     if (project.type === 'system') throw new Error('System projects cannot be updated');
-    const payload: any = { ...input, updated_at: new Date().toISOString() };
-    if (payload.team_members != null) payload.team_members = JSON.stringify(payload.team_members);
-    const [updated] = await this.db<Project>(TABLE)
+    const { team_members, ...rest } = input;
+    const payload: Partial<ProjectRow> = {
+      ...rest,
+      updated_at: new Date().toISOString(),
+      ...(team_members !== null && { team_members: JSON.stringify(team_members) }),
+    };
+    const [updated] = await this.db<ProjectRow>(TABLE)
       .where({ id })
       .update(payload)
       .returning('*');
-    return updated;
+    return updated as unknown as Project;
   }
 
   async deleteProject(id: string): Promise<void> {

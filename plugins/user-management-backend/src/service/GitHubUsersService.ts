@@ -126,8 +126,8 @@ export class GitHubUsersService {
 
     // Serialize back
     const newContent =
-      `# This file is managed by Nexus IDP. Manual edits are allowed but may be overwritten.\n` +
-      docs.map(d => '---\n' + yaml.dump(d, { lineWidth: -1 })).join('\n');
+      `# This file is managed by Nexus IDP. Manual edits are allowed but may be overwritten.\n${
+      docs.map(d => `---\n${yaml.dump(d, { lineWidth: -1 })}`).join('\n')}`;
 
     await this.putFile(
       newContent,

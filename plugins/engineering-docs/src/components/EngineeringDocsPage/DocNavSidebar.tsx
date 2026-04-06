@@ -2,20 +2,21 @@ import React, { useState, useRef } from 'react';
 import { makeStyles } from '@material-ui/core';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { NavItem } from '../../api/types';
+import { useColors, DesignTokens } from '@stratpoint/theme-utils';
 
-const useStyles = makeStyles(theme => ({
+const useStyles = makeStyles<{}, DesignTokens>(() => ({
   sidebar: {
     width: 240,
     flexShrink: 0,
     overflowY: 'auto',
     height: '100%',
-    borderRight: `1px solid ${theme.palette.type === 'dark' ? '#2e2e2e' : '#ebebeb'}`,
-    background: theme.palette.type === 'dark' ? '#0a0a0a' : '#fafafa',
+    borderRight: ({ border }: DesignTokens) => `1px solid ${border}`,
+    background: ({ surfaceSubtle }: DesignTokens) => surfaceSubtle,
     padding: '24px 0 8px',
     '&::-webkit-scrollbar': { width: 4 },
     '&::-webkit-scrollbar-track': { background: 'transparent' },
     '&::-webkit-scrollbar-thumb': {
-      background: theme.palette.type === 'dark' ? '#2e2e2e' : '#ebebeb',
+      background: ({ border }: DesignTokens) => border,
       borderRadius: 2,
     },
   },
@@ -25,7 +26,7 @@ const useStyles = makeStyles(theme => ({
     fontWeight: 600,
     letterSpacing: '0.06em',
     textTransform: 'uppercase' as const,
-    color: theme.palette.type === 'dark' ? '#454545' : '#8f8f8f',
+    color: ({ textDisabled }: DesignTokens) => textDisabled,
     fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
   },
   item: {
@@ -41,22 +42,22 @@ const useStyles = makeStyles(theme => ({
     fontWeight: 500,
     letterSpacing: '-0.006em',
     fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
-    color: theme.palette.type === 'dark' ? '#878787' : '#4d4d4d',
+    color: ({ textMuted }: DesignTokens) => textMuted,
     userSelect: 'none' as const,
     transition: 'color 0.1s, background 0.1s',
     '&:hover': {
-      background: theme.palette.type === 'dark' ? '#1a1a1a' : '#f2f2f2',
-      color: theme.palette.type === 'dark' ? '#ededed' : '#171717',
+      background: ({ avatarBg }: DesignTokens) => avatarBg,
+      color: ({ text }: DesignTokens) => text,
     },
   },
   active: {
-    background: theme.palette.type === 'dark' ? '#1f1f1f' : '#ebebeb',
-    color: `${theme.palette.type === 'dark' ? '#ededed' : '#171717'} !important`,
+    background: ({ hoverBg }: DesignTokens) => hoverBg,
+    color: ({ text }: DesignTokens) => `${text} !important`,
     fontWeight: 600,
   },
   divider: {
     height: 1,
-    background: theme.palette.type === 'dark' ? '#2e2e2e' : '#ebebeb',
+    background: ({ border }: DesignTokens) => border,
     margin: '8px 0',
   },
 }));
@@ -69,9 +70,10 @@ interface NavRowProps {
 }
 
 const NavRow = ({ item, depth, selectedPath, onSelect }: NavRowProps) => {
-  const classes = useStyles();
+  const c = useColors();
+  const classes = useStyles(c);
   const isActive = selectedPath === item.path;
-  const isAncestor = selectedPath.startsWith(item.path + '/');
+  const isAncestor = selectedPath.startsWith(`${item.path}/`);
   const [manualOpen, setManualOpen] = useState<boolean | null>(null);
   const prevSelectedRef = useRef(selectedPath);
   // Reset manual override when selectedPath moves into or out of this dir
@@ -87,9 +89,12 @@ const NavRow = ({ item, depth, selectedPath, onSelect }: NavRowProps) => {
     return (
       <>
         <div
+          role="button"
+          tabIndex={0}
           className={`${classes.item} ${isActive ? classes.active : ''}`}
           style={{ paddingLeft }}
           onClick={() => setManualOpen(o => o === null ? !isAncestor : !o)}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setManualOpen(o => o === null ? !isAncestor : !o); }}
         >
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {item.label}
@@ -114,9 +119,12 @@ const NavRow = ({ item, depth, selectedPath, onSelect }: NavRowProps) => {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={`${classes.item} ${isActive ? classes.active : ''}`}
       style={{ paddingLeft }}
       onClick={() => onSelect(item.path)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(item.path); }}
     >
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {item.label}
@@ -132,7 +140,8 @@ interface DocNavSidebarProps {
 }
 
 export const DocNavSidebar = ({ nav, selectedPath, onSelect }: DocNavSidebarProps) => {
-  const classes = useStyles();
+  const c = useColors();
+  const classes = useStyles(c);
   return (
     <div className={classes.sidebar}>
       {nav.map(item => (

@@ -6,8 +6,13 @@ metadata:
   name: ${{ values.appName }}
   title: ${{ values.appName | title }}
   description: ${{ values.description }}
+  tags:
+    {%- for tag in values.tags %}
+    - ${{ tag }}
+    {%- endfor %}
   annotations:
     backstage.io/source-location: url:https://github.com/${{ values.repoOwner }}/${{ values.repoName }}
+    project-registration/project-id: ${{ values.projectId }}
   links:
     - url: http://${{ values.appName }}-${{ values.environment }}.${{ values.ingressDomain }}
       title: Frontend

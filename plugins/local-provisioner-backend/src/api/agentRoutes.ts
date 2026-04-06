@@ -9,6 +9,33 @@ import {
   AgentAuthRequest,
   AgentRegisterRequest,
 } from '../types';
+import rateLimit from 'express-rate-limit';
+
+/**
+ * Rate limiter for POST /device/code
+ * 10 requests per IP per 15 minutes — one device flow needs 1 request.
+ * TODO: swap MemoryStore for rate-limit-redis if replicaCount > 1.
+ */
+const deviceCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_requests', error_description: 'Too many device code requests, please try again later.' },
+});
+
+/**
+ * Rate limiter for POST /device/token
+ * CLI polls every ~5s for up to 10 min = ~120 polls. 130 over 10 min window with buffer.
+ * TODO: swap MemoryStore for rate-limit-redis if replicaCount > 1.
+ */
+const deviceTokenLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 130,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too_many_requests', error_description: 'Too many token poll requests, please try again later.' },
+});
 
 /**
  * Validate service token from Authorization header
@@ -76,7 +103,7 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
    *   platform_version: string  // OS version (e.g., "macOS 14.2")
    * }
    */
-  router.post('/device/code', async (req, res) => {
+  router.post('/device/code', deviceCodeLimiter, async (req, res) => {
     try {
       // Extract machine info from request body (sent by CLI)
       const { agent_id, hostname, platform, platform_version } = req.body || {};
@@ -171,7 +198,7 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
    * Poll for device authorization (called by CLI)
    * This endpoint is PUBLIC - no authentication required
    */
-  router.post('/device/token', async (req, res) => {
+  router.post('/device/token', deviceTokenLimiter, async (req, res) => {
     try {
       const { device_code } = req.body;
 
@@ -203,7 +230,7 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
       logger.error('Error polling device code', {
         error: error.message,
         stack: error.stack,
-        deviceCode: req.body.device_code?.substring(0, 8) + '...',
+        deviceCode: `${req.body.device_code?.substring(0, 8)}...`,
       });
 
       if (error.message.includes('Invalid')) {
@@ -897,12 +924,11 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
           message: 'Disconnect signal sent to agent',
           agent_id: agentId,
         });
-      } else {
-        return res.status(404).json({
-          error: 'Agent not connected',
-          message: 'Agent is not currently connected via SSE',
-        });
       }
+      return res.status(404).json({
+        error: 'Agent not connected',
+        message: 'Agent is not currently connected via SSE',
+      });
     } catch (error: any) {
       return res.status(500).json({
         error: 'Failed to disconnect agent',

@@ -106,14 +106,15 @@ export class GitHubDocsService {
     // Matches: 'key', "key", or key  →  'value' or "value"
     // Handles unquoted identifiers (web, index) and hyphenated quoted keys ('ai-ml')
     const pairRegex = /(?:'([\w-]+)'|"([\w-]+)"|([\w-]+))\s*:\s*(?:'([^']*)'|"([^"]*)")/g;
-    let m: RegExpExecArray | null;
-    while ((m = pairRegex.exec(objMatch[1])) !== null) {
+    let m = pairRegex.exec(objMatch[1]);
+    while (m !== null) {
       const key = m[1] ?? m[2] ?? m[3];
       const value = m[4] ?? m[5];
       // Skip inner object properties like title/label
       if (key && value && key !== 'title' && key !== 'label') {
         result[key] = value;
       }
+      m = pairRegex.exec(objMatch[1]);
     }
     return result;
   }
@@ -237,16 +238,16 @@ export class GitHubDocsService {
         try {
           const cat = JSON.parse(content);
           const existing = dirMeta.get(dir) ?? {};
-          if (cat.label) existing['__dirLabel'] = cat.label;
-          if (cat.position !== undefined) existing['__position'] = String(cat.position);
+          if (cat.label) existing.__dirLabel = cat.label;
+          if (cat.position !== undefined) existing.__position = String(cat.position);
           dirMeta.set(dir, existing);
         } catch { /* skip */ }
       } else {
         const labelMatch = content.match(/^label:\s*['"]?(.+?)['"]?\s*$/m);
         const posMatch = content.match(/^position:\s*(\d+)/m);
         const existing = dirMeta.get(dir) ?? {};
-        if (labelMatch) existing['__dirLabel'] = labelMatch[1].trim();
-        if (posMatch) existing['__position'] = posMatch[1];
+        if (labelMatch) existing.__dirLabel = labelMatch[1].trim();
+        if (posMatch) existing.__position = posMatch[1];
         dirMeta.set(dir, existing);
       }
     }
@@ -282,7 +283,7 @@ export class GitHubDocsService {
       for (const [dirName, dirNode] of node.dirs) {
         const dirPath = pathPrefix ? `${pathPrefix}/${dirName}` : dirName;
         const dirMetaEntry = dirMeta.get(dirPath) ?? {};
-        const label = meta[dirName] ?? dirMetaEntry['__dirLabel'] ?? this.keyToLabel(dirName);
+        const label = meta[dirName] ?? dirMetaEntry.__dirLabel ?? this.keyToLabel(dirName);
         const children = buildItems(dirNode, dirPath);
         items.push({ label, path: dirPath, type: 'dir', children });
       }
@@ -346,8 +347,8 @@ export class GitHubDocsService {
       try {
         const src = await this.fetchRawContent(`${githubPath}/_category_.json`);
         const cat = JSON.parse(src);
-        if (cat.label) meta['__dirLabel'] = cat.label;
-        if (cat.position !== undefined) meta['__position'] = String(cat.position);
+        if (cat.label) meta.__dirLabel = cat.label;
+        if (cat.position !== undefined) meta.__position = String(cat.position);
         this.logger.info(`[EH] _category_.json in ${githubPath}: label="${cat.label}" pos=${cat.position}`);
       } catch (e) {
         this.logger.warn(`[EH] FAILED to read _category_.json in ${githubPath}: ${e}`);
@@ -359,9 +360,9 @@ export class GitHubDocsService {
         const src = await this.fetchRawContent(`${githubPath}/${fname}`);
         const labelMatch = src.match(/^label:\s*['"]?(.+?)['"]?\s*$/m);
         const posMatch = src.match(/^position:\s*(\d+)/m);
-        if (labelMatch) meta['__dirLabel'] = labelMatch[1].trim();
-        if (posMatch) meta['__position'] = posMatch[1];
-        this.logger.info(`[EH] _category_.yml in ${githubPath}: label="${meta['__dirLabel']}" pos=${meta['__position']}`);
+        if (labelMatch) meta.__dirLabel = labelMatch[1].trim();
+        if (posMatch) meta.__position = posMatch[1];
+        this.logger.info(`[EH] _category_.yml in ${githubPath}: label="${meta.__dirLabel}" pos=${meta.__position}`);
       } catch (e) {
         this.logger.warn(`[EH] FAILED to read _category_.yml in ${githubPath}: ${e}`);
       }
@@ -718,13 +719,14 @@ export class GitHubDocsService {
       (_match, inner: string) => {
         const cardPattern = /<div[^>]*>([\s\S]*?)<\/div>/g;
         const cards: string[] = [];
-        let m: RegExpExecArray | null;
-        while ((m = cardPattern.exec(inner)) !== null) {
+        let m = cardPattern.exec(inner);
+        while (m !== null) {
           const cardInner = m[1].trim();
           const titleMatch = cardInner.match(/^<strong>([^<]*)<\/strong>/);
           const title = titleMatch ? titleMatch[1].trim() : '';
           const body = titleMatch ? cardInner.slice(titleMatch[0].length).replace(/^<br\s*\/?>\s*/, '').trim() : cardInner;
           cards.push(`<Card title="${title}">${body}</Card>`);
+          m = cardPattern.exec(inner);
         }
         if (cards.length === 0) return _match;
         return `<Cards>\n${cards.join('\n')}\n</Cards>`;
@@ -734,6 +736,13 @@ export class GitHubDocsService {
 
   // Convert MkDocs definition lists (term\n:   definition) to HTML <dl>/<dt>/<dd>
   // Must run after admonition/tab conversion (those use 4-space indent, not `:   `)
+  private findNextNonEmptyIdx(lines: string[], fromIdx: number): number {
+    for (let j = fromIdx + 1; j < lines.length; j++) {
+      if (lines[j].trim() !== '') return j;
+    }
+    return -1;
+  }
+
   private convertDefinitionLists(content: string): string {
     const lines = content.split('\n');
     const result: string[] = [];
@@ -743,12 +752,7 @@ export class GitHubDocsService {
       // Look ahead: current line is a term candidate (non-empty, no special prefix),
       // next non-empty line starts with `:` (definition marker)
       const line = lines[i];
-      const nextIdx = (() => {
-        for (let j = i + 1; j < lines.length; j++) {
-          if (lines[j].trim() !== '') return j;
-        }
-        return -1;
-      })();
+      const nextIdx = this.findNextNonEmptyIdx(lines, i);
 
       const isNonSpecial = line.trim() !== '' &&
         !line.startsWith('#') &&
@@ -775,7 +779,7 @@ export class GitHubDocsService {
           const defLines = [defMatch[1]];
           j++;
           // Continuation lines (4-space indent after the `:   `)
-          while (j < lines.length && /^    /.test(lines[j])) {
+          while (j < lines.length && /^ {4}/.test(lines[j])) {
             defLines.push(lines[j].slice(4));
             j++;
           }

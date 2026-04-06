@@ -45,7 +45,7 @@ function useProgress(userRef: string, api: { markOnboardingStep: (step: 'catalog
     try {
       const saved = JSON.parse(localStorage.getItem(`onboarding_v1_${userRef}`) ?? '{}');
       setData(prev => ({ ...prev, __registered: saved.__registered ?? false }));
-    } catch {}
+    } catch { /* intentional */ }
   }, [userRef]);
 
   // Load DB-backed steps from getMe response
@@ -64,7 +64,7 @@ function useProgress(userRef: string, api: { markOnboardingStep: (step: 'catalog
       const next = { ...prev, [id]: value };
       // __registered is session-only
       if (id === '__registered') {
-        try { localStorage.setItem(`onboarding_v1_${userRef}`, JSON.stringify({ __registered: value })); } catch {}
+        try { localStorage.setItem(`onboarding_v1_${userRef}`, JSON.stringify({ __registered: value })); } catch { /* intentional */ }
       }
       // DB-backed steps
       if (id === 'catalog-tour') {
@@ -83,7 +83,7 @@ function useProgress(userRef: string, api: { markOnboardingStep: (step: 'catalog
     done: data,
     mark,
     loadFromDb,
-    isRegistered: data['__registered'] ?? false,
+    isRegistered: data.__registered ?? false,
     markRegistered,
     clearRegistered,
   };
@@ -150,7 +150,7 @@ function useGitHubStatus(userRef: string, onMeLoaded?: (me: { onboarding_catalog
   }, [api]);
 
   useEffect(() => {
-    if (!userRef) return;
+    if (!userRef) return undefined;
     check();
     const interval = setInterval(check, 30_000);
     return () => clearInterval(interval);
@@ -486,28 +486,38 @@ export const OnboardingPage = () => {
   // Show spinner while DB check is in flight (for non-admins without a session flag).
   const registrationChecking = !identity.isAdmin && isTeamAssigned === undefined && !isRegistered;
 
+  let registerDescription: string;
+  if (needsRegistration) {
+    registerDescription = 'Select your department team. This creates your profile in the portal.';
+  } else if (isRegistered) {
+    registerDescription = 'Registration submitted. Your profile will appear in the catalog within a minute.';
+  } else {
+    registerDescription = 'Your profile is registered in the portal.';
+  }
+
+  let registerCustom: JSX.Element | undefined;
+  if (registrationChecking) {
+    registerCustom = (
+      <Box display="flex" alignItems="center" style={{ gap: 8, marginTop: 10 }}>
+        <CircularProgress size={14} aria-hidden="true" />
+        <Typography style={{ fontSize: '0.8125rem', color: c.textSecondary }}>
+          Checking registration status…
+        </Typography>
+      </Box>
+    );
+  } else if (needsRegistration) {
+    registerCustom = <RegistrationForm identity={identity} onRegistered={handleRegistered} />;
+  }
+
   const steps: Step[] = [
     {
       id: 'register',
       number: 1,
       title: 'Complete your registration',
-      description: needsRegistration
-        ? 'Select your department team. This creates your profile in the portal.'
-        : isRegistered
-          ? 'Registration submitted. Your profile will appear in the catalog within a minute.'
-          : 'Your profile is registered in the portal.',
+      description: registerDescription,
       done: isFullyRegistered,
       autoDetected: true,
-      custom: registrationChecking ? (
-        <Box display="flex" alignItems="center" style={{ gap: 8, marginTop: 10 }}>
-          <CircularProgress size={14} aria-hidden="true" />
-          <Typography style={{ fontSize: '0.8125rem', color: c.textSecondary }}>
-            Checking registration status…
-          </Typography>
-        </Box>
-      ) : needsRegistration ? (
-        <RegistrationForm identity={identity} onRegistered={handleRegistered} />
-      ) : undefined,
+      custom: registerCustom,
     },
     {
       id: 'github',

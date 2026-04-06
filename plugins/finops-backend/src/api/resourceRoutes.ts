@@ -181,6 +181,7 @@ export function createResourceRoutes(resolver: Resolver, logger: LoggerService):
             case 'eip': result = await resourceService.releaseEIP(r.id, r.region); break;
             case 's3': result = await resourceService.deleteS3Bucket(r.id, r.region); break;
             case 'vpc-endpoint': result = await resourceService.deleteVpcEndpoint(r.id, r.region); break;
+            default: throw new Error(`Unsupported resource type: ${r.type}`);
           }
           return { ...r, success: true, action: result.action };
         } catch (err: any) {
@@ -250,6 +251,7 @@ export function createResourceRoutes(resolver: Resolver, logger: LoggerService):
           ? await resourceService.forceDeleteS3Bucket(id, region)
           : await resourceService.deleteS3Bucket(id, region); break;
         case 'vpc-endpoint': result = await resourceService.deleteVpcEndpoint(id, region); break;
+        default: throw new Error(`Unsupported resource type: ${type}`);
       }
 
       res.json({

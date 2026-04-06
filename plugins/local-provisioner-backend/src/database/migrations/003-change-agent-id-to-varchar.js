@@ -5,7 +5,7 @@
  * instead of random UUIDs. This enables stable agent IDs across re-registrations.
  */
 
-exports.up = async function(knex) {
+exports.up = async function up(knex) {
   // Step 1: Drop foreign key constraints if any exist
   // (None exist currently, but good practice for future)
 
@@ -23,7 +23,7 @@ exports.up = async function(knex) {
   console.log('✓ Changed agent_id column from UUID to VARCHAR(255)');
 };
 
-exports.down = async function(knex) {
+exports.down = async function down(knex) {
   // Revert back to UUID (this will fail if non-UUID values exist)
   await knex.schema.raw('ALTER TABLE agent_registrations DROP CONSTRAINT agent_registrations_pkey;');
 

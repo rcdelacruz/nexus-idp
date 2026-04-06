@@ -22,7 +22,7 @@ export function createDocsRoutes(logger: LoggerService): Router {
 
   router.get('/content', async (req: any, res) => {
     const service: GitHubDocsService = req.docsService;
-    const docPath = req.query['path'] as string;
+    const docPath = req.query.path as string;
     if (!docPath) {
       res.status(400).json({ error: 'Missing required query param: path' });
       return;
@@ -43,7 +43,7 @@ export function createDocsRoutes(logger: LoggerService): Router {
 
   router.post('/refresh/doc', async (req: any, res) => {
     const service: GitHubDocsService = req.docsService;
-    const docPath = req.query['path'] as string;
+    const docPath = req.query.path as string;
     if (!docPath) {
       res.status(400).json({ error: 'Missing required query param: path' });
       return;

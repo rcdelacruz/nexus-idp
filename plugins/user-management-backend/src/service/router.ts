@@ -380,9 +380,10 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
   // In Express 4, async handlers don't pass errors automatically — wrap() calls next(err)
   // which reaches this handler.
   router.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status =
-      err.name === 'NotAllowedError' ? 403 :
-      err.name === 'InputError' ? 400 : 500;
+    let status: number;
+    if (err.name === 'NotAllowedError') { status = 403; }
+    else if (err.name === 'InputError') { status = 400; }
+    else { status = 500; }
     res.status(status).json({ error: err.message ?? 'Internal server error' });
   });
 

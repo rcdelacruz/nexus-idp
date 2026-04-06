@@ -1,0 +1,24 @@
+---
+# Engineering Hub Documentation Source
+# This entity makes the Engineering Hub docs browsable in the Backstage catalog.
+# Its "Docs" tab is rendered by the Engineering Hub plugin (Nextra-style MDX rendering)
+# instead of TechDocs, because of the engineering-docs/source-id annotation.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: engineering-hub-docs
+  title: Engineering Hub
+  description: Stratpoint engineering standards, guides, and golden paths — rendered from stratpoint-engineering/engineering-hub
+  annotations:
+    engineering-docs/source-id: engineering-hub
+    github.com/project-slug: stratpoint-engineering/engineering-hub
+    backstage.io/source-location: url:https://github.com/stratpoint-engineering/engineering-hub
+  tags:
+    - documentation
+    - engineering-standards
+    - golden-paths
+spec:
+  type: documentation
+  lifecycle: production
+  owner: cloud-team
+  system: internal-developer-platform

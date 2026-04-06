@@ -51,9 +51,10 @@ const corsProxyPlugin = createBackendPlugin({
               if (['host','origin','referer','connection'].includes(k)) continue;
               if (typeof v === 'string') fwdHeaders[k] = v;
             }
-            const body = ['POST','PUT','PATCH'].includes(req.method)
-              ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body))
-              : undefined;
+            let body: string | undefined;
+            if (['POST','PUT','PATCH'].includes(req.method)) {
+              body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+            }
 
             const response = await fetch(targetUrl, { method: req.method, headers: fwdHeaders, body });
 

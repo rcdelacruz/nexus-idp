@@ -19,13 +19,27 @@ export function createSetRepoSecretAction() {
     },
     async handler(ctx) {
       const { repoOwner, repoName } = ctx.input;
-      const token = process.env.GITHUB_TOKEN;
-      if (!token) { ctx.logger.warn('GITHUB_TOKEN not set — skipping'); return; }
+      // Prefer a scoped GHCR_TOKEN (packages:write only) over the broad org-level GITHUB_TOKEN.
+      const token = process.env.GHCR_TOKEN ?? process.env.GITHUB_TOKEN;
+      if (!token) { ctx.logger.warn('GHCR_TOKEN and GITHUB_TOKEN not set — skipping GH_PAT secret'); return; }
+      if (!process.env.GHCR_TOKEN) {
+        ctx.logger.warn('GHCR_TOKEN not set — falling back to GITHUB_TOKEN. Set GHCR_TOKEN (packages:write scope only) to limit secret exposure.');
+      }
 
       ctx.logger.info(`Setting GH_PAT on ${repoOwner}/${repoName}`);
 
-      // Get repo public key
-      const pubKey = await ghApi(`/repos/${repoOwner}/${repoName}/actions/secrets/public-key`, 'GET', token);
+      // GitHub Actions API is not immediately ready on a freshly created repo — retry
+      let pubKey: any;
+      for (let attempt = 1; attempt <= 8; attempt++) {
+        try {
+          pubKey = await ghApi(`/repos/${repoOwner}/${repoName}/actions/secrets/public-key`, 'GET', token);
+          break;
+        } catch (err: any) {
+          if (attempt === 8) throw err;
+          ctx.logger.info(`Actions API not ready yet (attempt ${attempt}/8), retrying in 5s…`);
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      }
 
       // Encrypt using libsodium-wrappers
       const sodiumModule = await import('libsodium-wrappers');

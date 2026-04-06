@@ -17,10 +17,7 @@ import {
   DialogTitle,
 } from '@material-ui/core';
 import { AgentRegistration } from '../../api/types';
-import CheckCircleIcon from '@material-ui/icons/CheckCircle';
-import OfflineBoltIcon from '@material-ui/icons/OfflineBolt';
-import DeleteIcon from '@material-ui/icons/Delete';
-import StopIcon from '@material-ui/icons/Stop';
+import { CheckCircle, ZapOff, Trash2, Square } from 'lucide-react';
 
 const useStyles = makeStyles(theme => ({
   card: {
@@ -67,9 +64,9 @@ export const AgentStatusCard = ({ agent, loading, onDisconnect, onRevoke }: Agen
 
   const getStatusIcon = (isConnected: boolean) => {
     return isConnected ? (
-      <CheckCircleIcon fontSize="small" />
+      <CheckCircle size={16} strokeWidth={1.5} />
     ) : (
-      <OfflineBoltIcon fontSize="small" />
+      <ZapOff size={16} strokeWidth={1.5} />
     );
   };
 
@@ -123,7 +120,7 @@ export const AgentStatusCard = ({ agent, loading, onDisconnect, onRevoke }: Agen
         <CardHeader title="Agent Status" />
         <CardContent>
           <div className={classes.noAgent}>
-            <OfflineBoltIcon style={{ fontSize: 48, marginBottom: 16 }} />
+            <ZapOff size={48} strokeWidth={1.5} style={{ marginBottom: 16 }} />
             <Typography variant="h6" gutterBottom>
               No Agent Registered
             </Typography>
@@ -184,7 +181,7 @@ export const AgentStatusCard = ({ agent, loading, onDisconnect, onRevoke }: Agen
       <CardActions>
         <Button
           size="small"
-          startIcon={<StopIcon />}
+          startIcon={<Square size={16} strokeWidth={1.5} />}
           onClick={() => setDisconnectDialogOpen(true)}
           disabled={!agent.isConnected || actionLoading}
         >
@@ -193,7 +190,7 @@ export const AgentStatusCard = ({ agent, loading, onDisconnect, onRevoke }: Agen
         <Button
           size="small"
           color="secondary"
-          startIcon={<DeleteIcon />}
+          startIcon={<Trash2 size={16} strokeWidth={1.5} />}
           onClick={() => setRevokeDialogOpen(true)}
           disabled={actionLoading}
         >

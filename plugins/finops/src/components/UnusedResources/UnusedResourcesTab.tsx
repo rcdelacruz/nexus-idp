@@ -11,9 +11,8 @@ import {
   Chip, Checkbox, Dialog, DialogTitle, DialogContent, DialogContentText,
   DialogActions, ListSubheader,
 } from '@material-ui/core';
-import ExpandMoreIcon from '@material-ui/icons/ExpandMore';
-import DeleteIcon from '@material-ui/icons/Delete';
-import DeleteSweepIcon from '@material-ui/icons/DeleteSweep';
+import { ChevronDown, Trash2 } from 'lucide-react';
+import { semantic, useColors } from '@stratpoint/theme-utils';
 
 
 const ALL_AWS_REGIONS = [
@@ -80,25 +79,25 @@ const fmtDate = (iso?: string) =>
 
 const SafetyBadge = ({ resource }: { resource: UnusedResource }) => {
   let label = 'Safe to delete';
-  let color = '#2e7d32'; // green
+  let color = semantic.success;
 
   if (resource.resourceType === 'ec2') {
     if (resource.state === 'running') {
-      if ((resource.maxCpuPercent ?? 0) > 1) { label = 'Review — has CPU activity'; color = '#e65100'; }
-      else { label = 'Running but idle'; color = '#f57c00'; }
+      if ((resource.maxCpuPercent ?? 0) > 1) { label = 'Review — has CPU activity'; color = semantic.error; }
+      else { label = 'Running but idle'; color = semantic.warning; }
     } else {
-      label = 'Stopped — safe'; color = '#2e7d32';
+      label = 'Stopped — safe'; color = semantic.success;
     }
   } else if (resource.resourceType === 'rds') {
-    if ((resource.maxConnections ?? 0) > 0) { label = 'Had connections — review'; color = '#e65100'; }
-    else { label = 'No connections — safe'; color = '#2e7d32'; }
+    if ((resource.maxConnections ?? 0) > 0) { label = 'Had connections — review'; color = semantic.error; }
+    else { label = 'No connections — safe'; color = semantic.success; }
   } else if (resource.resourceType === 'elb') {
-    if ((resource.totalRequests ?? 0) > 0) { label = 'Had traffic — review'; color = '#e65100'; }
-    else { label = 'No traffic — safe'; color = '#2e7d32'; }
+    if ((resource.totalRequests ?? 0) > 0) { label = 'Had traffic — review'; color = semantic.error; }
+    else { label = 'No traffic — safe'; color = semantic.success; }
   } else if (resource.resourceType === 's3') {
-    if (resource.state === 'empty') { label = 'Empty — safe to delete'; color = '#2e7d32'; }
-    else if (resource.state === 'has-objects') { label = 'Has objects — review first'; color = '#e65100'; }
-    else { label = 'Review before deleting'; color = '#f57c00'; }
+    if (resource.state === 'empty') { label = 'Empty — safe to delete'; color = semantic.success; }
+    else if (resource.state === 'has-objects') { label = 'Has objects — review first'; color = semantic.error; }
+    else { label = 'Review before deleting'; color = semantic.warning; }
   }
 
   return <span style={{ fontSize: 11, fontWeight: 600, color, whiteSpace: 'nowrap' }}>● {label}</span>;
@@ -123,7 +122,7 @@ const TagsDetail = ({ tags }: { tags: Record<string, string> }) => {
         <Chip key={k} size="small" title={`${k}: ${v}`} label={v} style={{ fontSize: 10, height: 16, maxWidth: 120 }} />
       ))}
       {missing.map(k => (
-        <Chip key={k} size="small" label={`!${k}`} style={{ fontSize: 10, height: 16, background: '#ffebee', color: '#c62828' }} />
+        <Chip key={k} size="small" label={`!${k}`} style={{ fontSize: 10, height: 16, background: `${semantic.error}22`, color: semantic.error }} />
       ))}
     </Box>
   );
@@ -224,10 +223,10 @@ const ResourceTable = ({ rows, type, awsAccountNumber, accessPortalUrl, roleName
               {(r.isWebsite || (r.cdnDistributionIds && r.cdnDistributionIds.length > 0)) && (
                 <Box display="flex" style={{ gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                   {r.isWebsite && (
-                    <Chip size="small" label="Website" style={{ fontSize: 10, height: 18, background: '#e3f2fd', color: '#1565c0' }} />
+                    <Chip size="small" label="Website" style={{ fontSize: 10, height: 18, background: `${semantic.info}22`, color: semantic.info }} />
                   )}
                   {r.cdnDistributionIds && r.cdnDistributionIds.length > 0 && (
-                    <Chip size="small" label={`CDN ×${r.cdnDistributionIds.length}`} style={{ fontSize: 10, height: 18, background: '#f3e5f5', color: '#6a1b9a' }} />
+                    <Chip size="small" label={`CDN ×${r.cdnDistributionIds.length}`} style={{ fontSize: 10, height: 18, background: `${semantic.purple}22`, color: semantic.purple }} />
                   )}
                 </Box>
               )}
@@ -256,7 +255,7 @@ const ResourceTable = ({ rows, type, awsAccountNumber, accessPortalUrl, roleName
             </TableCell>
             <TableCell>
               {r.idleDays !== undefined
-                ? <Typography variant="body2" style={{ fontWeight: r.idleDays > 365 ? 700 : 400, color: r.idleDays > 365 ? '#e53935' : 'inherit' }}>{r.idleDays.toLocaleString()}</Typography>
+                ? <Typography variant="body2" style={{ fontWeight: r.idleDays > 365 ? 700 : 400, color: r.idleDays > 365 ? semantic.error : 'inherit' }}>{r.idleDays.toLocaleString()}</Typography>
                 : '—'}
             </TableCell>
             <TableCell><SafetyBadge resource={r} /></TableCell>
@@ -284,10 +283,10 @@ const ResourceTable = ({ rows, type, awsAccountNumber, accessPortalUrl, roleName
                 <Button
                   size="small"
                   variant="outlined"
-                  startIcon={<DeleteIcon />}
+                  startIcon={<Trash2 size={16} strokeWidth={1.5} />}
                   onClick={() => onDelete(r)}
                   disabled={busy}
-                  style={busy ? {} : { color: '#e53935', borderColor: '#e53935' }}
+                  style={busy ? {} : { color: semantic.error, borderColor: semantic.error }}
                 >
                   Delete
                 </Button>
@@ -367,7 +366,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
   const handleToggle = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
       return next;
     });
   };
@@ -375,7 +374,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
   const handleSelectAll = (ids: string[], checked: boolean) => {
     setSelected(prev => {
       const next = new Set(prev);
-      ids.forEach(id => checked ? next.add(id) : next.delete(id));
+      ids.forEach(id => { if (checked) { next.add(id); } else { next.delete(id); } });
       return next;
     });
   };
@@ -430,7 +429,10 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
     }
   };
 
-  const allResources = data ? [...data.ec2, ...data.ebs, ...data.rds, ...data.elb, ...data.eip, ...data.s3, ...data['vpc-endpoint']] : [];
+  const allResources = useMemo(
+    () => data ? [...data.ec2, ...data.ebs, ...data.rds, ...data.elb, ...data.eip, ...data.s3, ...data['vpc-endpoint']] : [],
+    [data],
+  );
   const totalUnused = allResources.length;
   const untaggedCount = allResources.filter(r => getMissingTags(r.tags).length > 0).length;
   const selectedCount = selected.size;
@@ -453,9 +455,11 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
       if (!groups.has(val)) groups.set(val, []);
       groups.get(val)!.push(r);
     });
-    return Array.from(groups.entries()).sort(([a], [b]) =>
-      a === '(untagged)' ? 1 : b === '(untagged)' ? -1 : a.localeCompare(b),
-    );
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      if (a === '(untagged)') return 1;
+      if (b === '(untagged)') return -1;
+      return a.localeCompare(b);
+    });
   }, [filteredResources, groupByTag, data]);
 
   return (
@@ -468,11 +472,11 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
               ? <MenuItem value="all">Loading regions...</MenuItem>
               : [
                 <MenuItem key="all" value="all">All Regions</MenuItem>,
-                <ListSubheader key="active-header" style={{ lineHeight: '28px', fontSize: 11, color: '#2e7d32' }}>ACTIVE</ListSubheader>,
+                <ListSubheader key="active-header" style={{ lineHeight: '28px', fontSize: 11, color: semantic.success }}>ACTIVE</ListSubheader>,
                 ...activeRegions.map(r => <MenuItem key={r} value={r}>{r}</MenuItem>),
-                <ListSubheader key="inactive-header" style={{ lineHeight: '28px', fontSize: 11, color: '#9e9e9e' }}>INACTIVE</ListSubheader>,
+                <ListSubheader key="inactive-header" style={{ lineHeight: '28px', fontSize: 11, color: semantic.warningText }}>INACTIVE</ListSubheader>,
                 ...ALL_AWS_REGIONS.filter(r => !activeRegions.includes(r)).map(r => (
-                  <MenuItem key={r} value={r} style={{ color: '#9e9e9e' }}>{r}</MenuItem>
+                  <MenuItem key={r} value={r} style={{ color: semantic.warningText }}>{r}</MenuItem>
                 )),
               ]
             }
@@ -507,8 +511,8 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
             onClick={() => setShowUntagged(v => !v)}
             style={{
               cursor: 'pointer',
-              background: showUntagged ? '#c62828' : '#ffebee',
-              color: showUntagged ? '#fff' : '#c62828',
+              background: showUntagged ? semantic.error : `${semantic.error}22`,
+              color: showUntagged ? '#fff' : semantic.error,
               fontWeight: 600,
             }}
           />
@@ -517,10 +521,10 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
         {selectedCount > 0 && (
           <Button
             variant="contained"
-            startIcon={bulkDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteSweepIcon />}
+            startIcon={bulkDeleting ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} strokeWidth={1.5} />}
             onClick={() => setBulkConfirmOpen(true)}
             disabled={busy}
-            style={{ background: '#e53935', color: '#fff', marginLeft: 'auto' }}
+            style={{ background: semantic.error, color: '#fff', marginLeft: 'auto' }}
           >
             Delete Selected ({selectedCount})
           </Button>
@@ -529,7 +533,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
 
       {error && <Typography color="error" style={{ marginBottom: 16 }}>Error: {error}</Typography>}
       {data?.timedOutRegions && data.timedOutRegions.length > 0 && (
-        <Typography style={{ marginBottom: 16, color: '#e65100', fontSize: 13 }}>
+        <Typography style={{ marginBottom: 16, color: semantic.warning, fontSize: 13 }}>
           ⚠ The following regions timed out and were skipped — try scanning them individually: <strong>{data.timedOutRegions.join(', ')}</strong>
         </Typography>
       )}
@@ -537,7 +541,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
 
       {!loading && data && tagGroups && tagGroups.map(([tagValue, rows]) => (
         <Accordion key={tagValue} defaultExpanded>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <AccordionSummary expandIcon={<ChevronDown size={16} strokeWidth={1.5} />}>
             <Box display="flex" alignItems="center" style={{ gap: 12 }}>
               <Typography><strong>{groupByTag}: {tagValue}</strong></Typography>
               <Chip size="small" label={rows.length} />
@@ -570,7 +574,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
         const rows = showUntagged ? data[type].filter(r => getMissingTags(r.tags).length > 0) : data[type];
         return (
         <Accordion key={type} defaultExpanded={rows.length > 0}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <AccordionSummary expandIcon={<ChevronDown size={16} strokeWidth={1.5} />}>
             <Box display="flex" alignItems="center" style={{ gap: 12 }}>
               <Typography><strong>{SECTION_LABELS[type]}</strong></Typography>
               <Chip size="small" label={rows.length} />
@@ -627,7 +631,7 @@ export const UnusedResourcesTab = ({ accountId }: { accountId: string }) => {
           <Button
             onClick={handleBulkDelete}
             disabled={bulkDeleting}
-            style={{ color: '#e53935' }}
+            style={{ color: semantic.error }}
           >
             {bulkDeleting ? <CircularProgress size={16} /> : `Delete ${selectedCount} resources`}
           </Button>

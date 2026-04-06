@@ -102,6 +102,15 @@ const AssignDialog = ({ user, onClose, onAssigned }: AssignDialogProps) => {
     }
   };
 
+  let assignButtonText: string;
+  if (loading) {
+    assignButtonText = 'Saving...';
+  } else if (selectedTeams.length === 0) {
+    assignButtonText = 'Select at least one team';
+  } else {
+    assignButtonText = `Assign to ${selectedTeams.map(t => TEAM_LABELS[t] || t).join(', ')}`;
+  }
+
   return (
     <Dialog
       open
@@ -226,11 +235,7 @@ const AssignDialog = ({ user, onClose, onAssigned }: AssignDialogProps) => {
               {loading
                 ? <Loader size={14} strokeWidth={1.5} aria-hidden="true" />
                 : <Check size={14} strokeWidth={2} aria-hidden="true" />}
-              {loading
-                ? 'Saving...'
-                : selectedTeams.length === 0
-                  ? 'Select at least one team'
-                  : `Assign to ${selectedTeams.map(t => TEAM_LABELS[t] || t).join(', ')}`}
+              {assignButtonText}
             </button>
           </Box>
         )}
@@ -495,15 +500,19 @@ export const UserManagementPage = () => {
             {
               title: 'Department',
               field: 'deptTeams',
-              render: (user: UserRecord) => user.isAdmin
-                ? <span style={badge('purple')}>Admin</span>
-                : user.deptTeams.length > 0
-                  ? <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
+              render: (user: UserRecord) => {
+                if (user.isAdmin) return <span style={badge('purple')}>Admin</span>;
+                if (user.deptTeams.length > 0) {
+                  return (
+                    <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
                       {user.deptTeams.map(t => (
                         <span key={t} style={badge('blue-subtle')}>{TEAM_LABELS[t] || t}</span>
                       ))}
                     </Box>
-                  : <span style={badge('amber')}>New user</span>,
+                  );
+                }
+                return <span style={badge('amber')}>New user</span>;
+              },
             },
             {
               title: 'Groups',

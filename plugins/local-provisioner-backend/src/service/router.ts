@@ -148,7 +148,7 @@ export async function createRouter(
         userEntityRef: credentials.principal.userEntityRef,
       });
 
-      next();
+      return next();
     } catch (error: any) {
       logger.warn('Authentication failed', {
         path: req.path,
@@ -159,6 +159,7 @@ export async function createRouter(
         error: 'Unauthorized',
         message: 'Valid Backstage authentication required',
       });
+      return undefined;
     }
   });
 

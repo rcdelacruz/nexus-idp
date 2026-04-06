@@ -487,18 +487,24 @@ export class ResourceService {
     );
     const inRegion = results.filter(r => r.bucketRegion === region);
 
-    return inRegion.map(({ bucket, isWebsite, isEmpty, tags }) => ({
+    return inRegion.map(({ bucket, isWebsite, isEmpty, tags }) => {
+      let bucketState: string;
+      if (isEmpty === true) bucketState = 'empty';
+      else if (isEmpty === false) bucketState = 'has-objects';
+      else bucketState = 'unknown';
+      return {
       resource_type: 's3' as const,
       resource_id: bucket.Name ?? '',
       resource_name: bucket.Name,
       region,
       launch_time: bucket.CreationDate?.toISOString(),
-      state: isEmpty === true ? 'empty' : isEmpty === false ? 'has-objects' : 'unknown',
+      state: bucketState,
       idle_days: this.ageInDays(bucket.CreationDate),
       tags,
       is_website: isWebsite || undefined,
       cdn_distribution_ids: cfDistMap.has(bucket.Name ?? '') ? cfDistMap.get(bucket.Name ?? '') : undefined,
-    }));
+    };
+    });
   }
 
   async getUnusedVpcEndpoints(region: string, thresholdDays?: number): Promise<UnusedResourceEntry[]> {

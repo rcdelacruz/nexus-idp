@@ -14,6 +14,7 @@ const DARK = {
   hoverBg:       '#1f1f1f',  // --ds-gray-200
   // Borders
   border:        '#2e2e2e',  // --ds-gray-400 / --border
+  borderSubtle:  '#1e1e1e',  // --ds-gray-300 / subtle border for large surrounded blocks
   borderHover:   '#454545',  // --ds-gray-500 / --border-hover
   // Text
   text:          '#ededed',  // --fg-primary
@@ -34,7 +35,8 @@ const LIGHT = {
   inputBg:       '#ffffff',  // --ds-background-100
   hoverBg:       '#ebebeb',  // --ds-gray-200
   // Borders
-  border:        '#ebebeb',  // --border
+  border:        '#e5e5e5',  // --border (slightly darker for card visibility)
+  borderSubtle:  '#ebebeb',  // subtle border for large surrounded blocks
   borderHover:   '#c9c9c9',  // --border-hover
   // Text
   text:          '#171717',  // --fg-primary
@@ -97,6 +99,11 @@ export type DesignTokens = typeof DARK & { isDark: boolean };
 export function useColors(): DesignTokens {
   const theme = useTheme();
   const isDark = theme.palette.type === 'dark';
+  return { ...(isDark ? DARK : LIGHT), isDark };
+}
+
+/** Non-hook version — safe to call outside React tree (e.g. root.render) */
+export function getColors(isDark: boolean): DesignTokens {
   return { ...(isDark ? DARK : LIGHT), isDark };
 }
 

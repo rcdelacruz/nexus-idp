@@ -13,6 +13,16 @@ import { useLayoutEffect } from 'react';
  * 3. Kubernetes pod grid layout fix (BackstageItemCardGrid inside MuiDrawer-paper)
  */
 const css = `
+  /* ─── Scaffolder task page: spinner animation ─── */
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ─── Scaffolder task page: log stream monospace font ─── */
+  .geist-log-stream, .geist-log-stream * {
+    font-family: "Geist Mono", "Fira Code", "Courier New", monospace !important;
+    font-size: 0.8125rem !important;
+    line-height: 1.6 !important;
+  }
+
   /*
    * Catalog-graph filter panel styles were here but broke in production:
    * [class*="PluginCatalogGraph*"] selectors don't match JSS-hashed jss4-NNN classes.
@@ -146,21 +156,27 @@ function patchFilterPanel(panel: Element) {
   });
 }
 
-/** Fix Kubernetes pod card grid: gridAutoRows:1fr squishes cards in the 80%-height drawer. */
+/** Fix Kubernetes pod card grid: gridAutoRows:1fr squishes cards in the 80%-height drawer.
+ *  NOTE: BackstageItemCardGrid-root is JSS-hashed in production builds — do NOT use that
+ *  selector. Instead detect grid containers by computed style inside .MuiDrawer-paper. */
 function patchKubernetesPodGrid() {
-  document.querySelectorAll<HTMLElement>('[class*="BackstageItemCardGrid-root"]').forEach(el => {
-    if (!el.closest('[class*="MuiDrawer-paper"]')) return; // scaffolder templates are NOT in a drawer
-    el.style.setProperty('grid-template-columns', '1fr', 'important');
-    el.style.setProperty('grid-auto-rows', 'auto', 'important');
-    el.style.setProperty('overflow-y', 'auto', 'important');
-    el.style.setProperty('height', 'auto', 'important');
-    const parent = el.parentElement;
-    if (parent) {
-      parent.style.setProperty('overflow-y', 'auto', 'important');
-      parent.style.setProperty('height', 'auto', 'important');
-    }
+  document.querySelectorAll<HTMLElement>('.MuiDrawer-paper').forEach(drawer => {
+    drawer.querySelectorAll<HTMLElement>('[class]').forEach(el => {
+      const cs = window.getComputedStyle(el);
+      if (cs.display !== 'grid' || cs.gridAutoRows !== '1fr') return;
+      el.style.setProperty('grid-template-columns', '1fr', 'important');
+      el.style.setProperty('grid-auto-rows', 'auto', 'important');
+      el.style.setProperty('overflow-y', 'auto', 'important');
+      el.style.setProperty('height', 'auto', 'important');
+      const parent = el.parentElement;
+      if (parent) {
+        parent.style.setProperty('overflow-y', 'auto', 'important');
+        parent.style.setProperty('height', 'auto', 'important');
+      }
+    });
   });
 }
+
 
 function findAndPatchFilterPanels() {
   // Catalog-graph filter sidebar styles are handled in theme.ts (PluginCatalogGraphCatalogGraphPage.filters)

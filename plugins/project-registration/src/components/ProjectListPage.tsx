@@ -4,23 +4,18 @@ import {
   Header,
   Page,
   ErrorBoundary,
-  Progress,
+  Table as BackstageTable,
+  TableColumn,
 } from '@backstage/core-components';
 import { useApi, fetchApiRef, discoveryApiRef, identityApiRef } from '@backstage/core-plugin-api';
 import { UserPickerField, CatalogUser } from './UserPickerField';
 import {
+  Box,
   Grid,
   Button,
   TextField,
   MenuItem,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
   Chip,
   Dialog,
@@ -29,53 +24,13 @@ import {
   DialogActions,
   Switch,
   FormControlLabel,
-  Divider,
-  TablePagination,
-  makeStyles,
 } from '@material-ui/core';
 import { Alert } from '@material-ui/lab';
-import EditIcon from '@material-ui/icons/Edit';
-import DeleteIcon from '@material-ui/icons/Delete';
-import ArchiveIcon from '@material-ui/icons/Archive';
-import UnarchiveIcon from '@material-ui/icons/Unarchive';
-import AddIcon from '@material-ui/icons/Add';
-import RemoveIcon from '@material-ui/icons/Remove';
-
-const useStyles = makeStyles(theme => ({
-  tableContainer: {
-    marginTop: theme.spacing(2),
-  },
-  chip: {
-    fontSize: '0.75rem',
-  },
-  actions: {
-    display: 'flex',
-    gap: theme.spacing(0.5),
-    alignItems: 'center',
-  },
-  dialogField: {
-    marginBottom: theme.spacing(2),
-  },
-  toolbar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing(2),
-  },
-  memberRow: {
-    padding: theme.spacing(1.5),
-    marginBottom: theme.spacing(1),
-    background: theme.palette.background.default,
-    borderRadius: 4,
-    border: `1px solid ${theme.palette.divider}`,
-  },
-  memberHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: theme.spacing(1),
-  },
-}));
+import {
+  Pencil, Trash2, Archive, ArchiveRestore,
+  Minus, UserPlus, Loader, AlertTriangle,
+} from 'lucide-react';
+import { useColors, semantic } from '@stratpoint/theme-utils';
 
 interface TeamMember {
   fullName: string;
@@ -115,19 +70,16 @@ interface EditForm {
 }
 
 export const ProjectListPage = () => {
-  const classes = useStyles();
   const fetchApi = useApi(fetchApiRef);
   const discoveryApi = useApi(discoveryApiRef);
   const identityApi = useApi(identityApiRef);
+  const c = useColors();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
   // Edit dialog state
   const [editOpen, setEditOpen] = useState(false);
@@ -148,6 +100,18 @@ export const ProjectListPage = () => {
 
   // Action feedback
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  // ── Styles ──────────────────────────────────────────────────────────────────
+
+  const sectionLabel: React.CSSProperties = {
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: c.textMuted,
+  };
+
+  // ── Data fetching ───────────────────────────────────────────────────────────
 
   useEffect(() => {
     identityApi.getBackstageIdentity().then(identity => {
@@ -173,6 +137,8 @@ export const ProjectListPage = () => {
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
+  // ── Edit handlers ───────────────────────────────────────────────────────────
+
   const openEdit = (project: Project) => {
     setEditProject(project);
     setEditForm({
@@ -190,7 +156,6 @@ export const ProjectListPage = () => {
       ? project.team_members
       : [{ fullName: '', email: '', role: '', accessLevel: 'member' }];
     setEditMembers(members);
-    // Pre-populate selected users from saved fullName/email so picker shows the right value
     setEditSelectedUsers(members.map(m =>
       m.fullName || m.email
         ? { entityRef: '', displayName: m.fullName, email: m.email }
@@ -266,6 +231,8 @@ export const ProjectListPage = () => {
     }
   };
 
+  // ── Archive / Delete handlers ───────────────────────────────────────────────
+
   const handleArchiveToggle = async (project: Project) => {
     const action = project.status === 'active' ? 'archive' : 'unarchive';
     try {
@@ -305,10 +272,18 @@ export const ProjectListPage = () => {
 
   const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString() : '—';
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <ErrorBoundary>
       <Page themeId="tool">
-        <Header title="Manage Projects" subtitle="Edit, archive, or delete projects" />
+        <Header title="Manage Projects" subtitle="Edit, archive, or delete projects">
+          <FormControlLabel
+            control={<Switch checked={showArchived} color="primary" />}
+            label="Show archived"
+            onChange={(_e, checked) => { setShowArchived(checked); }}
+          />
+        </Header>
         <Content>
           {actionMsg && (
             <Alert severity="success" onClose={() => setActionMsg(null)} style={{ marginBottom: 16 }}>
@@ -321,140 +296,125 @@ export const ProjectListPage = () => {
             </Alert>
           )}
 
-          <div className={classes.toolbar}>
-            <Typography variant="h6">
-              {projects.length} {showArchived ? 'total' : 'active'} project{projects.length !== 1 ? 's' : ''}
-            </Typography>
-            <FormControlLabel
-              control={<Switch checked={showArchived} color="primary" />}
-              label="Show archived"
-              onChange={(_e, checked) => { setShowArchived(checked); setPage(0); }}
-            />
-          </div>
-
-          {loading ? (
-            <Progress />
-          ) : (
-            <TableContainer component={Paper} className={classes.tableContainer}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Client</TableCell>
-                    <TableCell>Team</TableCell>
-                    <TableCell>PM Tool</TableCell>
-                    <TableCell>Start</TableCell>
-                    <TableCell>End</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Created By</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {projects.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} align="center">
-                        <Typography color="textSecondary">No projects found</Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : projects.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(p => (
-                    <TableRow key={p.id}>
-                      <TableCell>
-                        <Typography variant="body2" style={{ fontWeight: 500 }}>{p.name}</Typography>
-                        {p.description && (
-                          <Typography variant="caption" color="textSecondary">{p.description}</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>{p.client_name}</TableCell>
-                      <TableCell>{p.team_name ?? '—'}</TableCell>
-                      <TableCell>
-                        {p.pm_tool ? (
-                          <Chip label={p.pm_tool} size="small" className={classes.chip} />
-                        ) : '—'}
-                      </TableCell>
-                      <TableCell>{formatDate(p.start_date)}</TableCell>
-                      <TableCell>{formatDate(p.end_date)}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={p.status}
-                          size="small"
-                          className={classes.chip}
-                          color={p.status === 'active' ? 'primary' : 'default'}
-                        />
-                        {p.type === 'system' && (
-                          <Chip label="system" size="small" className={classes.chip} style={{ marginLeft: 4 }} />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption">{p.created_by.replace('user:default/', '')}</Typography>
-                      </TableCell>
-                      <TableCell align="right">
-                        <div className={classes.actions}>
-                          {p.type !== 'system' && (
-                            <IconButton size="small" title="Edit" onClick={() => openEdit(p)}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          )}
-                          {p.type !== 'system' && (
-                            <IconButton
-                              size="small"
-                              title={p.status === 'active' ? 'Archive' : 'Restore'}
-                              onClick={() => handleArchiveToggle(p)}
-                            >
-                              {p.status === 'active'
-                                ? <ArchiveIcon fontSize="small" />
-                                : <UnarchiveIcon fontSize="small" />
-                              }
-                            </IconButton>
-                          )}
-                          {isAdmin && p.type !== 'system' && (
-                            <IconButton size="small" title="Delete" onClick={() => { setDeleteId(p.id); setDeleteError(null); }}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <TablePagination
-                component="div"
-                count={projects.length}
-                page={page}
-                onPageChange={(_e, newPage) => setPage(newPage)}
-                rowsPerPage={rowsPerPage}
-                onRowsPerPageChange={e => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
-                rowsPerPageOptions={PAGE_SIZE_OPTIONS}
-              />
-            </TableContainer>
-          )}
+          <BackstageTable<Project>
+            title={`${projects.length} ${showArchived ? 'total' : 'active'} project${projects.length !== 1 ? 's' : ''}`}
+            data={projects}
+            isLoading={loading}
+            options={{
+              search: true,
+              paging: true,
+              pageSize: 10,
+              pageSizeOptions: [10, 25, 50],
+              padding: 'dense',
+              actionsColumnIndex: -1,
+            }}
+            columns={[
+              {
+                title: 'Name',
+                field: 'name',
+                render: (p: Project) => (
+                  <Box>
+                    <Typography style={{ fontSize: '0.875rem', fontWeight: 500 }}>{p.name}</Typography>
+                    {p.description && (
+                      <Typography style={{ fontSize: '0.75rem', color: c.textMuted }}>{p.description}</Typography>
+                    )}
+                  </Box>
+                ),
+              },
+              { title: 'Client', field: 'client_name' },
+              { title: 'Team', field: 'team_name', render: (p: Project) => p.team_name ?? '—' },
+              {
+                title: 'PM Tool',
+                field: 'pm_tool',
+                render: (p: Project) => p.pm_tool ? <Chip label={p.pm_tool} size="small" /> : '—',
+              },
+              { title: 'Start', field: 'start_date', render: (p: Project) => formatDate(p.start_date) },
+              { title: 'End', field: 'end_date', render: (p: Project) => formatDate(p.end_date) },
+              {
+                title: 'Status',
+                field: 'status',
+                render: (p: Project) => (
+                  <Box>
+                    <Chip label={p.status} size="small" color={p.status === 'active' ? 'primary' : 'default'} />
+                    {p.type === 'system' && <Chip label="system" size="small" style={{ marginLeft: 4 }} />}
+                  </Box>
+                ),
+              },
+              {
+                title: 'Created By',
+                field: 'created_by',
+                render: (p: Project) => (
+                  <Typography style={{ fontSize: '0.75rem', color: c.textMuted }}>
+                    {p.created_by.replace('user:default/', '')}
+                  </Typography>
+                ),
+              },
+              {
+                title: 'Actions',
+                field: 'id',
+                sorting: false,
+                searchable: false,
+                width: '120px',
+                render: (p: Project) => (
+                  <Box display="flex" style={{ gap: 4 }} justifyContent="flex-end" alignItems="center">
+                    {p.type !== 'system' && (
+                      <IconButton size="small" title="Edit" onClick={() => openEdit(p)} aria-label="Edit">
+                        <Pencil size={16} strokeWidth={1.5} />
+                      </IconButton>
+                    )}
+                    {p.type !== 'system' && (
+                      <IconButton
+                        size="small"
+                        title={p.status === 'active' ? 'Archive' : 'Restore'}
+                        onClick={() => handleArchiveToggle(p)}
+                        aria-label={p.status === 'active' ? 'Archive' : 'Restore'}
+                      >
+                        {p.status === 'active'
+                          ? <Archive size={16} strokeWidth={1.5} />
+                          : <ArchiveRestore size={16} strokeWidth={1.5} />
+                        }
+                      </IconButton>
+                    )}
+                    {isAdmin && p.type !== 'system' && (
+                      <IconButton size="small" title="Delete" onClick={() => { setDeleteId(p.id); setDeleteError(null); }} aria-label="Delete">
+                        <Trash2 size={16} strokeWidth={1.5} />
+                      </IconButton>
+                    )}
+                  </Box>
+                ),
+              },
+            ] as TableColumn<Project>[]}
+          />
 
           {/* Edit Dialog */}
           <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
             <DialogTitle>Edit Project</DialogTitle>
             <DialogContent>
               {editError && <Alert severity="error" style={{ marginBottom: 16 }}>{editError}</Alert>}
-              <Grid container spacing={2} style={{ marginTop: 4 }}>
+
+              <Typography style={{ ...sectionLabel, marginTop: 8, marginBottom: 12 }}>Project Details</Typography>
+              <Grid container spacing={2}>
                 <Grid item xs={12}>
                   <TextField
-                    required fullWidth label="Project Name"
+                    required fullWidth variant="outlined" size="small"
+                    label="Project Name"
                     value={editForm.name}
                     onChange={handleEditChange('name')}
-                    className={classes.dialogField}
                   />
                 </Grid>
                 <Grid item xs={12}>
                   <TextField
-                    fullWidth multiline rows={3} label="Description"
+                    fullWidth multiline minRows={3} variant="outlined" size="small"
+                    label="Description"
                     value={editForm.description}
                     onChange={handleEditChange('description')}
-                    className={classes.dialogField}
+                    InputProps={{ style: { height: 'auto' } }}
                   />
                 </Grid>
                 <Grid item xs={12}>
                   <TextField
-                    required fullWidth label="Client Name"
+                    required fullWidth variant="outlined" size="small"
+                    label="Client Name"
                     value={editForm.client_name}
                     onChange={handleEditChange('client_name')}
                   />
@@ -491,50 +451,15 @@ export const ProjectListPage = () => {
                     label="End Date"
                     InputLabelProps={{ shrink: true }}
                     value={editForm.end_date}
-                    onChange={handleEditChange('end_date')
+                    onChange={handleEditChange('end_date')}
                   />
                 </Grid>
                 <Grid item xs={12}>
                   <TextField
                     fullWidth select variant="outlined" size="small"
-                    label="Assigned Team"
-                    value={editForm.team_name}
-                    onChange={handleEditChange('team_name')}
-                  >
-                    <MenuItem value="">None</MenuItem>
-                    <MenuItem value="web-team">Web</MenuItem>
-                    <MenuItem value="mobile-team">Mobile</MenuItem>
-                    <MenuItem value="data-team">Data</MenuItem>
-                    <MenuItem value="cloud-team">Cloud</MenuItem>
-                    <MenuItem value="ai-team">AI</MenuItem>
-                    <MenuItem value="qa-team">QA</MenuItem>
-                    <MenuItem value="sa-team">SolArch</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth type="date" label="Start Date"
-                    InputLabelProps={{ shrink: true }}
-                    value={editForm.start_date}
-                    onChange={handleEditChange('start_date')}
-                    className={classes.dialogField}
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth type="date" label="End Date"
-                    InputLabelProps={{ shrink: true }}
-                    value={editForm.end_date}
-                    onChange={handleEditChange('end_date')}
-                    className={classes.dialogField}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth select label="PM Tool"
+                    label="PM Tool"
                     value={editForm.pm_tool}
                     onChange={handleEditChange('pm_tool')}
-                    className={classes.dialogField}
                   >
                     <MenuItem value="none">None</MenuItem>
                     <MenuItem value="jira">Jira</MenuItem>
@@ -545,18 +470,18 @@ export const ProjectListPage = () => {
                   <>
                     <Grid item xs={6}>
                       <TextField
-                        fullWidth label="Jira Project Key"
+                        fullWidth variant="outlined" size="small"
+                        label="Jira Project Key"
                         value={editForm.jira_key}
                         onChange={handleEditChange('jira_key')}
-                        className={classes.dialogField}
                       />
                     </Grid>
                     <Grid item xs={6}>
                       <TextField
-                        fullWidth select label="Jira Template"
+                        fullWidth select variant="outlined" size="small"
+                        label="Jira Template"
                         value={editForm.jira_template}
                         onChange={handleEditChange('jira_template')}
-                        className={classes.dialogField}
                       >
                         <MenuItem value="scrum">Scrum</MenuItem>
                         <MenuItem value="kanban">Kanban</MenuItem>
@@ -565,74 +490,106 @@ export const ProjectListPage = () => {
                     </Grid>
                   </>
                 )}
-
-                {/* Team Members */}
-                <Grid item xs={12}>
-                  <Divider style={{ margin: '8px 0 16px' }} />
-                  <Typography variant="subtitle2" style={{ marginBottom: 8 }}>Team Members</Typography>
-                  {editMembers.map((member, idx) => (
-                    <div key={idx} className={classes.memberRow}>
-                      <div className={classes.memberHeader}>
-                        <Typography variant="caption" color="textSecondary">Member {idx + 1}</Typography>
-                        {editMembers.length > 1 && (
-                          <IconButton size="small" onClick={() => removeMember(idx)}>
-                            <RemoveIcon fontSize="small" />
-                          </IconButton>
-                        )}
-                      </div>
-                      <Grid container spacing={1}>
-                        <Grid item xs={12}>
-                          <UserPickerField
-                            label="Select User"
-                            size="small"
-                            value={editSelectedUsers[idx] ?? null}
-                            onChange={user => handleEditUserSelect(idx, user)}
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            fullWidth size="small" select label="Role"
-                            value={member.role}
-                            onChange={handleMemberChange(idx, 'role')}
-                          >
-                            <MenuItem value="developer">Developer</MenuItem>
-                            <MenuItem value="tech-lead">Tech Lead</MenuItem>
-                            <MenuItem value="product-manager">Product Manager</MenuItem>
-                            <MenuItem value="designer">Designer</MenuItem>
-                          </TextField>
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            fullWidth size="small" select label="Access Level"
-                            value={member.accessLevel}
-                            onChange={handleMemberChange(idx, 'accessLevel')}
-                          >
-                            <MenuItem value="member">Team Member</MenuItem>
-                            <MenuItem value="lead">Team Lead</MenuItem>
-                            <MenuItem value="admin">Admin</MenuItem>
-                          </TextField>
-                        </Grid>
-                      </Grid>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outlined" size="small" startIcon={<AddIcon />}
-                    onClick={addMember}
-                    style={{ marginTop: 4 }}
-                  >
-                    Add Member
-                  </Button>
-                </Grid>
               </Grid>
+
+              {/* Team Members — same pattern as ProjectRegistrationPage */}
+              <Typography style={{ ...sectionLabel, marginTop: 24, marginBottom: 12 }}>Team Members</Typography>
+
+              {editMembers.map((member, idx) => (
+                <Box
+                  key={idx}
+                  style={{
+                    background: c.surfaceSubtle,
+                    border: `1px solid ${c.border}`,
+                    borderRadius: 8,
+                    padding: 16,
+                    marginBottom: 10,
+                  }}
+                >
+                  <Box display="flex" justifyContent="space-between" alignItems="center" style={{ marginBottom: 10 }}>
+                    <Typography style={{ fontSize: '0.75rem', color: c.textMuted }}>
+                      Member {idx + 1}
+                    </Typography>
+                    {editMembers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeMember(idx)}
+                        aria-label={`Remove member ${idx + 1}`}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                          background: 'transparent', border: `1px solid ${c.border}`,
+                          color: c.textMuted, fontSize: '0.75rem', fontWeight: 500,
+                        }}
+                      >
+                        <Minus size={12} strokeWidth={1.5} aria-hidden="true" />
+                        Remove
+                      </button>
+                    )}
+                  </Box>
+                  <Grid container spacing={1}>
+                    <Grid item xs={12}>
+                      <UserPickerField
+                        label="Select User"
+                        size="small"
+                        value={editSelectedUsers[idx] ?? null}
+                        onChange={user => handleEditUserSelect(idx, user)}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth select variant="outlined" size="small"
+                        label="Role"
+                        value={member.role}
+                        onChange={handleMemberChange(idx, 'role')}
+                      >
+                        <MenuItem value="developer">Developer</MenuItem>
+                        <MenuItem value="tech-lead">Tech Lead</MenuItem>
+                        <MenuItem value="product-manager">Product Manager</MenuItem>
+                        <MenuItem value="designer">Designer</MenuItem>
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth select variant="outlined" size="small"
+                        label="Access Level"
+                        value={member.accessLevel}
+                        onChange={handleMemberChange(idx, 'accessLevel')}
+                      >
+                        <MenuItem value="member">Team Member</MenuItem>
+                        <MenuItem value="lead">Team Lead</MenuItem>
+                        <MenuItem value="admin">Admin</MenuItem>
+                      </TextField>
+                    </Grid>
+                  </Grid>
+                </Box>
+              ))}
+
+              <button
+                type="button"
+                onClick={addMember}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4,
+                  padding: '8px 14px', borderRadius: 6, cursor: 'pointer',
+                  background: 'transparent', border: `1px solid ${c.border}`,
+                  color: c.textSecondary, fontSize: '0.8125rem', fontWeight: 500,
+                }}
+              >
+                <UserPlus size={14} strokeWidth={1.5} aria-hidden="true" />
+                Add Team Member
+              </button>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setEditOpen(false)} disabled={editLoading}>Cancel</Button>
+              <Button onClick={() => setEditOpen(false)} disabled={editLoading}>
+                Cancel
+              </Button>
               <Button
                 variant="contained" color="primary"
                 onClick={handleEditSave}
                 disabled={editLoading || !editForm.name || !editForm.client_name}
+                startIcon={editLoading ? <Loader size={14} strokeWidth={1.5} /> : undefined}
               >
-                {editLoading ? 'Saving…' : 'Save'}
+                {editLoading ? 'Saving...' : 'Save'}
               </Button>
             </DialogActions>
           </Dialog>
@@ -642,19 +599,29 @@ export const ProjectListPage = () => {
             <DialogTitle>Delete Project?</DialogTitle>
             <DialogContent>
               {deleteError && <Alert severity="error" style={{ marginBottom: 16 }}>{deleteError}</Alert>}
-              <Typography>
-                This will permanently delete the project and cannot be undone.
-                Consider archiving instead to preserve the record.
-              </Typography>
+              <Box display="flex" style={{ gap: 12 }} alignItems="flex-start">
+                <AlertTriangle size={18} color={semantic.error} strokeWidth={1.5} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
+                <Typography style={{ fontSize: '0.875rem', color: c.text }}>
+                  This will permanently delete the project and cannot be undone.
+                  Consider archiving instead to preserve the record.
+                </Typography>
+              </Box>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setDeleteId(null)} disabled={deleteLoading}>Cancel</Button>
+              <Button onClick={() => setDeleteId(null)} disabled={deleteLoading}>
+                Cancel
+              </Button>
               <Button
-                variant="contained" color="secondary"
+                variant="contained"
                 onClick={handleDelete}
                 disabled={deleteLoading}
+                startIcon={deleteLoading ? <Loader size={14} strokeWidth={1.5} /> : undefined}
+                style={{
+                  backgroundColor: '#e5484d',
+                  color: '#ffffff',
+                }}
               >
-                {deleteLoading ? 'Deleting…' : 'Delete'}
+                {deleteLoading ? 'Deleting...' : 'Delete'}
               </Button>
             </DialogActions>
           </Dialog>

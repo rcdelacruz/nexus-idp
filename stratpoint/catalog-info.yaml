@@ -1,0 +1,25 @@
+---
+# Stratpoint Backstage Catalog Root
+# This file serves as the entry point for the Stratpoint catalog
+# It references all organizational entities, systems, and components
+#
+# Note: Templates are maintained in a separate repository:
+# https://github.com/stratpoint-engineering/engineering-standards.git
+
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: stratpoint-root
+  description: Root catalog location for Stratpoint organization
+spec:
+  type: file
+  targets:
+    # Organization structure (groups and users)
+    - ./org/groups.yaml
+    - ./org/users.yaml
+
+    # Systems
+    - ./systems/*.yaml
+
+    # Components
+    - ./components/*.yaml

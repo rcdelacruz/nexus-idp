@@ -3,6 +3,7 @@ import type { TemplateEntityV1beta3 } from '@backstage/plugin-scaffolder-common'
 import { getEntityRelations } from '@backstage/plugin-catalog-react';
 import { RELATION_OWNED_BY, parseEntityRef } from '@backstage/catalog-model';
 import { ArrowUpRight } from 'lucide-react';
+import { badge } from '@stratpoint/theme-utils';
 
 const g = {
   bg:       'var(--ds-background-100)',
@@ -12,9 +13,6 @@ const g = {
   fg2:      'var(--fg-secondary)',
   fg3:      'var(--fg-tertiary)',
   gray100:  'var(--ds-gray-100)',
-  gray200:  'var(--ds-gray-200)',
-  blue:     'var(--blue)',
-  radius:   'var(--radius)',
   radiusMd: 'var(--radius-md)',
 };
 
@@ -33,15 +31,17 @@ export const CustomTemplateCard = ({ template, onSelected }: Props) => {
   const tags = template.metadata.tags ?? [];
   const type = template.spec.type;
 
-  const TYPE_COLORS: Record<string, { bg: string; border: string; color: string }> = {
-    service:       { bg: 'rgba(26,110,255,0.08)',  border: 'rgba(26,110,255,0.25)',  color: '#1a6eff' },
-    website:       { bg: 'rgba(121,40,202,0.08)',  border: 'rgba(121,40,202,0.25)',  color: '#7928ca' },
-    library:       { bg: 'rgba(0,112,243,0.08)',   border: 'rgba(0,112,243,0.25)',   color: '#0070f3' },
-    documentation: { bg: 'rgba(80,227,194,0.08)',  border: 'rgba(80,227,194,0.25)',  color: '#0ea47a' },
-    training:      { bg: 'rgba(245,166,35,0.08)',  border: 'rgba(245,166,35,0.25)',  color: '#c47d0e' },
-    resource:      { bg: 'rgba(143,143,143,0.08)', border: 'rgba(143,143,143,0.25)', color: '#6b6b6b' },
+  // Type badge — subtle variant (category label, not a status)
+  const TYPE_BADGE: Record<string, React.CSSProperties> = {
+    application:    badge('green-subtle'),
+    service:        badge('blue-subtle'),
+    website:        badge('purple-subtle'),
+    library:        badge('blue-subtle'),
+    documentation:  badge('teal-subtle'),
+    training:       badge('amber-subtle'),
+    resource:       badge('gray-subtle'),
   };
-  const typeStyle = TYPE_COLORS[type?.toLowerCase()] ?? { bg: 'var(--surface)', border: g.border, color: g.fg2 };
+  const typeChip = TYPE_BADGE[type?.toLowerCase()] ?? badge('gray-subtle');
 
   const owners = getEntityRelations(template, RELATION_OWNED_BY);
   const ownerName = owners.length
@@ -71,19 +71,7 @@ export const CustomTemplateCard = ({ template, onSelected }: Props) => {
       {/* Body */}
       <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* Type badge */}
-        <span style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          alignSelf: 'flex-start',
-          height: 22,
-          padding: '0 8px',
-          borderRadius: 4,
-          background: typeStyle.bg,
-          border: `1px solid ${typeStyle.border}`,
-          fontSize: '0.75rem',
-          fontWeight: 500,
-          color: typeStyle.color,
-        }}>
+        <span style={{ ...typeChip, alignSelf: 'flex-start' }}>
           {type}
         </span>
 
@@ -126,18 +114,7 @@ export const CustomTemplateCard = ({ template, onSelected }: Props) => {
         {tags.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {tags.slice(0, 5).map(tag => (
-              <span key={tag} style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                height: 22,
-                padding: '0 8px',
-                borderRadius: 4,
-                background: 'var(--surface)',
-                border: `1px solid ${g.border}`,
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                color: g.fg2,
-              }}>
+              <span key={tag} style={badge('gray-subtle')}>
                 {tag}
               </span>
             ))}

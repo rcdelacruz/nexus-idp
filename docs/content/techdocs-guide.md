@@ -23,7 +23,7 @@ engineeringDocs:
     - id: my-source
       label: My Docs
       description: Description shown in the Engineering Docs sidebar
-      repoOwner: your-org
+      repoOwner: stratpoint-engineering
       repoName: my-repo
       branch: main
       contentBase: docs   # path inside the repo where .md files live
@@ -105,7 +105,7 @@ spec:
 Add to `app-config.yaml` under `catalog.locations`:
 ```yaml
 - type: url
-  target: https://github.com/your-org/my-service/blob/main/catalog-info.yaml
+  target: https://github.com/stratpoint-engineering/my-service/blob/main/catalog-info.yaml
   rules:
     - allow: [Component]
 ```

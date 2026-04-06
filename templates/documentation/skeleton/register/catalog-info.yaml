@@ -4,7 +4,14 @@ metadata:
   name: ${{ values.docName }}
   title: ${{ values.title }}
   description: ${{ values.description }}
+  tags:
+    - documentation
+    - ${{ values.docFormat }}
+    {%- for tag in values.tags %}
+    - ${{ tag }}
+    {%- endfor %}
   annotations:
+    project-registration/project-id: ${{ values.projectId }}
     engineering-hub/repo: ${{ values.repoOrg }}/${{ values.repoName }}
     engineering-hub/branch: ${{ values.branch }}
     engineering-hub/content-base: ${{ values.contentBase }}

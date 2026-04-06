@@ -164,9 +164,28 @@ const serviceEntityPage = (
     <EntityLayout.Route
       path="/argocd"
       title="ArgoCD"
-      if={isArgocdAvailable}
     >
-      <EntityArgoCDContent />
+      <EntitySwitch>
+        <EntitySwitch.Case if={isArgocdAvailable}>
+          <EntityArgoCDContent />
+        </EntitySwitch.Case>
+        <EntitySwitch.Case>
+          <EmptyState
+            title="ArgoCD not configured"
+            missing="info"
+            description="Add argocd/app-name and argocd/app-namespace annotations to your catalog-info.yaml to enable the ArgoCD tab."
+            action={
+              <Button
+                variant="contained"
+                color="primary"
+                href="https://backstage.io/docs/features/software-catalog/well-known-annotations"
+              >
+                Read more
+              </Button>
+            }
+          />
+        </EntitySwitch.Case>
+      </EntitySwitch>
     </EntityLayout.Route>
 
     <EntityLayout.Route
@@ -218,9 +237,28 @@ const websiteEntityPage = (
     <EntityLayout.Route
       path="/argocd"
       title="ArgoCD"
-      if={isArgocdAvailable}
     >
-      <EntityArgoCDContent />
+      <EntitySwitch>
+        <EntitySwitch.Case if={isArgocdAvailable}>
+          <EntityArgoCDContent />
+        </EntitySwitch.Case>
+        <EntitySwitch.Case>
+          <EmptyState
+            title="ArgoCD not configured"
+            missing="info"
+            description="Add argocd/app-name and argocd/app-namespace annotations to your catalog-info.yaml to enable the ArgoCD tab."
+            action={
+              <Button
+                variant="contained"
+                color="primary"
+                href="https://backstage.io/docs/features/software-catalog/well-known-annotations"
+              >
+                Read more
+              </Button>
+            }
+          />
+        </EntitySwitch.Case>
+      </EntitySwitch>
     </EntityLayout.Route>
 
     <EntityLayout.Route

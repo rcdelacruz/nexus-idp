@@ -10,8 +10,9 @@ import { Box, Button, Typography } from '@material-ui/core';
 import { useTaskEventStream, scaffolderApiRef } from '@backstage/plugin-scaffolder-react';
 import { TaskLogStream } from '@backstage/plugin-scaffolder-react/alpha';
 import { useApi, useAnalytics } from '@backstage/core-plugin-api';
+import { parseEntityRef } from '@backstage/catalog-model';
 import { usePermission } from '@backstage/plugin-permission-react';
-import { taskCancelPermission, taskReadPermission, taskCreatePermission } from '@backstage/plugin-scaffolder-common/alpha';
+import { taskCancelPermission, taskReadPermission } from '@backstage/plugin-scaffolder-common/alpha';
 import { useColors, semantic } from '@stratpoint/theme-utils';
 import { X as XIcon, FileText, Play, CheckCircle, Circle, Loader, AlertCircle, ExternalLink, LayoutGrid } from 'lucide-react';
 
@@ -27,15 +28,16 @@ export const CustomTaskPage = () => {
 
   const { allowed: canCancelTask } = usePermission({ permission: taskCancelPermission, resourceRef: taskId });
   const { allowed: canReadTask } = usePermission({ permission: taskReadPermission, resourceRef: taskId });
-  const { allowed: canCreateTask } = usePermission({ permission: taskCreatePermission });
 
   const cancelEnabled = !(taskStream.cancelled || taskStream.completed);
 
   const steps = useMemo(
-    () => taskStream.task?.spec.steps.map(step => ({
-      ...step,
-      ...taskStream?.steps?.[step.id],
-    })) ?? [],
+    () => (taskStream.task?.spec.steps ?? [])
+      .filter(step => !step.id.startsWith('resolve-') && !step.id.startsWith('fetch-'))
+      .map(step => ({
+        ...step,
+        ...taskStream?.steps?.[step.id],
+      })),
     [taskStream],
   );
 
@@ -109,6 +111,21 @@ export const CustomTaskPage = () => {
                 const isActive = idx === activeStep;
                 const isLast = idx === steps.length - 1;
 
+                let stepBg = 'transparent';
+                if (isDone) stepBg = semantic.successBg;
+                else if (isFailed) stepBg = semantic.errorBg;
+                else if (isRunning) stepBg = c.surface;
+
+                let stepBorder = c.border;
+                if (isDone) stepBorder = semantic.success;
+                else if (isFailed) stepBorder = semantic.error;
+                else if (isRunning) stepBorder = c.blue;
+
+                let stepColor = c.textMuted;
+                if (isDone) stepColor = c.textSecondary;
+                else if (isFailed) stepColor = semantic.error;
+                else if (isRunning) stepColor = c.text;
+
                 return (
                   <React.Fragment key={step.id}>
                     <Box display="flex" flexDirection="column" alignItems="center" style={{ flex: 0, minWidth: 60 }}>
@@ -116,8 +133,8 @@ export const CustomTaskPage = () => {
                         display="flex" alignItems="center" justifyContent="center"
                         style={{
                           width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                          background: isDone ? semantic.successBg : isFailed ? semantic.errorBg : isRunning ? c.surface : 'transparent',
-                          border: `2px solid ${isDone ? semantic.success : isFailed ? semantic.error : isRunning ? c.blue : c.border}`,
+                          background: stepBg,
+                          border: `2px solid ${stepBorder}`,
                         }}
                       >
                         {isDone && <CheckCircle size={16} color={semantic.success} strokeWidth={2} />}
@@ -128,7 +145,7 @@ export const CustomTaskPage = () => {
                       <Typography style={{
                         fontSize: '0.75rem',
                         fontWeight: isActive || isRunning ? 600 : 500,
-                        color: isDone ? c.textSecondary : isFailed ? semantic.error : isRunning ? c.text : c.textMuted,
+                        color: stepColor,
                         marginTop: 6, textAlign: 'center', lineHeight: 1.3, maxWidth: 100,
                       }}>
                         {step.name}
@@ -145,7 +162,6 @@ export const CustomTaskPage = () => {
                 );
               })}
             </Box>
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
           </Box>
 
           {/* Output links — custom Geist rendering */}
@@ -155,7 +171,15 @@ export const CustomTaskPage = () => {
               <Box display="flex" style={{ gap: 8, flexWrap: 'wrap' }}>
                 {(taskStream.output.links as Array<{ title?: string; url?: string; entityRef?: string; icon?: string }>).map((link, i) => {
                   const isExternal = !!link.url;
-                  const href = link.url ?? (link.entityRef ? `/catalog/${link.entityRef}` : '#');
+                  const entityHref = link.entityRef ? (() => {
+                    try {
+                      const { kind, namespace, name } = parseEntityRef(link.entityRef);
+                      return `/catalog/${namespace ?? 'default'}/${kind.toLowerCase()}/${name}`;
+                    } catch {
+                      return '#';
+                    }
+                  })() : '#';
+                  const href = link.url ?? entityHref;
                   const Icon = link.icon === 'catalog' ? LayoutGrid : ExternalLink;
                   return (
                     <a
@@ -201,7 +225,7 @@ export const CustomTaskPage = () => {
             </Box>
             <Button
               variant="contained" color="primary" size="small"
-              disabled={cancelEnabled || !canReadTask || !canCreateTask}
+              disabled={cancelEnabled || !canReadTask}
               onClick={handleStartOver}
               startIcon={<Play size={14} strokeWidth={1.5} />}
             >
@@ -223,13 +247,6 @@ export const CustomTaskPage = () => {
                 padding: 16,
                 background: c.surfaceSubtle,
               }}>
-                <style>{`
-                  .geist-log-stream, .geist-log-stream * {
-                    font-family: "Geist Mono", "Fira Code", "Courier New", monospace !important;
-                    font-size: 0.8125rem !important;
-                    line-height: 1.6 !important;
-                  }
-                `}</style>
                 <div className="geist-log-stream">
                   <TaskLogStream logs={taskStream.stepLogs} />
                 </div>

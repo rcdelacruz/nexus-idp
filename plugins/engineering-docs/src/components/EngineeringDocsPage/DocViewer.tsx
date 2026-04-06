@@ -3,12 +3,15 @@ import * as ReactDOMClient from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { makeStyles, useTheme } from '@material-ui/core';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const SyntaxHighlighter: any = require('react-syntax-highlighter').default ?? require('react-syntax-highlighter');
+import { makeStyles } from '@material-ui/core';
+import { useColors, getColors, DesignTokens } from '@stratpoint/theme-utils';
 import { atomOneDark, atomOneLight } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 import { Copy, Check, RefreshCw } from 'lucide-react';
+
 import { slugify } from './DocTOC';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const SyntaxHighlighter: any = require('react-syntax-highlighter').default ?? require('react-syntax-highlighter');
 
 // ─── Mermaid ────────────────────────────────────────────────────────────────
 
@@ -17,6 +20,7 @@ import { slugify } from './DocTOC';
 let _mermaidTheme: string | null = null;
 
 const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
+  const c = useColors();
   const ref = useRef<HTMLDivElement>(null);
   const [zoomed, setZoomed] = useState(false);
   const [svg, setSvg] = useState('');
@@ -35,33 +39,33 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
           sequence: { useMaxWidth: true },
           gantt: { useMaxWidth: true },
           themeVariables: dark ? {
-            background: '#0a0a0a',
-            mainBkg: '#1f1f1f',
+            background: c.surfaceSubtle,
+            mainBkg: c.hoverBg,
             nodeBorder: '#333333',
             lineColor: '#666666',
-            primaryColor: '#1f1f1f',
-            primaryTextColor: '#ededed',
+            primaryColor: c.hoverBg,
+            primaryTextColor: c.text,
             primaryBorderColor: '#333333',
             secondaryColor: '#141414',
             tertiaryColor: '#0d0d0d',
-            clusterBkg: '#111111',
-            titleColor: '#ededed',
-            edgeLabelBackground: '#1a1a1a',
+            clusterBkg: c.surface,
+            titleColor: c.text,
+            edgeLabelBackground: c.inputBg,
             fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
             fontSize: '14px',
           } : {
-            background: '#ffffff',
-            mainBkg: '#f4f4f4',
+            background: c.surfaceSubtle,
+            mainBkg: c.avatarBg,
             nodeBorder: '#e0e0e0',
             lineColor: '#555555',
-            primaryColor: '#f4f4f4',
-            primaryTextColor: '#171717',
+            primaryColor: c.avatarBg,
+            primaryTextColor: c.text,
             primaryBorderColor: '#e0e0e0',
-            secondaryColor: '#fafafa',
+            secondaryColor: c.bg,
             tertiaryColor: '#f9fafb',
-            clusterBkg: '#fafafa',
-            titleColor: '#171717',
-            edgeLabelBackground: '#ffffff',
+            clusterBkg: c.bg,
+            titleColor: c.text,
+            edgeLabelBackground: c.surface,
             fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
             fontSize: '14px',
           },
@@ -82,18 +86,26 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
       });
     });
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, dark]);
 
   return (
     <>
       <div
         ref={ref}
+        role={svg ? 'button' : 'img'}
+        aria-label={svg ? 'Expand diagram' : undefined}
         onClick={() => svg && setZoomed(true)}
+        onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && svg) setZoomed(true); }}
+        tabIndex={svg ? 0 : undefined}
         style={{ overflowX: 'auto', padding: '16px 0', cursor: svg ? 'zoom-in' : 'default' }}
       />
       {zoomed && (
         <div
+          role="button"
+          tabIndex={0}
           onClick={() => setZoomed(false)}
+          onKeyDown={e => { if (e.key === 'Escape') setZoomed(false); }}
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
             background: 'rgba(0,0,0,0.85)', display: 'flex',
@@ -102,6 +114,7 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
           }}
         >
           <div
+            role="presentation"
             onClick={e => e.stopPropagation()}
             style={{ width: '85vw', maxHeight: '85vh', overflow: 'auto', background: dark ? '#111' : '#fff', borderRadius: 12, padding: 32 }}
             // eslint-disable-next-line react/no-danger
@@ -119,6 +132,7 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
 // ─── Code block ─────────────────────────────────────────────────────────────
 
 export const CodeBlock = ({ code, language, dark, title }: { code: string; language: string; dark: boolean; title?: string }) => {
+  const c = getColors(dark);
   const [copied, setCopied] = useState(false);
   const copy = () => navigator.clipboard.writeText(code).then(() => {
     setCopied(true);
@@ -127,18 +141,18 @@ export const CodeBlock = ({ code, language, dark, title }: { code: string; langu
 
   if (language === 'mermaid') return <MermaidDiagram code={code} dark={dark} />;
 
-  const headerBg = dark ? '#1a1a1a' : '#f5f5f5';
-  const borderColor = dark ? '#2e2e2e' : '#e5e5e5';
+  const headerBg = dark ? c.surface : c.avatarBg;
+  const borderColor = dark ? c.borderSubtle : c.border;
 
   return (
     <div style={{ borderRadius: 8, border: `1px solid ${borderColor}`, marginBottom: 20, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 14px', background: headerBg, borderBottom: `1px solid ${borderColor}` }}>
-        <span style={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: dark ? '#878787' : '#6b7280', letterSpacing: '0.02em' }}>
+        <span style={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace', color: c.textMuted, letterSpacing: '0.02em' }}>
           {title || language || 'text'}
         </span>
         <button
           onClick={copy}
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: dark ? '#878787' : '#6b7280', fontFamily: '"Geist", sans-serif', padding: '2px 6px', borderRadius: 4 }}
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: c.textMuted, fontFamily: '"Geist", sans-serif', padding: '2px 6px', borderRadius: 4 }}
         >
           {copied ? <><Check size={12} strokeWidth={1.5} /> Copied</> : <><Copy size={12} strokeWidth={1.5} /> Copy</>}
         </button>
@@ -146,7 +160,7 @@ export const CodeBlock = ({ code, language, dark, title }: { code: string; langu
       <SyntaxHighlighter
         language={language || 'text'}
         style={dark ? atomOneDark : atomOneLight}
-        customStyle={{ margin: 0, borderRadius: 0, fontSize: '0.8125rem', fontFamily: '"Geist Mono", "Fira Code", monospace', padding: '14px 16px', background: dark ? '#0d0d0d' : '#fafafa' }}
+        customStyle={{ margin: 0, borderRadius: 0, fontSize: '0.8125rem', fontFamily: '"Geist Mono", "Fira Code", monospace', padding: '14px 16px', background: c.surfaceSubtle }}
       >
         {code}
       </SyntaxHighlighter>
@@ -198,14 +212,7 @@ function preprocessCallouts(content: string): string {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const useStyles = makeStyles(theme => {
-  const dark = theme.palette.type === 'dark';
-  const fg1 = dark ? '#ededed' : '#171717';
-  const fg2 = dark ? '#a1a1a1' : '#374151';
-  const border = dark ? '#2e2e2e' : '#e5e5e5';
-  const inlineCodeBg = dark ? '#1a1a1a' : '#f3f4f6';
-  const inlineCodeColor = dark ? '#e2b96b' : '#d97706';
-
+const useStyles = makeStyles<{}, DesignTokens>(() => {
   // Nextra component colors
   const calloutNote = { color: '#3b82f6', bg: 'rgba(59,130,246,0.07)', border: 'rgba(59,130,246,0.25)' };
   const calloutTip = { color: '#10b981', bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.25)' };
@@ -221,20 +228,20 @@ const useStyles = makeStyles(theme => {
       overflowY: 'auto',
       maxWidth: 860,
       fontFamily: '"Geist", "Inter", "Helvetica Neue", Arial, sans-serif',
-      color: fg1,
+      color: ({ text }: DesignTokens) => text,
       lineHeight: 1.7,
 
-      '& h1': { fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.04em', lineHeight: 1.2, marginTop: 0, marginBottom: 24, color: fg1, paddingBottom: 16, borderBottom: `1px solid ${border}`, scrollMarginTop: 16 },
-      '& h2': { fontSize: '1.375rem', fontWeight: 600, letterSpacing: '-0.025em', lineHeight: 1.3, marginTop: 48, marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${border}`, color: fg1, scrollMarginTop: 16 },
-      '& h3': { fontSize: '1.125rem', fontWeight: 600, letterSpacing: '-0.015em', marginTop: 32, marginBottom: 10, color: fg1, scrollMarginTop: 16 },
-      '& h4': { fontSize: '1rem', fontWeight: 600, letterSpacing: '-0.01em', marginTop: 24, marginBottom: 8, color: fg1, scrollMarginTop: 16 },
-      '& p': { fontSize: '0.9375rem', lineHeight: 1.75, letterSpacing: '-0.003em', marginBottom: 20, color: fg2 },
+      '& h1': { fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.04em', lineHeight: 1.2, marginTop: 0, marginBottom: 24, color: ({ text }: DesignTokens) => text, paddingBottom: 16, borderBottom: ({ border }: DesignTokens) => `1px solid ${border}`, scrollMarginTop: 16 },
+      '& h2': { fontSize: '1.375rem', fontWeight: 600, letterSpacing: '-0.025em', lineHeight: 1.3, marginTop: 48, marginBottom: 16, paddingBottom: 10, borderBottom: ({ border }: DesignTokens) => `1px solid ${border}`, color: ({ text }: DesignTokens) => text, scrollMarginTop: 16 },
+      '& h3': { fontSize: '1.125rem', fontWeight: 600, letterSpacing: '-0.015em', marginTop: 32, marginBottom: 10, color: ({ text }: DesignTokens) => text, scrollMarginTop: 16 },
+      '& h4': { fontSize: '1rem', fontWeight: 600, letterSpacing: '-0.01em', marginTop: 24, marginBottom: 8, color: ({ text }: DesignTokens) => text, scrollMarginTop: 16 },
+      '& p': { fontSize: '0.9375rem', lineHeight: 1.75, letterSpacing: '-0.003em', marginBottom: 20, color: ({ textSecondary }: DesignTokens) => textSecondary },
       '& ul, & ol': { paddingLeft: 28, marginBottom: 20 },
-      '& li': { fontSize: '0.9375rem', lineHeight: 1.75, letterSpacing: '-0.003em', marginBottom: 6, color: fg2 },
+      '& li': { fontSize: '0.9375rem', lineHeight: 1.75, letterSpacing: '-0.003em', marginBottom: 6, color: ({ textSecondary }: DesignTokens) => textSecondary },
       '& li > ul, & li > ol': { marginTop: 6, marginBottom: 0 },
-      '& strong': { fontWeight: 600, color: fg1 },
+      '& strong': { fontWeight: 600, color: ({ text }: DesignTokens) => text },
       '& em': { fontStyle: 'italic' },
-      '& :not(pre) > code': { fontFamily: '"Geist Mono", "Fira Code", monospace', fontSize: '0.8125rem', background: inlineCodeBg, border: `1px solid ${border}`, padding: '1px 6px', borderRadius: 4, color: inlineCodeColor },
+      '& :not(pre) > code': { fontFamily: '"Geist Mono", "Fira Code", monospace', fontSize: '0.8125rem', background: ({ inputBg }: DesignTokens) => inputBg, border: ({ border }: DesignTokens) => `1px solid ${border}`, padding: '1px 6px', borderRadius: 4, color: ({ isDark }: DesignTokens) => isDark ? '#e2b96b' : '#d97706' },
       '& pre': { margin: '0 0 4px', background: 'transparent !important' },
       // Fix: theme's `* { fontFamily: geist !important }` overrides spans inside pre/code.
       // Use higher-specificity rule to restore monospace inside code elements.
@@ -245,17 +252,17 @@ const useStyles = makeStyles(theme => {
       '& foreignObject': { overflow: 'visible' },
       '& svg p': { fontSize: '14px !important', lineHeight: '1.5 !important', letterSpacing: 'normal !important', marginBottom: '0 !important', color: 'inherit !important' },
       '& table': { width: '100%', borderCollapse: 'collapse', marginBottom: 28, fontSize: '0.875rem', display: 'block', overflowX: 'auto' as const },
-      '& th': { border: `1px solid ${border}`, padding: '10px 16px', background: dark ? '#111111' : '#f9fafb', fontWeight: 600, letterSpacing: '-0.006em', textAlign: 'left' as const, color: fg1, whiteSpace: 'nowrap' as const },
-      '& td': { border: `1px solid ${border}`, padding: '10px 16px', color: fg2, verticalAlign: 'top' as const },
-      '& tr:nth-child(even) td': { background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)' },
-      '& a': { color: dark ? '#60a5fa' : '#2563eb', textDecoration: 'underline', textDecorationColor: dark ? 'rgba(96,165,250,0.3)' : 'rgba(37,99,235,0.3)', '&:hover': { textDecorationColor: dark ? '#60a5fa' : '#2563eb' } },
-      '& hr': { border: 'none', borderTop: `1px solid ${border}`, margin: '40px 0' },
+      '& th': { border: ({ border }: DesignTokens) => `1px solid ${border}`, padding: '10px 16px', background: ({ surface }: DesignTokens) => surface, fontWeight: 600, letterSpacing: '-0.006em', textAlign: 'left' as const, color: ({ text }: DesignTokens) => text, whiteSpace: 'nowrap' as const },
+      '& td': { border: ({ border }: DesignTokens) => `1px solid ${border}`, padding: '10px 16px', color: ({ textSecondary }: DesignTokens) => textSecondary, verticalAlign: 'top' as const },
+      '& tr:nth-child(even) td': { background: ({ isDark }: DesignTokens) => isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)' },
+      '& a': { color: ({ isDark }: DesignTokens) => isDark ? '#60a5fa' : '#2563eb', textDecoration: 'underline', textDecorationColor: ({ isDark }: DesignTokens) => isDark ? 'rgba(96,165,250,0.3)' : 'rgba(37,99,235,0.3)', '&:hover': { textDecorationColor: ({ isDark }: DesignTokens) => isDark ? '#60a5fa' : '#2563eb' } },
+      '& hr': { border: 'none', borderTop: ({ border }: DesignTokens) => `1px solid ${border}`, margin: '40px 0' },
       '& img': { maxWidth: '100%', borderRadius: 8, display: 'block', margin: '16px 0' },
-      '& blockquote': { margin: '0 0 20px', padding: '12px 16px', borderLeft: `3px solid ${border}`, color: fg2, fontStyle: 'italic' },
+      '& blockquote': { margin: '0 0 20px', padding: '12px 16px', borderLeft: ({ border }: DesignTokens) => `3px solid ${border}`, color: ({ textSecondary }: DesignTokens) => textSecondary, fontStyle: 'italic' },
       // Definition lists (MkDocs)
       '& dl': { marginBottom: 20 },
-      '& dt': { fontWeight: 600, color: fg1, fontSize: '0.9375rem', marginTop: 12, marginBottom: 2 },
-      '& dd': { marginLeft: 24, color: fg2, fontSize: '0.9375rem', lineHeight: 1.75, marginBottom: 4 },
+      '& dt': { fontWeight: 600, color: ({ text }: DesignTokens) => text, fontSize: '0.9375rem', marginTop: 12, marginBottom: 2 },
+      '& dd': { marginLeft: 24, color: ({ textSecondary }: DesignTokens) => textSecondary, fontSize: '0.9375rem', lineHeight: 1.75, marginBottom: 4 },
 
       // ── Nextra: Callout ──────────────────────────────────────────────────
       '& .nh-callout': { borderRadius: 8, padding: '12px 16px', marginBottom: 20 },
@@ -272,34 +279,34 @@ const useStyles = makeStyles(theme => {
       '& .nh-steps': { marginBottom: 24 },
       '& .nh-step': { display: 'flex', gap: 16, marginBottom: 4 },
       '& .nh-step-indicator': { display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 },
-      '& .nh-step-number': { width: 28, height: 28, borderRadius: '50%', background: dark ? '#ededed' : '#171717', color: dark ? '#171717' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, fontFamily: '"Geist", sans-serif' },
-      '& .nh-step-line': { width: 1, flex: 1, minHeight: 16, background: border, marginTop: 4 },
+      '& .nh-step-number': { width: 28, height: 28, borderRadius: '50%', background: ({ text }: DesignTokens) => text, color: ({ isDark }: DesignTokens) => isDark ? '#171717' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, fontFamily: '"Geist", sans-serif' },
+      '& .nh-step-line': { width: 1, flex: 1, minHeight: 16, background: ({ border }: DesignTokens) => border, marginTop: 4 },
       '& .nh-step-content': { flex: 1, paddingBottom: 16, '& h3': { marginTop: 4 } },
 
       // ── Nextra: FileTree ─────────────────────────────────────────────────
-      '& .nh-filetree': { border: `1px solid ${border}`, borderRadius: 8, padding: '12px 16px', marginBottom: 20, background: dark ? '#0d0d0d' : '#fafafa' },
-      '& .nh-filetree-folder-name': { fontFamily: '"Geist Mono", monospace', fontSize: '0.875rem', padding: '2px 0', color: fg1, cursor: 'default' },
-      '& .nh-filetree-children': { paddingLeft: 20, borderLeft: `1px solid ${border}`, marginLeft: 7, marginTop: 4 },
-      '& .nh-filetree-file': { fontFamily: '"Geist Mono", monospace', fontSize: '0.875rem', padding: '2px 0', color: fg2 },
+      '& .nh-filetree': { border: ({ border }: DesignTokens) => `1px solid ${border}`, borderRadius: 8, padding: '12px 16px', marginBottom: 20, background: ({ surfaceSubtle }: DesignTokens) => surfaceSubtle },
+      '& .nh-filetree-folder-name': { fontFamily: '"Geist Mono", monospace', fontSize: '0.875rem', padding: '2px 0', color: ({ text }: DesignTokens) => text, cursor: 'default' },
+      '& .nh-filetree-children': { paddingLeft: 20, borderLeft: ({ border }: DesignTokens) => `1px solid ${border}`, marginLeft: 7, marginTop: 4 },
+      '& .nh-filetree-file': { fontFamily: '"Geist Mono", monospace', fontSize: '0.875rem', padding: '2px 0', color: ({ textSecondary }: DesignTokens) => textSecondary },
 
       // ── Nextra: Tabs (static fallback; interactive version replaces via useEffect) ──
       '& .nh-tabs': { marginBottom: 20 },
       '& .nh-tab': { marginBottom: 16 },
-      '& .nh-tab-label': { fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: fg2, marginBottom: 8, opacity: 0.6 },
+      '& .nh-tab-label': { fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: ({ textSecondary }: DesignTokens) => textSecondary, marginBottom: 8, opacity: 0.6 },
       '& .nh-tab-content': {},
       '& .nh-interactive-tabs': { marginBottom: 20 },
 
       // ── Nextra: Cards ─────────────────────────────────────────────────────
       '& .nh-cards': { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, marginBottom: 20 },
-      '& .nh-card': { border: `1px solid ${border}`, borderRadius: 10, padding: '16px 18px', minWidth: 0, overflow: 'hidden' },
-      '& .nh-card-title': { fontWeight: 600, fontSize: '0.9375rem', color: fg1, marginBottom: 6, fontFamily: '"Geist", sans-serif', wordBreak: 'break-word', overflowWrap: 'break-word' },
-      '& .nh-card-body': { fontSize: '0.875rem', color: fg2, lineHeight: 1.6, wordBreak: 'break-word', overflowWrap: 'break-word' },
+      '& .nh-card': { border: ({ border }: DesignTokens) => `1px solid ${border}`, borderRadius: 10, padding: '16px 18px', minWidth: 0, overflow: 'hidden' },
+      '& .nh-card-title': { fontWeight: 600, fontSize: '0.9375rem', color: ({ text }: DesignTokens) => text, marginBottom: 6, fontFamily: '"Geist", sans-serif', wordBreak: 'break-word', overflowWrap: 'break-word' },
+      '& .nh-card-body': { fontSize: '0.875rem', color: ({ textSecondary }: DesignTokens) => textSecondary, lineHeight: 1.6, wordBreak: 'break-word', overflowWrap: 'break-word' },
 
       // ── MkDocs custom classes (kafka training repo) ────────────────────────
       '& .card-grid': { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, margin: '16px 0' },
       // minWidth:0 + overflow:hidden required on grid children — prevents expansion and clips overflow
       '& .success-box': { minWidth: 0, overflow: 'hidden', background: 'rgba(0,204,102,0.08)', borderLeft: '4px solid #00cc66', padding: '12px 16px', borderRadius: 4, marginBottom: 0, overflowWrap: 'break-word', wordBreak: 'break-all' },
-      '& .kafka-container': { minWidth: 0, overflow: 'hidden', background: dark ? 'rgba(255,102,0,0.08)' : 'rgba(255,102,0,0.05)', borderLeft: '4px solid #ff6600', padding: '12px 16px', borderRadius: 4, marginBottom: 0, overflowWrap: 'break-word', wordBreak: 'break-all' },
+      '& .kafka-container': { minWidth: 0, overflow: 'hidden', background: ({ isDark }: DesignTokens) => isDark ? 'rgba(255,102,0,0.08)' : 'rgba(255,102,0,0.05)', borderLeft: '4px solid #ff6600', padding: '12px 16px', borderRadius: 4, marginBottom: 0, overflowWrap: 'break-word', wordBreak: 'break-all' },
       '& .info-box': { minWidth: 0, overflow: 'hidden', background: 'rgba(0,102,204,0.08)', borderLeft: '4px solid #0066cc', padding: '12px 16px', borderRadius: 4, marginBottom: 0, overflowWrap: 'break-word', wordBreak: 'break-all' },
       '& .container-section': { minWidth: 0, overflow: 'hidden', background: 'rgba(36,150,237,0.06)', borderLeft: '4px solid #2496ed', padding: '12px 16px', borderRadius: 4, marginBottom: 0, overflowWrap: 'break-word', wordBreak: 'break-all' },
       // Reset p margin inside cards so it doesn't add extra space
@@ -351,9 +358,9 @@ function injectCardStyles(raw: string): string {
 }
 
 export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocViewerProps) => {
-  const classes = useStyles();
-  const theme = useTheme();
-  const dark = theme.palette.type === 'dark';
+  const c = useColors();
+  const classes = useStyles(c);
+  const dark = c.isDark;
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Each entry owns its root — we call root.render() (not createRoot) when only dark changes
@@ -369,7 +376,7 @@ export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocVi
   // Unmount all roots when component unmounts
   useEffect(() => {
     return () => {
-      blockDataRef.current.forEach(b => { try { b.root.unmount(); } catch (_) {} });
+      blockDataRef.current.forEach(b => { try { b.root.unmount(); } catch (_) { /* ignore */ } });
       blockDataRef.current = [];
     };
   }, []);
@@ -379,17 +386,17 @@ export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocVi
     if (!html || !containerRef.current) return;
 
     // Always update CSS vars so tab colors update on dark/light switch without re-parsing HTML
-    containerRef.current.style.setProperty('--tab-border', dark ? '#2e2e2e' : '#e5e5e5');
-    containerRef.current.style.setProperty('--tab-active-fg', dark ? '#ededed' : '#171717');
-    containerRef.current.style.setProperty('--tab-inactive-fg', dark ? '#878787' : '#6b7280');
-    containerRef.current.style.setProperty('--tab-bar-bg', dark ? '#111111' : '#f9fafb');
-    containerRef.current.style.setProperty('--tab-active-bg', dark ? '#1a1a1a' : '#ffffff');
+    containerRef.current.style.setProperty('--tab-border', c.border);
+    containerRef.current.style.setProperty('--tab-active-fg', c.text);
+    containerRef.current.style.setProperty('--tab-inactive-fg', c.textMuted);
+    containerRef.current.style.setProperty('--tab-bar-bg', c.surface);
+    containerRef.current.style.setProperty('--tab-active-bg', dark ? c.inputBg : c.surfaceSubtle);
 
     const htmlChanged = prevHtmlRef.current !== html;
 
     if (htmlChanged) {
       // HTML changed — unmount old roots, re-parse DOM
-      blockDataRef.current.forEach(b => { try { b.root.unmount(); } catch (_) {} });
+      blockDataRef.current.forEach(b => { try { b.root.unmount(); } catch (_) { /* ignore */ } });
       blockDataRef.current = [];
       prevHtmlRef.current = html;
 
@@ -473,8 +480,8 @@ export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocVi
         (tabsEl as HTMLElement).style.cssText = `border:1px solid var(--tab-border);border-radius:8px;overflow:hidden;margin-bottom:20px`;
         tabsEl.insertBefore(tabBar, tabsEl.firstChild);
         tabs.forEach(t => {
-          const content = t.querySelector('.nh-tab-content') as HTMLElement | null;
-          if (content) content.style.cssText = `padding:16px 20px;background:var(--tab-active-bg)`;
+          const tabContent = t.querySelector('.nh-tab-content') as HTMLElement | null;
+          if (tabContent) tabContent.style.cssText = `padding:16px 20px;background:var(--tab-active-bg)`;
         });
         activate(0);
       });
@@ -532,14 +539,27 @@ export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocVi
     });
     Array.from(containerRef.current.querySelectorAll('.success-box,.kafka-container,.info-box,.container-section') as NodeListOf<HTMLElement>).forEach(el => {
       const cls = el.className;
-      const color = cls.includes('success-box') ? '#00cc66' : cls.includes('kafka-container') ? '#ff6600' : cls.includes('info-box') ? '#0066cc' : '#2496ed';
-      const bg = cls.includes('success-box') ? 'rgba(0,204,102,0.08)' : cls.includes('kafka-container') ? 'rgba(255,102,0,0.07)' : cls.includes('info-box') ? 'rgba(0,102,204,0.08)' : 'rgba(36,150,237,0.06)';
+      let color: string;
+      let bg: string;
+      if (cls.includes('success-box')) {
+        color = '#00cc66';
+        bg = 'rgba(0,204,102,0.08)';
+      } else if (cls.includes('kafka-container')) {
+        color = '#ff6600';
+        bg = 'rgba(255,102,0,0.07)';
+      } else if (cls.includes('info-box')) {
+        color = '#0066cc';
+        bg = 'rgba(0,102,204,0.08)';
+      } else {
+        color = '#2496ed';
+        bg = 'rgba(36,150,237,0.06)';
+      }
       el.style.cssText = `min-width:0;overflow:hidden;word-break:break-all;overflow-wrap:break-word;background:${bg};border-left:4px solid ${color};padding:12px 16px;border-radius:4px;margin-bottom:0;`;
       (el.querySelectorAll('p') as NodeListOf<HTMLElement>).forEach(p => { p.style.marginBottom = '0'; });
     });
 
   // Re-run when html or dark changes. onNavigate/currentPath are read via refs.
-  }, [html, dark]);
+  }, [html, dark, c]);
 
   // ── HTML mode (backend-compiled MDX) ────────────────────────────────────
   if (html) {
@@ -566,7 +586,7 @@ export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocVi
           h3: makeHeading(3),
           h4: makeHeading(4),
           a: ({ href, children }: any) => {
-            if (!href) return <a>{children}</a>;
+            if (!href) return <span>{children}</span>;
             if (/^(https?:|\/\/|mailto:|data:|tel:)/.test(href)) return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
             const resolved = resolveDocPath(href, currentPath);
             return <a href={`#doc:${resolved}`} onClick={(e) => { e.preventDefault(); if (onNavigate && resolved) onNavigate(resolved); }}>{children}</a>;

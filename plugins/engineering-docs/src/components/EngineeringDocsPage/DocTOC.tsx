@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { makeStyles } from '@material-ui/core';
+import { useColors, DesignTokens } from '@stratpoint/theme-utils';
 
 export interface TocEntry {
   id: string;
@@ -17,14 +18,15 @@ function decodeHtmlEntities(raw: string): string {
 export function extractTocFromHtml(html: string): TocEntry[] {
   const entries: TocEntry[] = [];
   const re = /<h([23])\s+id="([^"]+)"[^>]*>([\s\S]*?)<\/h[23]>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
+  let m = re.exec(html);
+  while (m !== null) {
     const level = parseInt(m[1], 10) as 2 | 3;
     const id = m[2];
     // Strip inner HTML tags then decode HTML entities (handles &amp;, &#8211;, etc.)
     const stripped = m[3].replace(/<[^>]+>/g, '').trim();
     const label = decodeHtmlEntities(stripped);
     if (id && label) entries.push({ id, label, level });
+    m = re.exec(html);
   }
   return entries;
 }
@@ -57,61 +59,59 @@ export function slugify(text: string): string {
     .trim();
 }
 
-const useStyles = makeStyles(theme => {
-  const dark = theme.palette.type === 'dark';
-  return {
-    toc: {
-      width: 220,
-      flexShrink: 0,
-      padding: '32px 0 32px 24px',
-      overflowY: 'auto',
-      height: '100%',
-      '&::-webkit-scrollbar': { width: 0 },
+const useStyles = makeStyles<{}, DesignTokens>(() => ({
+  toc: {
+    width: 220,
+    flexShrink: 0,
+    padding: '32px 0 32px 24px',
+    overflowY: 'auto',
+    height: '100%',
+    '&::-webkit-scrollbar': { width: 0 },
+  },
+  label: {
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
+    color: ({ textDisabled }: DesignTokens) => textDisabled,
+    fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
+    marginBottom: 12,
+  },
+  entry: {
+    display: 'block',
+    fontSize: '0.8125rem',
+    fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
+    letterSpacing: '-0.006em',
+    lineHeight: 1.5,
+    padding: '3px 0',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    color: ({ textMuted }: DesignTokens) => textMuted,
+    transition: 'color 0.1s',
+    '&:hover': {
+      color: ({ text }: DesignTokens) => text,
     },
-    label: {
-      fontSize: '0.6875rem',
-      fontWeight: 600,
-      letterSpacing: '0.06em',
-      textTransform: 'uppercase' as const,
-      color: dark ? '#454545' : '#8f8f8f',
-      fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
-      marginBottom: 12,
-    },
-    entry: {
-      display: 'block',
-      fontSize: '0.8125rem',
-      fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
-      letterSpacing: '-0.006em',
-      lineHeight: 1.5,
-      padding: '3px 0',
-      cursor: 'pointer',
-      textDecoration: 'none',
-      color: dark ? '#878787' : '#8f8f8f',
-      transition: 'color 0.1s',
-      '&:hover': {
-        color: dark ? '#ededed' : '#171717',
-      },
-    },
-    active: {
-      color: `${dark ? '#ededed' : '#171717'} !important`,
-      fontWeight: 500,
-    },
-    h3: {
-      paddingLeft: 12,
-    },
-  };
-});
+  },
+  active: {
+    color: ({ text }: DesignTokens) => `${text} !important`,
+    fontWeight: 500,
+  },
+  h3: {
+    paddingLeft: 12,
+  },
+}));
 
 interface DocTOCProps {
   entries: TocEntry[];
 }
 
 export const DocTOC = ({ entries }: DocTOCProps) => {
-  const classes = useStyles();
+  const c = useColors();
+  const classes = useStyles(c);
   const [activeId, setActiveId] = useState<string>('');
 
   useEffect(() => {
-    if (entries.length === 0) return;
+    if (entries.length === 0) return undefined;
 
     const observer = new IntersectionObserver(
       observed => {

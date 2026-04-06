@@ -43,7 +43,7 @@ export const CostOverviewTab = ({ refreshKey, accountId, onFetchedAt }: { refres
   const [tagData, setTagData] = useState<Record<string, TagCostEntry[]>>(cached?.tagData ?? {});
 
   useEffect(() => {
-    if (_costCache?.refreshKey === refreshKey && _costCache?.accountId === accountId) { setLoading(false); return; }
+    if (_costCache?.refreshKey === refreshKey && _costCache?.accountId === accountId) { setLoading(false); return undefined; }
     let mounted = true;
     const { start, end } = lastNMonths(1);
     setLoading(true);
@@ -103,7 +103,7 @@ export const CostOverviewTab = ({ refreshKey, accountId, onFetchedAt }: { refres
                 <TableRow>
                   <TableCell>Month</TableCell>
                   <TableCell>Cost</TableCell>
-                  <TableCell style={{ width: '50%' }}></TableCell>
+                  <TableCell style={{ width: '50%' }} />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -136,7 +136,7 @@ export const CostOverviewTab = ({ refreshKey, accountId, onFetchedAt }: { refres
                 <TableRow>
                   <TableCell>Service</TableCell>
                   <TableCell>Cost</TableCell>
-                  <TableCell style={{ width: '40%' }}></TableCell>
+                  <TableCell style={{ width: '40%' }} />
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -179,7 +179,7 @@ export const CostOverviewTab = ({ refreshKey, accountId, onFetchedAt }: { refres
                       <TableRow>
                         <TableCell>{k}</TableCell>
                         <TableCell>Cost</TableCell>
-                        <TableCell style={{ width: '40%' }}></TableCell>
+                        <TableCell style={{ width: '40%' }} />
                       </TableRow>
                     </TableHead>
                     <TableBody>

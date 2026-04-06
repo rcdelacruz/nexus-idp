@@ -35,6 +35,7 @@ const DEPT_TEAMS = [
   'group:default/qa-team',
   'group:default/pm-team',
   'group:default/sa-team',
+  'group:default/devops-team',
 ];
 
 /** Platform admins — full access to everything including FinOps */
@@ -46,6 +47,10 @@ const isAdmin = (groups: string[]) =>
 /** Team leads — any group ending in -lead */
 const isLead = (groups: string[]) =>
   groups.some(ref => ref.startsWith('group:default/') && ref.endsWith('-lead'));
+
+/** DevOps / Platform Engineering — can run infra templates */
+const isDevOps = (groups: string[]) =>
+  groups.some(ref => ref === 'group:default/devops-team');
 
 /** Project managers */
 const isPM = (groups: string[]) =>
@@ -150,14 +155,34 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         });
       }
 
-      // Dev + SA (assigned engineers): components, APIs, systems, resources, templates, users, groups
-      // Excludes Location kind and other internal catalog entities
-      if (isAssignedEngineer(groups)) {
+      // DevOps: full catalog visibility including service + infra templates
+      if (isDevOps(groups)) {
         return createCatalogConditionalDecision(request.permission, {
           anyOf: [
             catalogConditions.isEntityKind({
               kinds: ['component', 'api', 'system', 'domain', 'resource', 'template', 'user', 'group'],
             }),
+          ],
+        });
+      }
+
+      // Engineers: same catalog visibility but templates filtered — devops-team-owned templates hidden
+      if (isAssignedEngineer(groups)) {
+        return createCatalogConditionalDecision(request.permission, {
+          anyOf: [
+            catalogConditions.isEntityKind({
+              kinds: ['component', 'api', 'system', 'domain', 'resource', 'user', 'group'],
+            }),
+            {
+              allOf: [
+                catalogConditions.isEntityKind({ kinds: ['template'] }),
+                {
+                  not: catalogConditions.isEntityOwner({
+                    claims: ['group:default/devops-team'],
+                  }),
+                },
+              ],
+            },
           ],
         });
       }
@@ -232,6 +257,7 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
 
     // Scaffolder: use templates → engineers + leads (not new hires)
     // Create/edit templates → leads only
+    // Infra templates (owned by devops-team) → admins + devops only
     if (permissionName.startsWith('scaffolder.')) {
       // Template management (creating/editing templates in the catalog) → leads only
       if (
@@ -244,6 +270,24 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         }
         return { result: AuthorizeResult.DENY };
       }
+
+      // Infra template execution → admins + devops only
+      // Infra templates are identified by spec.owner: group:default/devops-team
+      if (
+        permissionName === 'scaffolder.task.create' &&
+        isResourcePermission(request.permission, RESOURCE_TYPE_CATALOG_ENTITY)
+      ) {
+        if (isAdmin(groups) || isDevOps(groups)) {
+          return { result: AuthorizeResult.ALLOW };
+        }
+        // Engineers: CONDITIONAL — deny templates owned by devops-team
+        return createCatalogConditionalDecision(request.permission, {
+          not: catalogConditions.isEntityOwner({
+            claims: ['group:default/devops-team'],
+          }),
+        });
+      }
+
       // All other scaffolder operations (use templates, view tasks, etc.) → all assigned engineers
       return { result: AuthorizeResult.ALLOW };
     }

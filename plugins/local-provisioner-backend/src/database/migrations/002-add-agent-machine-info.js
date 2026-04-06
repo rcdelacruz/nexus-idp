@@ -8,7 +8,7 @@
  * 4. Add unique constraint on (hostname, user_id) for machine-based identification
  */
 
-exports.up = async function(knex) {
+exports.up = async function up(knex) {
   // 1. Add platform_version column
   await knex.schema.alterTable('agent_registrations', table => {
     table
@@ -42,7 +42,7 @@ exports.up = async function(knex) {
   console.log('Migration 002: Added platform_version, hostname columns and unique constraint');
 };
 
-exports.down = async function(knex) {
+exports.down = async function down(knex) {
   // Remove unique constraint
   await knex.schema.alterTable('agent_registrations', table => {
     table.dropUnique(['hostname', 'user_id'], 'idx_agent_hostname_user_unique');

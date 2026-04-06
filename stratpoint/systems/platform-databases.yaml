@@ -1,0 +1,54 @@
+---
+# Platform Databases — CNPG PostgreSQL Cluster
+# Registered via stratpoint/catalog-info.yaml → systems/*.yaml
+
+# The shared CNPG cluster that hosts all platform databases
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: postgres-cluster-main
+  title: Main PostgreSQL Cluster (CNPG)
+  description: >
+    CloudNativePG cluster in the default namespace.
+    Shared by Backstage, n8n, and all platform services.
+    Backed by Longhorn storage with daily snapshots and weekly MinIO backups.
+  annotations:
+    backstage.io/kubernetes-id: postgres-cluster
+    backstage.io/kubernetes-namespace: default
+  links:
+    - url: http://192.168.2.214
+      title: pgAdmin Console
+      icon: dashboard
+spec:
+  type: database
+  lifecycle: production
+  owner: group:default/cloud-team
+  system: internal-developer-platform
+---
+# Backstage's own database on the shared cluster
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: backstage-db
+  title: Backstage IDP Database
+  description: PostgreSQL database for the Backstage IDP application (user backstage, db backstage)
+spec:
+  type: database
+  lifecycle: production
+  owner: group:default/cloud-team
+  system: internal-developer-platform
+  dependencyOf:
+    - component:default/stratpoint-idp-portal
+---
+# n8n's database on the shared cluster
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: n8n-db
+  title: n8n Workflow Database
+  description: PostgreSQL database for n8n workflow automation (user n8n, db n8n)
+spec:
+  type: database
+  lifecycle: production
+  owner: group:default/cloud-team
+  system: internal-developer-platform

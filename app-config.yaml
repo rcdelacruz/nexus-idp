@@ -26,7 +26,7 @@ backend:
       - host: github.com
       - host: gitlab.coderstudio.co
       - host: gitlab.com
-      - host: file
+      - host: ''
   listen:
     port: 7007
     host: '0.0.0.0'
@@ -117,10 +117,70 @@ scaffolder:
   github:
     token: ${GITHUB_TOKEN}
     visibility: private
+  engineeringStandards:
+    # Local dev: file path to your local clone of the engineering-standards repo
+    localPath: ${ENGINEERING_STANDARDS_LOCAL_PATH}
+    # Production: GitHub (or any other) URL to the engineering-standards repo
+    # Supports any Git host — GitHub, GitLab, Bitbucket, etc.
+    githubUrl: ${ENGINEERING_STANDARDS_REPO_URL}
   # Base domain for scaffolded app ingress URLs.
   # Set in .env as SCAFFOLDER_INGRESS_DOMAIN
   # Examples: 192.168.2.210.nip.io, apps.coderstudio.co, apps.example.com
   ingressDomain: ${SCAFFOLDER_INGRESS_DOMAIN}
+
+  # ── Infra Targets ────────────────────────────────────────────────────────
+  # Single source of truth for all available deployment targets.
+  # Portal admin configures this — engineers never enter infra details manually.
+  # Add new clusters/accounts here to make them available in scaffolder templates.
+  targets:
+    kubernetes:
+      - name: talos-homelab
+        displayName: 'Talos Homelab (Self-hosted)'
+        type: k8s-selfhosted
+        ingressDomain: ${SCAFFOLDER_INGRESS_DOMAIN}
+        storageClass: longhorn
+        ingressClass: traefik
+        argocdUrl: ${ARGOCD_URL}
+        # Frameworks supported on this target
+        supportedFrameworks: [nextjs, nodejs, nestjs, springboot, python]
+
+    aws:
+      - name: stratpoint-nonprod
+        displayName: 'Stratpoint (Non-prod)'
+        accountId: '${FINOPS_AWS_ACCOUNT_NONPROD}'
+        region: us-west-2
+        ecrRegistry: '${FINOPS_AWS_ACCOUNT_NONPROD}.dkr.ecr.us-west-2.amazonaws.com'
+        targets:
+          ecs:
+            - name: backstage-idp
+              displayName: 'Backstage IDP Cluster'
+              clusterName: backstage-idp-cluster
+              supportedFrameworks: [nextjs, nodejs, nestjs, springboot, python]
+          ec2:
+            enabled: true
+            supportedFrameworks: [nodejs, nestjs, springboot, python]
+          lambda:
+            enabled: true
+            # Lambda: backend/serverless frameworks only
+            supportedFrameworks: [nodejs, nestjs, springboot, python]
+          appRunner:
+            enabled: true
+            supportedFrameworks: [nextjs, nodejs, nestjs, springboot, python]
+      # Add client AWS accounts here:
+      # - name: client-project-x
+      #   displayName: 'Client Project X'
+      #   accountId: '111122223333'
+      #   region: ap-southeast-1
+
+  # ── OpenTofu State Backend ────────────────────────────────────────────────
+  # Used by infra templates to store OpenTofu state
+  tofu:
+    stateBackend:
+      s3Bucket: ${TOFU_STATE_BUCKET}
+      s3Region: ${TOFU_STATE_REGION}
+      dynamoTable: ${TOFU_LOCK_TABLE}
+      #   targets:
+      #     ecs: [...]
 
 catalog:
   import:
@@ -243,15 +303,16 @@ proxy:
         # Get it from: ArgoCD UI → User Info → Copy JWT token
 
 argocd:
-  baseUrl: ${ARGOCD_URL}
-  namespacedApps: true
+  baseUrl: ${ARGOCD_FRONTEND_URL}
+  revisionsToLoad: 20
   appLocatorMethods:
     - type: 'config'
       instances:
         - name: argocd
           url: ${ARGOCD_URL}
-          frontendUrl: ${ARGOCD_URL}
+          frontendUrl: ${ARGOCD_FRONTEND_URL}
           token: ${ARGOCD_TOKEN}
+          rejectUnauthorized: false
           # ARGOCD_TOKEN: bare JWT (same value as ARGOCD_AUTH_TOKEN without the "argocd.token=" prefix)
           # Create a dedicated service account for Backstage:
           #   argocd account create --account backstage
