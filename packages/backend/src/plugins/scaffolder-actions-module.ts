@@ -16,6 +16,8 @@ import { createGetTargetsAction } from './scaffolder/actions/getTargets';
 import { createGetTargetConfigAction } from './scaffolder/actions/getTargetConfig';
 import { createFetchEntityInfoAction } from './scaffolder/actions/fetchEntityInfo';
 import { createTofuApplyAction } from './scaffolder/actions/tofuApply';
+import { createDispatchWorkflowAction } from './scaffolder/actions/dispatchWorkflow';
+import { createSetupRepoForPromotionAction } from './scaffolder/actions/setupRepoForPromotion';
 
 export const scaffolderActionsModule = createBackendModule({
   pluginId: 'scaffolder',
@@ -38,9 +40,11 @@ export const scaffolderActionsModule = createBackendModule({
           createGetIngressDomainAction({ config }),
           createResolveSkeletonUrlAction({ config }),
           createGetTargetsAction({ config }),
-          createGetTargetConfigAction({ config }),
+          createGetTargetConfigAction({ config, discovery, auth }),
           createFetchEntityInfoAction({ discovery, auth }),
           createTofuApplyAction(),
+          createDispatchWorkflowAction(),
+          createSetupRepoForPromotionAction(),
         );
       },
     });

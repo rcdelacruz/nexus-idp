@@ -151,11 +151,10 @@ scaffolder:
         region: us-west-2
         ecrRegistry: '${FINOPS_AWS_ACCOUNT_NONPROD}.dkr.ecr.us-west-2.amazonaws.com'
         targets:
-          ecs:
-            - name: backstage-idp
-              displayName: 'Backstage IDP Cluster'
-              clusterName: backstage-idp-cluster
-              supportedFrameworks: [nextjs, nodejs, nestjs, springboot, python]
+          # ECS clusters are auto-discovered from the Backstage catalog.
+          # Run the "Infrastructure — AWS ECS Fargate Cluster" template to provision
+          # a cluster — it registers automatically as a deployment target.
+          ecs: []
           ec2:
             enabled: true
             supportedFrameworks: [nodejs, nestjs, springboot, python]

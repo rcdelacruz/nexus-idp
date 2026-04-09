@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Content, Header, Page, InfoCard } from '@backstage/core-components';
+import { Content, Header, Page, InfoCard, ErrorPanel } from '@backstage/core-components';
 import { Grid, Box, Typography } from '@material-ui/core';
-import { useApi, errorApiRef } from '@backstage/core-plugin-api';
+import { useApi } from '@backstage/core-plugin-api';
 import { Construction } from 'lucide-react';
 import { useColors } from '@stratpoint/theme-utils';
 import { localProvisionerApiRef } from '../../api/LocalProvisionerClient';
@@ -12,8 +12,8 @@ import { AgentList } from '../AgentList';
 
 export const LocalProvisionerPage = () => {
   const api = useApi(localProvisionerApiRef);
-  const errorApi = useApi(errorApiRef);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pageError, setPageError] = useState<Error | null>(null);
   const { tasks, loading, error } = useProvisioningTasks(refreshKey);
   const { agents, loading: agentsLoading } = useAgents(refreshKey);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -46,10 +46,9 @@ export const LocalProvisionerPage = () => {
       // Trigger refresh by updating refreshKey
       setRefreshKey(prev => prev + 1);
     } catch (err: any) {
-      errorApi.post(new Error(`Failed to disconnect agent: ${err.message}`));
-      throw err;
+      setPageError(new Error(`Failed to disconnect agent: ${err.message}`));
     }
-  }, [api, errorApi]);
+  }, [api]);
 
   const handleRevoke = useCallback(async (agentId: string) => {
     try {
@@ -61,10 +60,9 @@ export const LocalProvisionerPage = () => {
       // Trigger refresh
       setRefreshKey(prev => prev + 1);
     } catch (err: any) {
-      errorApi.post(new Error(`Failed to revoke agent: ${err.message}`));
-      throw err;
+      setPageError(new Error(`Failed to revoke agent: ${err.message}`));
     }
-  }, [api, errorApi, selectedAgentId]);
+  }, [api, selectedAgentId]);
 
   const c = useColors();
 
@@ -75,6 +73,12 @@ export const LocalProvisionerPage = () => {
         subtitle="Manage local development resources provisioned to your machine"
       />
       <Content>
+        {pageError && (
+          <Box style={{ marginBottom: 16 }}>
+            <ErrorPanel error={pageError} titleFormat="markdown" title={pageError.message} />
+          </Box>
+        )}
+
         <Box
           display="flex" alignItems="flex-start"
           style={{

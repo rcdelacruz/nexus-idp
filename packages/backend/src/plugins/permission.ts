@@ -166,6 +166,33 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         });
       }
 
+      // Team leads: see everything engineers see + governance templates (promote-app)
+      if (isLead(groups)) {
+        return createCatalogConditionalDecision(request.permission, {
+          anyOf: [
+            catalogConditions.isEntityKind({
+              kinds: ['component', 'api', 'system', 'domain', 'resource', 'user', 'group'],
+            }),
+            {
+              allOf: [
+                catalogConditions.isEntityKind({ kinds: ['template'] }),
+                {
+                  anyOf: [
+                    {
+                      not: catalogConditions.isEntityOwner({
+                        claims: ['group:default/devops-team'],
+                      }),
+                    },
+                    // Governance templates (e.g. promote-app) are visible to leads
+                    catalogConditions.hasSpec({ key: 'type', value: 'governance' }),
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+      }
+
       // Engineers: same catalog visibility but templates filtered — devops-team-owned templates hidden
       if (isAssignedEngineer(groups)) {
         return createCatalogConditionalDecision(request.permission, {
@@ -272,6 +299,7 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
       }
 
       // Infra template execution → admins + devops only
+      // Governance templates (spec.type: governance) → admins + devops + leads
       // Infra templates are identified by spec.owner: group:default/devops-team
       if (
         permissionName === 'scaffolder.task.create' &&
@@ -279,6 +307,19 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
       ) {
         if (isAdmin(groups) || isDevOps(groups)) {
           return { result: AuthorizeResult.ALLOW };
+        }
+        // Leads: can run non-devops templates + governance templates (promote-app)
+        if (isLead(groups)) {
+          return createCatalogConditionalDecision(request.permission, {
+            anyOf: [
+              {
+                not: catalogConditions.isEntityOwner({
+                  claims: ['group:default/devops-team'],
+                }),
+              },
+              catalogConditions.hasSpec({ key: 'type', value: 'governance' }),
+            ],
+          });
         }
         // Engineers: CONDITIONAL — deny templates owned by devops-team
         return createCatalogConditionalDecision(request.permission, {

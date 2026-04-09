@@ -54,7 +54,6 @@ const makeComponents = (isDark: boolean) => {
     MuiCssBaseline: {
       styleOverrides: {
         '*': {
-          fontFamily: `${geistFont} !important`,
           boxSizing: 'border-box',
           minWidth: 0,
         },
@@ -746,6 +745,19 @@ const makeComponents = (isDark: boolean) => {
       },
     },
 
+    // ---- LogViewer: fix AutoSizer height chain + enforce mono font ----
+    BackstageLogViewer: {
+      styleOverrides: {
+        root: {
+          height: '100%',
+        },
+        log: {
+          fontFamily: geistMono,
+          fontSize: '0.75rem',
+        },
+      },
+    },
+
     // ---- Scaffolder Template Stepper ----
     BackstageTemplateStepper: {
       styleOverrides: {
@@ -870,6 +882,14 @@ const makeComponents = (isDark: boolean) => {
           opacity: 1,
           margin: '2px 0 0',
           lineHeight: 1.4,
+          // subtitle is rendered as component="span" with display:inline-block
+          // inline-block grows with content — must switch to block so it is
+          // constrained by leftItemsBox width and ellipsis kicks in
+          display: 'block',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '100%',
         },
         type: {
           fontFamily: geistFont,

@@ -27,14 +27,33 @@ export function createAppSecretsAction() {
       const { namespace, appName } = ctx.input;
       const secretName = `${appName}-secrets`;
 
-      ctx.logger.info(`Creating app secrets ${secretName} in namespace ${namespace}`);
+      ctx.logger.info(`Ensuring app secrets ${secretName} in namespace ${namespace}`);
 
       const config = await getClusterConfig();
 
-      // Auto-generate a secure AUTH_SECRET as a hex string.
-      // Using hex (not base64) ensures the injected env var is always valid UTF-8.
-      // Stored in stringData so Kubernetes handles the base64 encoding internally.
-      const authSecret = crypto.randomBytes(32).toString('hex');
+      // Check if the secret already exists so we can preserve auth-secret and
+      // any OAuth credentials already filled in. We never rotate auth-secret on
+      // re-runs — that would invalidate active sessions in the environment.
+      let existingData: Record<string, string> = {};
+      try {
+        const existing = await k8sRequest(
+          `${config.server}/api/v1/namespaces/${namespace}/secrets/${secretName}`,
+          'GET',
+          undefined,
+          config,
+        );
+        // Secret data values are base64-encoded
+        const raw = existing?.data ?? {};
+        for (const [k, v] of Object.entries(raw)) {
+          existingData[k] = Buffer.from(v as string, 'base64').toString('utf-8');
+        }
+        ctx.logger.info(`Secret ${secretName} already exists — preserving existing values`);
+      } catch (err: any) {
+        if (err.statusCode !== 404) throw err;
+        // 404 = secret doesn't exist yet, will be created fresh
+      }
+
+      const authSecret = existingData['auth-secret'] ?? crypto.randomBytes(32).toString('hex');
 
       const secretManifest = {
         apiVersion: 'v1',
@@ -43,17 +62,17 @@ export function createAppSecretsAction() {
         type: 'Opaque',
         stringData: {
           'auth-secret': authSecret,
-          'auth-github-id': '',
-          'auth-github-secret': '',
-          'auth-google-id': '',
-          'auth-google-secret': '',
+          'auth-github-id': existingData['auth-github-id'] ?? '',
+          'auth-github-secret': existingData['auth-github-secret'] ?? '',
+          'auth-google-id': existingData['auth-google-id'] ?? '',
+          'auth-google-secret': existingData['auth-google-secret'] ?? '',
         },
       };
 
       const url = `${config.server}/api/v1/namespaces/${namespace}/secrets/${secretName}?fieldManager=backstage-scaffolder&force=true`;
       try {
         await k8sRequest(url, 'PATCH', secretManifest, config);
-        ctx.logger.info(`App secrets ${secretName} created`);
+        ctx.logger.info(`App secrets ${secretName} applied`);
       } catch (err: any) {
         if (err.statusCode === 404) {
           await k8sRequest(`${config.server}/api/v1/namespaces/${namespace}/secrets`, 'POST', secretManifest, config);
@@ -63,7 +82,11 @@ export function createAppSecretsAction() {
         }
       }
 
-      ctx.logger.warn(`OAuth credentials in ${secretName} are empty — update auth-github-id, auth-github-secret, auth-google-id, auth-google-secret before the app can authenticate`);
+      const missingOAuth = ['auth-github-id', 'auth-github-secret', 'auth-google-id', 'auth-google-secret']
+        .filter(k => !existingData[k]);
+      if (missingOAuth.length > 0) {
+        ctx.logger.warn(`OAuth credentials not yet set in ${secretName}: ${missingOAuth.join(', ')} — update before the app can authenticate`);
+      }
     },
   });
 }
@@ -125,15 +148,19 @@ function k8sRequest(url: string, method: string, body: any, config: ClusterConfi
     const isHttps = parsed.protocol === 'https:';
     const lib = isHttps ? https : http;
     const headers: Record<string, string> = {
-      'Content-Type': method === 'PATCH' ? 'application/apply-patch+yaml' : 'application/json',
       Accept: 'application/json',
     };
     if (config.token) headers.Authorization = `Bearer ${config.token}`;
-    const bodyStr = method === 'PATCH' ? yaml.dump(body) : JSON.stringify(body);
+    let bodyStr = '';
+    if (body !== undefined) {
+      headers['Content-Type'] = method === 'PATCH' ? 'application/apply-patch+yaml' : 'application/json';
+      bodyStr = method === 'PATCH' ? yaml.dump(body) : JSON.stringify(body);
+      headers['Content-Length'] = String(Buffer.byteLength(bodyStr));
+    }
     const options: https.RequestOptions = {
       hostname: parsed.hostname, port: parsed.port || (isHttps ? 443 : 80),
       path: parsed.pathname + parsed.search, method,
-      headers: { ...headers, 'Content-Length': Buffer.byteLength(bodyStr) },
+      headers,
       rejectUnauthorized: true,
       timeout: 30000,
       ...(config.ca ? { ca: config.ca } : {}),
@@ -151,7 +178,7 @@ function k8sRequest(url: string, method: string, body: any, config: ClusterConfi
     });
     req.on('error', reject);
     req.on('timeout', () => { req.destroy(new Error(`K8s API request timed out after 30s`)); });
-    req.write(bodyStr);
+    if (bodyStr) req.write(bodyStr);
     req.end();
   });
 }

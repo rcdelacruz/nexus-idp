@@ -4,29 +4,50 @@ import * as https from 'https';
 /**
  * Scaffolder action: github:repo:set-secret
  *
- * Sets the GITHUB_TOKEN from env as GH_PAT on the scaffolded repo
- * so CI/CD can push to GHCR.
+ * Sets a secret on a GitHub repository using the Actions Secrets API.
+ * When secretName/secretValue are omitted, defaults to setting GH_PAT
+ * (the GHCR push token used by CI/CD).
  */
 export function createSetRepoSecretAction() {
   return createTemplateAction({
     id: 'github:repo:set-secret',
-    description: 'Set GH_PAT secret on a GitHub repo for GHCR access',
+    description: 'Set a secret on a GitHub repo (defaults to GH_PAT for GHCR access)',
     schema: {
       input: z => z.object({
         repoOwner: z.string(),
         repoName: z.string(),
+        secretName: z.string().optional().describe('Secret name (default: GH_PAT)'),
+        secretValue: z.string().optional().describe('Secret value (default: GHCR_TOKEN or GITHUB_TOKEN)'),
       }),
     },
     async handler(ctx) {
       const { repoOwner, repoName } = ctx.input;
-      // Prefer a scoped GHCR_TOKEN (packages:write only) over the broad org-level GITHUB_TOKEN.
+      const secretName = ctx.input.secretName ?? 'GH_PAT';
+
+      // Resolve secret value: explicit input > named env var > fallback defaults
+      const ENV_MAP: Record<string, string | undefined> = {
+        GH_PAT: process.env.GHCR_TOKEN ?? process.env.GITHUB_TOKEN,
+        ARGOCD_TOKEN: process.env.ARGOCD_TOKEN,
+        // ARGOCD_FRONTEND_URL is the public URL reachable from GitHub Actions.
+        // ARGOCD_URL is the internal cluster URL — unusable outside the cluster.
+        ARGOCD_SERVER: process.env.ARGOCD_FRONTEND_URL ?? process.env.ARGOCD_URL ?? process.env.ARGOCD_SERVER,
+      };
+      const secretValue = ctx.input.secretValue
+        ?? ENV_MAP[secretName]
+        ?? process.env.GHCR_TOKEN
+        ?? process.env.GITHUB_TOKEN;
+
       const token = process.env.GHCR_TOKEN ?? process.env.GITHUB_TOKEN;
-      if (!token) { ctx.logger.warn('GHCR_TOKEN and GITHUB_TOKEN not set — skipping GH_PAT secret'); return; }
-      if (!process.env.GHCR_TOKEN) {
-        ctx.logger.warn('GHCR_TOKEN not set — falling back to GITHUB_TOKEN. Set GHCR_TOKEN (packages:write scope only) to limit secret exposure.');
+      if (!token) {
+        ctx.logger.warn('GHCR_TOKEN and GITHUB_TOKEN not set — skipping secret');
+        return;
+      }
+      if (!secretValue) {
+        ctx.logger.warn(`No value for secret ${secretName} — skipping`);
+        return;
       }
 
-      ctx.logger.info(`Setting GH_PAT on ${repoOwner}/${repoName}`);
+      ctx.logger.info(`Setting ${secretName} on ${repoOwner}/${repoName}`);
 
       // GitHub Actions API is not immediately ready on a freshly created repo — retry
       let pubKey: any;
@@ -41,22 +62,20 @@ export function createSetRepoSecretAction() {
         }
       }
 
-      // Encrypt using libsodium-wrappers
       const sodiumModule = await import('libsodium-wrappers');
       const sodium = sodiumModule.default ?? sodiumModule;
       await sodium.ready;
       const keyBytes = sodium.from_base64(pubKey.key, sodium.base64_variants.ORIGINAL);
-      const secretBytes = sodium.from_string(token);
+      const secretBytes = sodium.from_string(secretValue);
       const encrypted = sodium.crypto_box_seal(secretBytes, keyBytes);
       const encryptedB64 = sodium.to_base64(encrypted, sodium.base64_variants.ORIGINAL);
 
-      // Set secret
-      await ghApi(`/repos/${repoOwner}/${repoName}/actions/secrets/GH_PAT`, 'PUT', token, {
+      await ghApi(`/repos/${repoOwner}/${repoName}/actions/secrets/${secretName}`, 'PUT', token, {
         encrypted_value: encryptedB64,
         key_id: pubKey.key_id,
       });
 
-      ctx.logger.info('GH_PAT secret set');
+      ctx.logger.info(`${secretName} secret set`);
     },
   });
 }
@@ -88,7 +107,7 @@ function ghApi(path: string, method: string, token: string, body?: any): Promise
       });
     });
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(new Error(`GitHub API request timed out after 30s`)); });
+    req.on('timeout', () => { req.destroy(new Error('GitHub API request timed out after 30s')); });
     if (bodyStr) req.write(bodyStr);
     req.end();
   });

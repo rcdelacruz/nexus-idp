@@ -29,11 +29,14 @@ export function createFetchEntityInfoAction(options: { discovery: DiscoveryServi
         }),
       output: z =>
         z.object({
+          appName: z.string(),
           repoOwner: z.string(),
           repoName: z.string(),
           containerPort: z.number(),
           owner: z.string(),
           description: z.string(),
+          deploymentTarget: z.string(),
+          database: z.string(),
         }),
     },
     async handler(ctx) {
@@ -78,19 +81,43 @@ export function createFetchEntityInfoAction(options: { discovery: DiscoveryServi
         );
       }
 
-      const containerPort = Number(annotations['backstage.io/container-port'] ?? 3000);
+      const containerPort = Number(
+        annotations['backstage.io/container-port'] ??
+        annotations['app/container-port'] ??
+        3000,
+      );
       const owner = typeof entity.spec?.owner === 'string' ? entity.spec.owner : '';
       const description = entity.metadata.description ?? '';
+      // Prefer explicit annotation; fall back to inferring from target-specific annotations
+      // so that entities scaffolded before app/deployment-target was added still work.
+      let deploymentTarget = annotations['app/deployment-target'] ?? '';
+      if (!deploymentTarget) {
+        if (annotations['backstage.io/kubernetes-id']) {
+          deploymentTarget = 'k8s-selfhosted';
+        } else if (annotations['aws/ecs-service']) {
+          deploymentTarget = 'ecs';
+        } else if (annotations['aws/app-runner-service']) {
+          deploymentTarget = 'app-runner';
+        } else if (annotations['aws/lambda-function']) {
+          deploymentTarget = 'lambda';
+        }
+      }
+      const database = annotations['app/database'] ?? 'none';
+      const appName = entity.metadata.name;
 
       ctx.logger.info(
-        `Entity [${entityRef}]: repo=${repoOwner}/${repoName}, port=${containerPort}, owner=${owner}`,
+        `Entity [${entityRef}]: app=${appName}, repo=${repoOwner}/${repoName}, ` +
+        `port=${containerPort}, target=${deploymentTarget}, db=${database}`,
       );
 
+      ctx.output('appName', appName);
       ctx.output('repoOwner', repoOwner);
       ctx.output('repoName', repoName);
       ctx.output('containerPort', containerPort);
       ctx.output('owner', owner);
       ctx.output('description', description);
+      ctx.output('deploymentTarget', deploymentTarget);
+      ctx.output('database', database);
     },
   });
 }

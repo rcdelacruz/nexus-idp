@@ -43,6 +43,8 @@ import { CustomTemplateWizardPage } from './components/scaffolder/CustomTemplate
 import { CustomTaskPage } from './components/scaffolder/CustomTaskPage';
 import { ProjectPickerField } from './components/scaffolder/ProjectPickerField';
 import { DeploymentTargetPicker } from './components/scaffolder/DeploymentTargetPicker';
+import { DatabasePicker } from './components/scaffolder/DatabasePicker';
+import { ValidatedTextField } from './components/scaffolder/ValidatedTextField';
 import type { TemplateWizardPageProps } from '@backstage/plugin-scaffolder/alpha';
 
 // Injects ProjectPicker field extension into the wizard without needing
@@ -54,6 +56,8 @@ const CustomTemplateWizardPageWithExtensions = (props: TemplateWizardPageProps) 
       ...(props.customFieldExtensions ?? []),
       { name: 'ProjectPicker', component: ProjectPickerField as any },
       { name: 'DeploymentTargetPicker', component: DeploymentTargetPicker as any },
+      { name: 'DatabasePicker', component: DatabasePicker as any },
+      { name: 'ValidatedTextField', component: ValidatedTextField as any },
     ]}
   />
 );

@@ -11,7 +11,17 @@ export PATH="$(pwd)/node_modules/.bin:$PATH"
 yarn workspace app build && yarn build:backend
 
 echo "==> Building Docker image..."
-docker build . -f Dockerfile.with-migrations --tag 192.168.2.101:5000/backstage:latest
+docker build . -f Dockerfile.with-migrations --tag backstage:built
+
+echo "==> Flattening image (prevent overlay layer accumulation)..."
+CID=$(docker create backstage:built)
+docker export "$CID" | docker import \
+  --change 'USER node' \
+  --change 'WORKDIR /app' \
+  --change 'CMD ["node", "packages/backend", "--config", "app-config.yaml", "--config", "app-config.production.yaml"]' \
+  - 192.168.2.101:5000/backstage:latest
+docker rm "$CID"
+docker rmi backstage:built
 
 echo "==> Pushing image to registry..."
 docker push 192.168.2.101:5000/backstage:latest
