@@ -21,6 +21,9 @@ import { techRadarApiRef } from '@backstage-community/plugin-tech-radar';
 import { ThoughtworksTechRadarApi } from './components/techRadar/ThoughtworksTechRadarApi';
 import { githubActionsApiRef, GithubActionsClient } from '@backstage-community/plugin-github-actions';
 import { Octokit } from '@octokit/rest';
+import { catalogImportApiRef, CatalogImportClient } from '@backstage/plugin-catalog-import';
+import { catalogApiRef } from '@backstage/plugin-catalog-react';
+import { scmAuthApiRef } from '@backstage/integration-react';
 
 export const apis: AnyApiFactory[] = [
   // Extends the default Backstage FetchApi with token injection + revoked-session auto sign-out.
@@ -107,6 +110,19 @@ export const apis: AnyApiFactory[] = [
     api: userManagementApiRef,
     deps: { discoveryApi: discoveryApiRef, identityApi: identityApiRef },
     factory: ({ discoveryApi, identityApi }) => new UserManagementApiImpl(discoveryApi, identityApi),
+  }),
+  createApiFactory({
+    api: catalogImportApiRef,
+    deps: {
+      discoveryApi: discoveryApiRef,
+      fetchApi: fetchApiRef,
+      scmAuthApi: scmAuthApiRef,
+      scmIntegrationsApi: scmIntegrationsApiRef,
+      catalogApi: catalogApiRef,
+      configApi: configApiRef,
+    },
+    factory: ({ discoveryApi, fetchApi, scmAuthApi, scmIntegrationsApi, catalogApi, configApi }) =>
+      new CatalogImportClient({ discoveryApi, fetchApi, scmAuthApi, scmIntegrationsApi, catalogApi, configApi }),
   }),
   // Override apiDocsConfig to route SwaggerUI "Try it out" requests through the
   // Backstage CORS proxy backend, avoiding browser cross-origin restrictions.

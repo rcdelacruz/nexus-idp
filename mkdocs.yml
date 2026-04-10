@@ -1,9 +1,18 @@
 site_name: Nexus IDP Documentation
 nav:
   - Home: index.md
-  - Permission System: permission-system.md
-  - User & Group Management: user-group-management.md
-  - Google OAuth Setup: google-oauth-setup.md
-  - Template Permissions: template-permissions.md
-  - TechDocs Guide: techdocs-guide.md
-  - K8s + ArgoCD + CNPG: k8s-argocd-cnpg-integration.md
+  - Getting Started: getting-started.md
+  - Catalog:
+      - Importing Projects: importing-projects.md
+      - Search: search.md
+  - Scaffolder:
+      - Templates: scaffolder-templates.md
+      - Template Permissions: template-permissions.md
+  - Platform:
+      - Permission System: permission-system.md
+      - User & Group Management: user-group-management.md
+      - Local Provisioner: local-provisioner.md
+      - Kubernetes & ArgoCD: kubernetes-argocd.md
+      - FinOps: finops.md
+      - Tech Radar: tech-radar.md
+      - Documentation Guide: techdocs-guide.md

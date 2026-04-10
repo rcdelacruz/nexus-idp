@@ -235,7 +235,8 @@ const makeComponents = (isDark: boolean) => {
           borderRadius: 6,
           backgroundColor: isDark ? '#0a0a0a' : '#ffffff',
           color: c.textPrimary,
-          height: 40,
+          // No height here — fixed height breaks multiline inputs and floating labels.
+          // Single-line height (40px) is enforced via the input slot padding instead.
           '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: c.borderHover },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: c.blue,
@@ -1466,19 +1467,21 @@ const makeComponents = (isDark: boolean) => {
           minHeight: 48,
           alignItems: 'center',
         },
-        description: {
+        // title slot: renders as Typography variant="h4" — MUI default is 2.125rem (34px)
+        // must override fontSize here or the title is enormous and overlaps other content
+        title: {
           fontSize: '1rem',
           fontWeight: 600,
           letterSpacing: '-0.025em',
           color: c.textPrimary,
-          margin: 0,
-          '& h2': {
-            fontSize: '1rem',
-            fontWeight: 600,
-            letterSpacing: '-0.025em',
-            color: c.textPrimary,
-            margin: 0,
-          },
+          lineHeight: 1.4,
+          marginBottom: 0,
+        },
+        description: {
+          fontSize: '0.875rem',
+          color: c.textSecondary,
+          letterSpacing: '-0.006em',
+          margin: '2px 0 0',
         },
       },
     },

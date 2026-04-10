@@ -18,7 +18,7 @@ CID=$(docker create backstage:built)
 docker export "$CID" | docker import \
   --change 'USER node' \
   --change 'WORKDIR /app' \
-  --change 'CMD ["node", "packages/backend", "--config", "app-config.yaml", "--config", "app-config.production.yaml"]' \
+  --change 'CMD ["node", "packages/backend", "--config", "app-config.yaml", "--config", "app-config.production.yaml", "--config", "app-config.on-prem.yaml"]' \
   - 192.168.2.101:5000/backstage:latest
 docker rm "$CID"
 docker rmi backstage:built

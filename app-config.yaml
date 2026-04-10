@@ -7,11 +7,11 @@ app:
       key: './key.pem'
 
 organization:
-  name: Stratpoint Technologies
-  domain: stratpoint.com
-  githubOwner: stratpoint-engineering
-  githubRepo: backstage-main
-  usersFilePath: stratpoint/org/users.yaml
+  name: Your Organization
+  domain: ${ORG_DOMAIN}
+  githubOwner: ${GITHUB_ORG}
+  githubRepo: nexus-idp
+  usersFilePath: org/users.yaml
 
 backend:
   logging:
@@ -20,6 +20,11 @@ backend:
   auth:
     keys:
       - secret: ${BACKEND_SECRET}
+    externalAccess:
+      - type: static
+        options:
+          token: ${BACKSTAGE_SCRIPT_TOKEN}
+          subject: teardown-script
   baseUrl: 'http://localhost:7007'
   reading:
     allow:
@@ -41,7 +46,7 @@ backend:
     # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
     # Default Helmet Content-Security-Policy values can be removed by setting the key to false
   cors:
-    origin: [http://localhost:3000, https://portal.stratpoint.io]
+    origin: [http://localhost:3000]
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
     credentials: true
   # This is for local development only, it is not recommended to use this in production
@@ -132,18 +137,9 @@ scaffolder:
   # Single source of truth for all available deployment targets.
   # Portal admin configures this — engineers never enter infra details manually.
   # Add new clusters/accounts here to make them available in scaffolder templates.
+  # On-prem k8s targets (Talos homelab) are defined in app-config.on-prem.yaml.
+  # Cloud-provisioned k8s clusters (EKS) are auto-discovered from the catalog.
   targets:
-    kubernetes:
-      - name: talos-homelab
-        displayName: 'Talos Homelab (Self-hosted)'
-        type: k8s-selfhosted
-        ingressDomain: ${SCAFFOLDER_INGRESS_DOMAIN}
-        storageClass: longhorn
-        ingressClass: traefik
-        argocdUrl: ${ARGOCD_URL}
-        # Frameworks supported on this target
-        supportedFrameworks: [nextjs, nodejs, nestjs, springboot, python]
-
     aws:
       - name: stratpoint-nonprod
         displayName: 'Stratpoint (Non-prod)'
@@ -191,8 +187,8 @@ catalog:
   orphanStrategy: delete
   providers:
     github:
-      stratpoint:
-        organization: stratpoint-engineering
+      your-org:
+        organization: ${GITHUB_ORG}
         catalogPath: /catalog-info.yaml
         filters:
           branch: main
@@ -260,25 +256,6 @@ catalog:
 
     # Local template overrides: add in app-config.local.yaml (gitignored)
     # See app-config.local.yaml.example for template
-
-kubernetes:
-  serviceLocatorMethod:
-    type: 'multiTenant'
-  clusterLocatorMethods:
-    - type: 'config'
-      clusters:
-        - name: talos-homelab
-          # In-cluster URL — works because Backstage runs inside the same cluster.
-          # If running Backstage outside the cluster, change to: https://192.168.2.198:6443
-          url: https://kubernetes.default.svc
-          authProvider: serviceAccount
-          # In-cluster token: no serviceAccountToken or caData needed.
-          # The Backstage pod must run with serviceAccountName: backstage-k8s-reader
-          # (set in Helm values). Kubernetes automatically mounts the projected SA token.
-          skipTLSVerify: false
-          # Set to true if metrics-server is not installed (run `kubectl top nodes` to check).
-          # Without metrics-server, CPU/memory charts won't show but everything else works.
-          skipMetricsLookup: false
 
 proxy:
   endpoints:
@@ -353,33 +330,13 @@ engineeringDocs:
     - id: nexus-idp-docs
       label: Nexus IDP Docs
       description: Nexus IDP platform documentation — permissions, user management, integrations
-      repoOwner: stratpoint-engineering
-      repoName: backstage-main
+      repoOwner: ${GITHUB_ORG}
+      repoName: nexus-idp
       branch: main
       contentBase: docs/content
 
-    - id: engineering-hub
-      label: Engineering Hub
-      description: Stratpoint engineering standards, guides, and golden paths
-      repoOwner: stratpoint-engineering
-      repoName: engineering-hub
-      branch: main
-      contentBase: src/content
-
-    # Local Provisioner docs live at plugins/local-provisioner/docs/
-    # Will be wired as an engineering-docs source once plugins are in separate repos.
-
-    # strat-training/kafka is a PUBLIC repo — any valid GITHUB_TOKEN can read it.
-    - id: kafka-training
-      label: Kafka Training
-      description: Kafka training materials, guides, and exercises
-      repoOwner: strat-training
-      repoName: kafka
-      branch: main
-      contentBase: docs
-
 finops:
-  awsAccessPortalUrl: 'https://stratpoint.awsapps.com/start'
+  awsAccessPortalUrl: '${AWS_ACCESS_PORTAL_URL}'
   awsRoleToAssume: 'AccountAdmin'
   aws:
     region: us-east-1

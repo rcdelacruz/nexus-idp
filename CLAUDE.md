@@ -11,6 +11,18 @@
 
 ---
 
+## MANDATORY Session Start Protocol (do this before ANYTHING else)
+
+> Every session, every compaction, no exceptions.
+
+1. Read ALL memory files in `/root/.claude/projects/-tank-Projects-backstage-main/memory/` — not just MEMORY.md
+2. Internalize and apply them for the entire session without being reminded
+3. Only then respond to the user
+
+**Why:** After context compaction, memory is not automatically active. Reading it reactively (after the user corrects you) is too late and wastes their time. The user should never have to say "check your memory" or "you forgot X again."
+
+---
+
 ## MANDATORY Fix Protocol (non-negotiable)
 
 > Established 2026-03-22. Ronald's time is real. Never say a fix is done without proof.
@@ -278,7 +290,7 @@ bash scripts/deploy.sh
 ### Deploy to AWS ECS Fargate
 ```bash
 cd infra/
-docker build -t 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest -f packages/backend/Dockerfile .
+docker build --squash -t 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest -f Dockerfile.with-migrations .
 aws ecr get-login-password --region us-west-2 --profile cost-admin-nonprod | docker login --username AWS --password-stdin 746540123485.dkr.ecr.us-west-2.amazonaws.com
 docker push 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest
 AWS_PROFILE=cost-admin-nonprod tofu apply -auto-approve
@@ -443,7 +455,7 @@ Infrastructure is fully managed by OpenTofu in `infra/`. **Never configure manua
 cd infra/
 
 # 1. Build & push image
-docker build -t 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest .
+docker build --squash -t 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest -f Dockerfile.with-migrations .
 aws ecr get-login-password --region us-west-2 --profile cost-admin-nonprod | docker login --username AWS --password-stdin 746540123485.dkr.ecr.us-west-2.amazonaws.com
 docker push 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest
 

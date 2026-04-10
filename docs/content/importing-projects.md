@@ -6,7 +6,10 @@ This guide explains the different ways to register an existing project, service,
 
 ## Option 1 — GitHub Autodiscovery (Recommended)
 
-The portal automatically scans the `stratpoint-engineering` GitHub organization every 30 minutes for any repository that has a `catalog-info.yaml` file on the `main` branch.
+The portal automatically scans two GitHub organizations every 30 minutes for any repository that has a `catalog-info.yaml` file on the `main` branch:
+
+- `stratpoint-engineering` — main Stratpoint org
+- `strat-main-team` — Stratpoint main team org
 
 **What you need to do:** Add a `catalog-info.yaml` to the root of your repo.
 
@@ -18,7 +21,7 @@ metadata:
   name: my-service
   description: Short description of your service
   annotations:
-    github.com/project-slug: stratpoint-engineering/my-repo
+    github.com/project-slug: stratpoint-engineering/my-repo  # or strat-main-team/my-repo
     backstage.io/kubernetes-id: my-service    # optional — links the K8s tab
 spec:
   type: service          # service | website | library | documentation
@@ -119,7 +122,7 @@ This requires a config change and redeployment, so use Option 2 (UI registration
 
 | Scenario | Recommended method |
 |----------|--------------------|
-| Repo is in `stratpoint-engineering` GitHub org | **Option 1** — add `catalog-info.yaml` to the repo |
+| Repo is in `stratpoint-engineering` or `strat-main-team` GitHub org | **Option 1** — add `catalog-info.yaml` to the repo |
 | Repo is external / personal | **Option 2** — Register via UI |
 | Internal tool with no GitHub repo | **Option 3** — add to `stratpoint/components/` |
 | Entire external org to bulk-import | **Option 4** — URL location in config |

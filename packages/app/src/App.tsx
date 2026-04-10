@@ -5,10 +5,7 @@ import {
   CatalogEntityPage,
   catalogPlugin,
 } from '@backstage/plugin-catalog';
-import {
-  CatalogImportPage,
-  catalogImportPlugin,
-} from '@backstage/plugin-catalog-import';
+import { catalogImportPlugin } from '@backstage/plugin-catalog-import';
 import { ScaffolderPage, scaffolderPlugin } from '@backstage/plugin-scaffolder';
 import { orgPlugin } from '@backstage/plugin-org';
 import { SearchPage } from '@backstage/plugin-search';
@@ -41,6 +38,7 @@ import { CustomTemplateCard } from './components/scaffolder/CustomTemplateCard';
 import { CustomScaffolderListPage } from './components/scaffolder/CustomScaffolderListPage';
 import { CustomTemplateWizardPage } from './components/scaffolder/CustomTemplateWizardPage';
 import { CustomTaskPage } from './components/scaffolder/CustomTaskPage';
+import { CustomCatalogImportPage } from './components/catalog/CustomCatalogImportPage';
 import { ProjectPickerField } from './components/scaffolder/ProjectPickerField';
 import { DeploymentTargetPicker } from './components/scaffolder/DeploymentTargetPicker';
 import { DatabasePicker } from './components/scaffolder/DatabasePicker';
@@ -138,7 +136,7 @@ const routes = (
       path="/catalog-import"
       element={
         <RequirePermission permission={catalogEntityCreatePermission}>
-          <CatalogImportPage />
+          <CustomCatalogImportPage />
         </RequirePermission>
       }
     />

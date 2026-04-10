@@ -161,21 +161,6 @@ permission:
   # (CatalogPermissionPolicy). The YAML `policies` block is NOT a supported Backstage
   # config pattern and has no effect — do not add rules here.
 
-kubernetes:
-  serviceLocatorMethod:
-    type: 'multiTenant'
-  clusterLocatorMethods:
-    - type: 'config'
-      clusters:
-        - name: talos-homelab
-          url: https://kubernetes.default.svc
-          authProvider: serviceAccount
-          # In-cluster token: no serviceAccountToken or caData needed.
-          # The Backstage pod must run with serviceAccountName: backstage-k8s-reader
-          # (set in Helm values). Kubernetes automatically mounts the projected SA token.
-          skipTLSVerify: false
-          skipMetricsLookup: false
-
 proxy:
   endpoints:
     '/argocd/api':

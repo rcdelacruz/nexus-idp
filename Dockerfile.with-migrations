@@ -96,6 +96,7 @@ COPY --chown=node:node packages/backend/config.d.ts /app/packages/backend/config
 # Copy updated config files with OAuth fix
 COPY --chown=node:node app-config.yaml /app/
 COPY --chown=node:node app-config.production.yaml /app/
+COPY --chown=node:node app-config.on-prem.yaml /app/
 
 # Copy stratpoint organization catalog (CRITICAL for user authentication)
 # Clear first so deleted/renamed files from the base image don't persist

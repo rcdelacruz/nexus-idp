@@ -3,7 +3,7 @@
 **Date:** 2026-04-06
 **Status:** Active
 
-Operational guide for deploying and maintaining the Nexus IDP k8s homelab instance.
+Operational guide for deploying and maintaining the Nexus IDP k8s on-prem instance.
 
 ---
 
@@ -11,7 +11,7 @@ Operational guide for deploying and maintaining the Nexus IDP k8s homelab instan
 
 | Target | URL | Trigger |
 |--------|-----|---------|
-| **k8s homelab (Talos)** | `https://backstage.coderstudio.co` | `bash scripts/deploy.sh` |
+| **k8s on-prem (Talos)** | `https://backstage.coderstudio.co` | `bash scripts/deploy.sh` |
 | **AWS ECS Fargate** | `https://portal.stratpoint.io` | ECR push + `tofu apply` |
 
 ---

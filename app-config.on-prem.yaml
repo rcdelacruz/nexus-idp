@@ -1,0 +1,33 @@
+# On-premises overrides — loaded ONLY by the homelab (Talos k8s) Backstage instance.
+# deploy.sh appends: --config app-config.on-prem.yaml
+# Dockerfile.with-migrations (ECS) does NOT load this file.
+
+scaffolder:
+  # ── On-prem Kubernetes Deployment Targets ──────────────────────────────────
+  # Talos homelab k8s cluster — pre-existing on-prem, not provisioned via template.
+  # Cloud-provisioned k8s clusters (EKS) are auto-discovered from the catalog instead.
+  targets:
+    kubernetes:
+      - name: talos-homelab
+        displayName: 'Talos Homelab (Self-hosted)'
+        type: k8s-selfhosted
+        ingressDomain: ${SCAFFOLDER_INGRESS_DOMAIN}
+        storageClass: longhorn
+        ingressClass: traefik
+        argocdUrl: ${ARGOCD_URL}
+        supportedFrameworks: [nextjs, nodejs, nestjs, springboot, python]
+
+kubernetes:
+  serviceLocatorMethod:
+    type: 'multiTenant'
+  clusterLocatorMethods:
+    - type: 'config'
+      clusters:
+        - name: talos-homelab
+          # In-cluster URL — works because Backstage runs inside the same cluster.
+          url: https://kubernetes.default.svc
+          authProvider: serviceAccount
+          # In-cluster token: no serviceAccountToken or caData needed.
+          # The Backstage pod must run with serviceAccountName: backstage-k8s-reader
+          skipTLSVerify: false
+          skipMetricsLookup: false
