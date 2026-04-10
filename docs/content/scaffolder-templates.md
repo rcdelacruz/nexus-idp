@@ -259,11 +259,28 @@ Prefers `GHCR_TOKEN` (packages:write scope only) over `GITHUB_TOKEN`. Retries up
 
 **Plugin:** `scaffolder-targets` (`packages/backend/src/plugins/scaffolderTargetsApi.ts`)
 
-Exposes `GET /api/scaffolder-targets/targets?framework=<framework>` — returns deployment targets from `app-config.yaml`, optionally filtered by framework compatibility.
+Exposes `GET /api/scaffolder-targets/targets?framework=<framework>` — returns deployment targets merged from two sources, optionally filtered by framework compatibility.
 
-Used by the `DeploymentTargetPicker` custom field extension in the frontend.
+Used by the `DeploymentTargetPicker` custom field extension in the frontend. Requires authentication.
 
-Requires authentication (no unauthenticated access). Config path: `scaffolder.targets.kubernetes[]` and `scaffolder.targets.aws[]`.
+### Sources
+
+| Source | Config / Catalog | Targets |
+|--------|-----------------|---------|
+| Static config | `scaffolder.targets.kubernetes[]` in `app-config.on-prem.yaml` | On-prem k8s (Talos homelab) — homelab Backstage only |
+| Static config | `scaffolder.targets.aws[]` in `app-config.yaml` | EC2, Lambda, App Runner per AWS account |
+| Catalog auto-discovery | `Resource` entities with `spec.type: ecs-cluster` | ECS clusters provisioned via infra templates |
+| Catalog auto-discovery | `Resource` entities with `spec.type: eks-cluster` | EKS clusters provisioned via infra templates |
+
+### Environment split
+
+- **Homelab** (`backstage.coderstudio.co`) — loads `app-config.on-prem.yaml` → shows Talos + all cloud targets
+- **Cloud** (`portal.stratpoint.io`) — does NOT load `app-config.on-prem.yaml` → shows cloud targets only
+
+### Adding a new deployment target
+
+- **On-prem k8s cluster**: add an entry to `scaffolder.targets.kubernetes[]` in `app-config.on-prem.yaml`
+- **Cloud cluster (ECS/EKS)**: run the corresponding infra scaffolder template — it registers a `Resource` entity in the catalog automatically
 
 ---
 
