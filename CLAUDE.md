@@ -2,11 +2,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-03-31 |
+| **Last Updated** | 2026-06-27 |
 | **Project** | Stratpoint Internal Developer Portal |
-| **Backstage Version** | 1.49.1 |
+| **Backstage Version** | 1.52.1 |
 | **Status** | Production-ready, deployed on AWS ECS Fargate (portal.stratpoint.io) + k8s homelab |
-| **Node.js** | 20.x or 22.x |
+| **Node.js** | 22.x (required — isolated-vm@6.x needs Node 22) |
 | **Package Manager** | Yarn 4.12.0 (Berry with PnP) |
 
 ---
@@ -287,6 +287,13 @@ bash scripts/deploy.sh
 # Pulls latest develop, builds Docker image, pushes to 192.168.2.101:5000, kubectl rollout restart
 ```
 
+> **Version bumps only**: `deploy.sh` builds on top of the cached base image — after a `yarn backstage-cli versions:bump`, node_modules in the base are stale. Rebuild the base first:
+> ```bash
+> docker build -t 192.168.2.101:5000/backstage:latest -f packages/backend/Dockerfile .
+> docker push 192.168.2.101:5000/backstage:latest
+> bash scripts/deploy.sh
+> ```
+
 ### Deploy to AWS ECS Fargate
 ```bash
 cd infra/
@@ -363,6 +370,7 @@ spec:
 
 | Date | Change |
 |------|--------|
+| 2026-06-27 | Backstage version bump 1.49.1 → 1.52.1. Breaking changes fixed: (1) `plugin-permission-node` 0.11 — `PolicyQueryUser` replaces `BackstageIdentityResponse`, `.identity` → `.info`; (2) `plugin-catalog-node` v2 — `catalogProcessingExtensionPoint` moved from `/alpha` to main export; (3) `isolated-vm@6.0.2` requires Node.js 22 — updated `packages/backend/Dockerfile` from `node:20-bookworm-slim` to `node:22-bookworm-slim`. Version bump requires rebuilding base image (`packages/backend/Dockerfile`) before running `deploy.sh`. |
 | 2026-03-31 | AWS ECS Fargate deployment: OpenTofu-managed infra in `infra/` — VPC, RDS PostgreSQL 13.20, ElastiCache Redis 7.1, ECR, ECS Fargate, Secrets Manager, CloudWatch. Cloudflare Tunnel `backstage-aws-prod` routes `portal.stratpoint.io`. 4-container task: create-db (init) → db-migrations (init) → backstage (main) → cloudflared (sidecar). S3 backend `stratpoint-tofu-state-prod`. ~$90/month. |
 | 2026-03-31 | Admin onboarding bug documented: admins bypass `POST /register` (step 1 auto-done), so `user_management_users` has no row → `updateOnboardingStep` silently fails for steps 3 & 4. Fix planned as Admin Setup Portal (see `.claude/plans/user-management-onboarding-roadmap.md`). |
 | 2026-03-28 | P1 features: GitHub catalog autodiscovery (plugin-catalog-backend-module-github + orphanStrategy:delete), rate limiting on device endpoints (express-rate-limit, 10/15min for code, 130/10min for token), Project Registration backend plugin (`@stratpoint/plugin-project-registration-backend`) — DB store, REST API, leads+admins RBAC, system project pre-seeding; frontend wired to real API |
