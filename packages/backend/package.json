@@ -48,6 +48,7 @@
     "@backstage/plugin-search-backend-node": "^1.4.2",
     "@backstage/plugin-techdocs-backend": "^2.1.6",
     "@roadiehq/backstage-plugin-argo-cd-backend": "^4.7.1",
+    "@stratpoint/plugin-dbaas-backend": "link:../../plugins/dbaas-backend",
     "@stratpoint/plugin-engineering-docs-backend": "link:../../plugins/engineering-docs-backend",
     "@stratpoint/plugin-finops-backend": "link:../../plugins/finops-backend",
     "@stratpoint/plugin-local-provisioner-backend": "link:../../plugins/local-provisioner-backend",

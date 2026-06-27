@@ -62,6 +62,14 @@ export function createGetTargetConfigAction(options: {
           region: z.string().optional(),
           ecrRegistry: z.string().optional(),
           clusterName: z.string().optional(),
+          // Infra provisioning
+          vpcId: z.string().optional(),
+          vpcCidr: z.string().optional(),
+          privateSubnetIds: z.string().optional(),
+          githubActionsRoleArn: z.string().optional(),
+          tofuStateBucket: z.string().optional(),
+          tofuStateRegion: z.string().optional(),
+          tofuLockTable: z.string().optional(),
         }),
     },
     async handler(ctx) {
@@ -117,6 +125,25 @@ export function createGetTargetConfigAction(options: {
         ctx.output('accountId', accountId);
         ctx.output('region', region);
         ctx.output('ecrRegistry', ecrRegistry);
+
+        // VPC networking + GitHub Actions role
+        const vpcId = account?.getOptionalString('vpcId') ?? '';
+        const vpcCidr = account?.getOptionalString('vpcCidr') ?? '';
+        const privateSubnetIds = account?.getOptionalString('privateSubnetIds') ?? '';
+        const githubActionsRoleArn = account?.getOptionalString('githubActionsRoleArn') ?? '';
+        ctx.output('vpcId', vpcId);
+        ctx.output('vpcCidr', vpcCidr);
+        ctx.output('privateSubnetIds', privateSubnetIds);
+        ctx.output('githubActionsRoleArn', githubActionsRoleArn);
+
+        // OpenTofu state backend (shared across all infra templates)
+        const tofuConfig = config.getOptionalConfig('scaffolder.tofu.stateBackend');
+        const tofuStateBucket = tofuConfig?.getOptionalString('s3Bucket') ?? '';
+        const tofuStateRegion = tofuConfig?.getOptionalString('s3Region') ?? region;
+        const tofuLockTable = tofuConfig?.getOptionalString('dynamoTable') ?? '';
+        ctx.output('tofuStateBucket', tofuStateBucket);
+        ctx.output('tofuStateRegion', tofuStateRegion);
+        ctx.output('tofuLockTable', tofuLockTable);
 
         if (!service) return;
 

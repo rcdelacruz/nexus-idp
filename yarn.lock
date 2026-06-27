@@ -5506,7 +5506,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@backstage/plugin-catalog-node@npm:^1.15.0":
+"@backstage/plugin-catalog-node@npm:^1.15.0, @backstage/plugin-catalog-node@npm:^1.15.3":
   version: 1.20.1
   resolution: "@backstage/plugin-catalog-node@npm:1.20.1"
   dependencies:
@@ -8079,6 +8079,26 @@ __metadata:
     react-router-dom: "npm:^6.3.0"
     react-use: "npm:^17.2.4"
     webpack: "npm:~5.103.0"
+  peerDependencies:
+    react: ^16.13.1 || ^17.0.0 || ^18.0.0
+  languageName: unknown
+  linkType: soft
+
+"@internal/plugin-dbaas@npm:^0.1.0, @internal/plugin-dbaas@workspace:plugins/dbaas":
+  version: 0.0.0-use.local
+  resolution: "@internal/plugin-dbaas@workspace:plugins/dbaas"
+  dependencies:
+    "@backstage/cli": "npm:^0.36.0"
+    "@backstage/core-components": "npm:^0.18.8"
+    "@backstage/core-plugin-api": "npm:^1.12.4"
+    "@backstage/theme": "npm:^0.7.2"
+    "@material-ui/core": "npm:^4.9.13"
+    "@stratpoint/theme-utils": "workspace:*"
+    "@types/react": "npm:^18.0.0"
+    jest: "npm:^30.0.0"
+    lucide-react: "npm:0.577.0"
+    react: "npm:^16.13.1 || ^17.0.0 || ^18.0.0"
+    react-dom: "npm:^18.0.0"
   peerDependencies:
     react: ^16.13.1 || ^17.0.0 || ^18.0.0
   languageName: unknown
@@ -15477,6 +15497,30 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@stratpoint/plugin-dbaas-backend@link:../../plugins/dbaas-backend::locator=backend%40workspace%3Apackages%2Fbackend":
+  version: 0.0.0-use.local
+  resolution: "@stratpoint/plugin-dbaas-backend@link:../../plugins/dbaas-backend::locator=backend%40workspace%3Apackages%2Fbackend"
+  languageName: node
+  linkType: soft
+
+"@stratpoint/plugin-dbaas-backend@workspace:plugins/dbaas-backend":
+  version: 0.0.0-use.local
+  resolution: "@stratpoint/plugin-dbaas-backend@workspace:plugins/dbaas-backend"
+  dependencies:
+    "@backstage/backend-plugin-api": "npm:^1.8.0"
+    "@backstage/catalog-model": "npm:^1.7.7"
+    "@backstage/cli": "npm:^0.36.0"
+    "@backstage/errors": "npm:^1.2.7"
+    "@backstage/plugin-catalog-node": "npm:^1.15.3"
+    "@types/express": "npm:*"
+    "@types/node": "npm:^22.0.0"
+    "@types/node-fetch": "npm:^2.6.0"
+    express: "npm:^4.21.2"
+    express-promise-router: "npm:^4.1.0"
+    node-fetch: "npm:^2.7.0"
+  languageName: unknown
+  linkType: soft
+
 "@stratpoint/plugin-engineering-docs-backend@link:../../plugins/engineering-docs-backend::locator=backend%40workspace%3Apackages%2Fbackend":
   version: 0.0.0-use.local
   resolution: "@stratpoint/plugin-engineering-docs-backend@link:../../plugins/engineering-docs-backend::locator=backend%40workspace%3Apackages%2Fbackend"
@@ -17408,7 +17452,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node-fetch@npm:^2.6.13":
+"@types/node-fetch@npm:^2.6.0, @types/node-fetch@npm:^2.6.13":
   version: 2.6.13
   resolution: "@types/node-fetch@npm:2.6.13"
   dependencies:
@@ -18899,6 +18943,7 @@ __metadata:
     "@backstage/theme": "npm:^0.7.2"
     "@backstage/ui": "npm:^0.13.1"
     "@internal/backstage-plugin-project-registration": "npm:^0.1.0"
+    "@internal/plugin-dbaas": "npm:^0.1.0"
     "@internal/plugin-engineering-docs": "npm:^0.1.0"
     "@internal/plugin-finops": "npm:^0.1.0"
     "@internal/plugin-local-provisioner": "npm:^0.1.0"
@@ -19577,6 +19622,7 @@ __metadata:
     "@backstage/plugin-search-backend-node": "npm:^1.4.2"
     "@backstage/plugin-techdocs-backend": "npm:^2.1.6"
     "@roadiehq/backstage-plugin-argo-cd-backend": "npm:^4.7.1"
+    "@stratpoint/plugin-dbaas-backend": "link:../../plugins/dbaas-backend"
     "@stratpoint/plugin-engineering-docs-backend": "link:../../plugins/engineering-docs-backend"
     "@stratpoint/plugin-finops-backend": "link:../../plugins/finops-backend"
     "@stratpoint/plugin-local-provisioner-backend": "link:../../plugins/local-provisioner-backend"

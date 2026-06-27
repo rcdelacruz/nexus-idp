@@ -95,6 +95,14 @@ backend.add(import('./plugins/scaffolderTargetsApi'));
 backend.add(
   import('@stratpoint/plugin-user-management-backend').then(m => ({ default: m.userManagementPlugin }))
 );
+
+// dbaas — connect databases integration hub
+backend.add(
+  import('@stratpoint/plugin-dbaas-backend').then(m => ({ default: m.dbaasPlugin }))
+);
+backend.add(
+  import('@stratpoint/plugin-dbaas-backend').then(m => ({ default: m.dbaasBackendCatalogModule }))
+);
 backend.add(
   import('@stratpoint/plugin-user-management-backend').then(m => ({ default: m.userManagementCatalogModule }))
 );

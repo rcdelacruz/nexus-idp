@@ -11,5 +11,9 @@ resources:
   - backend/deployment.yaml
   - backend/service.yaml
   - backend/ingress.yaml
+{%- if values.dbProvider == 'postgresql' %}
   - database/cluster.yaml
+{%- if values.enableConnectionPooling %}
   - database/pooler.yaml
+{%- endif %}
+{%- endif %}

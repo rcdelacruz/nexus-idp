@@ -12,13 +12,18 @@
 #   --execute          Actually delete resources (default: dry-run)
 #   --keep-repo        Skip GitHub repository deletion
 #   --keep-backups     Skip S3 / CNPG backup deletion
-#   --backstage-url    Backstage base URL (default: http://localhost:7007)
+#   --backstage-url    Backstage base URL (default: https://backstage.coderstudio.co)
 #   --token TOKEN      Backstage token — enables catalog lookup + unregistration
+#   --aws-profile      AWS CLI profile for tofu destroy (default: cost-admin-nonprod)
+#   --aws-region       AWS region (default: us-west-2)
+#   --skip-aws         Skip AWS infrastructure destruction
 #
 # Examples:
 #   bash scripts/teardown.sh demo-for-syl
 #   bash scripts/teardown.sh demo-for-syl --execute --token <token>
 #   bash scripts/teardown.sh demo-for-syl --execute --keep-repo
+#   bash scripts/teardown.sh shared-rds-infra --execute --token <token>   # AWS-only teardown
+#   bash scripts/teardown.sh my-app --execute --skip-aws --token <token>  # k8s-only teardown
 #
 # Dependencies: kubectl, gh (GitHub CLI), curl, jq
 # =============================================================================
@@ -57,6 +62,9 @@ KEEP_REPO=false
 KEEP_BACKUPS=false
 BACKSTAGE_URL="https://backstage.coderstudio.co"
 BACKSTAGE_TOKEN=""
+AWS_PROFILE="${AWS_PROFILE:-cost-admin-nonprod}"
+AWS_REGION="${AWS_REGION:-us-west-2}"
+SKIP_AWS=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -65,6 +73,9 @@ while [[ $# -gt 0 ]]; do
     --keep-backups)  KEEP_BACKUPS=true ;;
     --backstage-url) BACKSTAGE_URL="$2"; shift ;;
     --token)         BACKSTAGE_TOKEN="$2"; shift ;;
+    --aws-profile)   AWS_PROFILE="$2"; shift ;;
+    --aws-region)    AWS_REGION="$2"; shift ;;
+    --skip-aws)      SKIP_AWS=true ;;
     *) die "Unknown option: $1" ;;
   esac
   shift
@@ -254,6 +265,8 @@ if [[ -n "$BACKSTAGE_TOKEN" ]]; then
   add_catalog_entity() {
     local entry="$1"
     local uid="${entry##*/}"
+    # Skip entities with null UID — incomplete ingestion; no valid entity to delete
+    [[ "$uid" == "null" || -z "$uid" ]] && return
     # Deduplicate by UID
     for seen in "${SEEN_ENTITY_UIDS[@]+"${SEEN_ENTITY_UIDS[@]}"}"; do
       [[ "$seen" == "$uid" ]] && return
@@ -330,6 +343,117 @@ else
   warn "No --token provided — catalog entities will not be discovered or unregistered"
 fi
 
+# ── 1f. AWS infra repos (tofu-managed resources) ──────────────────────────────
+# Strategy 1: from catalog — Resource entities with AWS spec.type carry the repo slug
+# Strategy 2: fallback — GitHub search for backstage-infra topic repos matching app name
+FOUND_AWS_INFRA_REPOS=()  # entries: "owner/repo|resource-type"
+
+if ! $SKIP_AWS; then
+  log "Scanning for AWS infrastructure repos..."
+
+  # AWS spec.types created by infra templates
+  AWS_RESOURCE_TYPES=("rds-instance" "ecs-cluster" "eks-cluster" "aws-ec2-instance")
+
+  if [[ -n "$BACKSTAGE_TOKEN" ]]; then
+    # Build a deduplicated list of Resource entity names to query:
+    # - from already-discovered CATALOG_ENTITIES (if any)
+    # - plus a direct catalog filter by app name (catches Resource entities whose
+    #   infra repo name doesn't contain the app name — e.g. infra-for-deletion vs project-for-deletion)
+    declare -A _AWS_RESOURCE_SEEN=()
+
+    _check_aws_resource_entity() {
+      local ns="$1" name="$2"
+      local key="${ns}/${name}"
+      [[ -n "${_AWS_RESOURCE_SEEN[$key]:-}" ]] && return
+      _AWS_RESOURCE_SEEN[$key]=1
+
+      local entity_json
+      entity_json=$(curl -s \
+        -H "Authorization: Bearer ${BACKSTAGE_TOKEN}" \
+        "${BACKSTAGE_URL}/api/catalog/entities/by-name/resource/${ns}/${name}" 2>/dev/null || true)
+
+      local spec_type
+      spec_type=$(echo "$entity_json" | jq -r '.spec.type // empty' 2>/dev/null || true)
+      local is_aws=false
+      for t in "${AWS_RESOURCE_TYPES[@]}"; do
+        [[ "$spec_type" == "$t" ]] && is_aws=true && break
+      done
+      $is_aws || return
+
+      local repo_slug
+      repo_slug=$(echo "$entity_json" | jq -r \
+        '.metadata.annotations["github.com/project-slug"] // empty' 2>/dev/null || true)
+      [[ -z "$repo_slug" ]] && return
+
+      local already=false
+      for existing in "${FOUND_AWS_INFRA_REPOS[@]+"${FOUND_AWS_INFRA_REPOS[@]}"}"; do
+        [[ "${existing%%|*}" == "$repo_slug" ]] && already=true && break
+      done
+      $already && return
+
+      FOUND_AWS_INFRA_REPOS+=("${repo_slug}|${spec_type}")
+      found "AWS infra repo: ${repo_slug}  ${DIM}(${spec_type})${RESET}"
+
+      # Also register this Resource entity in CATALOG_ENTITIES so Step 6 unregisters it
+      local uid
+      uid=$(echo "$entity_json" | jq -r '.metadata.uid // empty' 2>/dev/null || true)
+      [[ -n "$uid" ]] && add_catalog_entity "Resource/${ns}/${name}/${uid}"
+    }
+
+    # Pass 1: from already-discovered catalog entities
+    for entry in "${CATALOG_ENTITIES[@]+"${CATALOG_ENTITIES[@]}"}"; do
+      kind="${entry%%/*}"
+      [[ "${kind,,}" != "resource" ]] && continue
+      rest="${entry#*/}"; ns="${rest%%/*}"; rest="${rest#*/}"; name="${rest%%/*}"
+      _check_aws_resource_entity "$ns" "$name"
+    done
+
+    # Pass 2: direct catalog query for Resource entities whose name contains the app name
+    # (catches cases where the Resource entity was not picked up by the earlier entity scan,
+    # e.g. the infra repo has a different name and no github.com/project-slug on the Component)
+    mapfile -t _direct_resources < <(
+      curl -s \
+        -H "Authorization: Bearer ${BACKSTAGE_TOKEN}" \
+        "${BACKSTAGE_URL}/api/catalog/entities?filter=kind=Resource&limit=500" \
+        2>/dev/null \
+        | jq -r --arg app "${APP_NAME}" \
+          '.[] | select(.metadata.name | test($app)) | "\(.metadata.namespace)/\(.metadata.name)"' \
+        2>/dev/null || true
+    )
+    for ref in "${_direct_resources[@]+"${_direct_resources[@]}"}"; do
+      _ns="${ref%%/*}"; _name="${ref##*/}"
+      _check_aws_resource_entity "$_ns" "$_name"
+    done
+
+    unset _AWS_RESOURCE_SEEN
+  fi
+
+  # Fallback: GitHub topic search if catalog yielded nothing
+  if [[ ${#FOUND_AWS_INFRA_REPOS[@]} -eq 0 ]]; then
+    for org in strat-main-team stratpoint-engineering; do
+      while IFS= read -r repo_name; do
+        [[ -z "$repo_name" ]] && continue
+        # Must contain the app name somewhere in the repo name
+        [[ "$repo_name" == *"${APP_NAME}"* ]] || continue
+
+        topics=$(gh repo view "${org}/${repo_name}" \
+          --json repositoryTopics --jq '[.repositoryTopics[].name] | join(",")' 2>/dev/null || true)
+        resource_type="aws-infra"
+        [[ "$topics" == *"aws-rds"* ]]         && resource_type="rds-instance"
+        [[ "$topics" == *"aws-ecs-cluster"* ]] && resource_type="ecs-cluster"
+        [[ "$topics" == *"aws-eks-cluster"* ]] && resource_type="eks-cluster"
+        [[ "$topics" == *"aws-ec2"* ]]         && resource_type="aws-ec2-instance"
+
+        FOUND_AWS_INFRA_REPOS+=("${org}/${repo_name}|${resource_type}")
+        found "AWS infra repo (GitHub): ${org}/${repo_name}  ${DIM}(${resource_type})${RESET}"
+      done < <(gh repo list "$org" --topic backstage-infra \
+        --json name --jq '.[].name' 2>/dev/null || true)
+    done
+  fi
+
+  [[ ${#FOUND_AWS_INFRA_REPOS[@]} -gt 0 ]] || skip "No AWS infra repos found for ${APP_NAME}"
+fi
+
 echo ""
 
 # =============================================================================
@@ -363,6 +487,11 @@ if $GITHUB_REPO_EXISTS; then
     printf '  • GitHub repo:      %s\n' "${GITHUB_REPO_SLUG}"; (( TOTAL_FOUND++ )) || true
   fi
 fi
+for entry in "${FOUND_AWS_INFRA_REPOS[@]+"${FOUND_AWS_INFRA_REPOS[@]}"}"; do
+  repo_slug="${entry%%|*}"; rtype="${entry##*|}"
+  printf '  • AWS infra (tofu): %s  ⚠  AWS RESOURCES DESTROYED\n' "${repo_slug} (${rtype})"
+  (( TOTAL_FOUND++ )) || true
+done
 for entry in "${CATALOG_ENTITIES[@]+"${CATALOG_ENTITIES[@]}"}"; do
   ref="${entry%/*}"   # strip uid
   printf '  • Catalog entity:   %s\n' "${ref}"; (( TOTAL_FOUND++ )) || true
@@ -400,8 +529,8 @@ echo ""
 
 EXIT_CODE=0
 
-# ── Step 1/5: Suspend ArgoCD auto-sync on all apps ───────────────────────────
-step "1/5" "Suspending ArgoCD auto-sync (prevents re-creation during teardown)..."
+# ── Step 1/6: Suspend ArgoCD auto-sync on all apps ───────────────────────────
+step "1/6" "Suspending ArgoCD auto-sync (prevents re-creation during teardown)..."
 for full_ref in "${FOUND_ARGOCD_APPS[@]+"${FOUND_ARGOCD_APPS[@]}"}"; do
   ns="${full_ref%%/*}"; name="${full_ref##*/}"
   progress "Suspending ${full_ref}..."
@@ -411,10 +540,10 @@ for full_ref in "${FOUND_ARGOCD_APPS[@]+"${FOUND_ARGOCD_APPS[@]}"}"; do
     || warn "Could not suspend: ${full_ref}"
 done
 
-# ── Step 2/5: Delete ArgoCD Applications ─────────────────────────────────────
+# ── Step 2/6: Delete ArgoCD Applications ─────────────────────────────────────
 # Delete in-namespace apps first (they have resources-finalizer — must complete
 # before namespace deletion, or the finalizer will deadlock namespace termination)
-step "2/5" "Deleting ArgoCD applications (cascade-deletes all synced k8s resources)..."
+step "2/6" "Deleting ArgoCD applications (cascade-deletes all synced k8s resources)..."
 IN_NS_APPS=(); CENTRAL_APPS=()
 for full_ref in "${FOUND_ARGOCD_APPS[@]+"${FOUND_ARGOCD_APPS[@]}"}"; do
   ns="${full_ref%%/*}"; name="${full_ref##*/}"
@@ -441,8 +570,8 @@ if [[ ${#FOUND_ARGOCD_APPS[@]} -gt 0 ]]; then
   sleep 10
 fi
 
-# ── Step 3/5: Delete Kubernetes Namespaces ───────────────────────────────────
-step "3/5" "Deleting Kubernetes namespaces (cascades pods, services, CNPG, PVCs)..."
+# ── Step 3/6: Delete Kubernetes Namespaces ───────────────────────────────────
+step "3/6" "Deleting Kubernetes namespaces (cascades pods, services, CNPG, PVCs)..."
 for ns in "${FOUND_NAMESPACES[@]+"${FOUND_NAMESPACES[@]}"}"; do
   progress "Issuing delete for namespace ${ns}..."
   kubectl delete namespace "${ns}" --timeout=120s 2>/dev/null || true
@@ -502,8 +631,76 @@ for ns in "${FOUND_NAMESPACES[@]+"${FOUND_NAMESPACES[@]}"}"; do
   fi
 done
 
-# ── Step 4/5: Delete GitHub Repository ───────────────────────────────────────
-step "4/5" "Deleting GitHub repository..."
+# ── Step 4/6: Destroy AWS Infrastructure (tofu destroy) ──────────────────────
+step "4/6" "Destroying AWS infrastructure via OpenTofu..."
+if [[ ${#FOUND_AWS_INFRA_REPOS[@]} -eq 0 ]] || $SKIP_AWS; then
+  skip "No AWS infra repos to destroy"
+else
+  # Check tofu is available
+  if ! command -v tofu &>/dev/null; then
+    warn "OpenTofu (tofu) not found — skipping AWS destroy. Install from https://opentofu.org"
+    EXIT_CODE=1
+  else
+    TOFU_TMPDIR=$(mktemp -d)
+
+    # TF_VAR_* — read from environment (must be exported before running this script)
+    for var in AWS_VPC_ID AWS_VPC_CIDR AWS_PRIVATE_SUBNET_IDS TOFU_STATE_BUCKET TOFU_LOCK_TABLE; do
+      [[ -z "${!var:-}" ]] && warn "Env var ${var} is not set — tofu destroy may prompt for it"
+    done
+
+    # Convert comma-separated subnet IDs to HCL list format required by TF_VAR for list(string)
+    # e.g. "subnet-aaa,subnet-bbb" → ["subnet-aaa","subnet-bbb"]
+    if [[ -n "${AWS_PRIVATE_SUBNET_IDS:-}" ]]; then
+      SUBNET_LIST="[\"$(echo "${AWS_PRIVATE_SUBNET_IDS}" | sed 's/,/","/g')\"]"
+    else
+      SUBNET_LIST='[]'
+    fi
+
+    for entry in "${FOUND_AWS_INFRA_REPOS[@]+"${FOUND_AWS_INFRA_REPOS[@]}"}"; do
+      repo_slug="${entry%%|*}"; resource_type="${entry##*|}"
+      clone_dir="${TOFU_TMPDIR}/${repo_slug//\//-}"
+
+      progress "Cloning ${repo_slug}..."
+      if ! gh repo clone "${repo_slug}" "${clone_dir}" -- --depth=1 --quiet 2>/dev/null; then
+        warn "Could not clone ${repo_slug} — skipping tofu destroy"
+        EXIT_CODE=1
+        continue
+      fi
+
+      progress "Running tofu destroy for ${repo_slug} (${resource_type})..."
+
+      # Run in subshell to isolate env exports and cd; capture exit code explicitly
+      set +e
+      (
+        cd "${clone_dir}"
+        export TF_VAR_aws_region="${AWS_REGION}"
+        export TF_VAR_vpc_id="${AWS_VPC_ID:-}"
+        export TF_VAR_vpc_cidr="${AWS_VPC_CIDR:-}"
+        export TF_VAR_private_subnet_ids="${SUBNET_LIST}"
+        export TF_VAR_tofu_state_bucket="${TOFU_STATE_BUCKET:-stratpoint-tofu-state-prod}"
+        export TF_VAR_tofu_state_region="${AWS_REGION}"
+        export TF_VAR_tofu_lock_table="${TOFU_LOCK_TABLE:-terraform-locks}"
+
+        AWS_PROFILE="${AWS_PROFILE}" tofu init -reconfigure -no-color
+        AWS_PROFILE="${AWS_PROFILE}" tofu destroy -auto-approve -no-color
+      )
+      tofu_exit=$?
+      set -e
+
+      if [[ $tofu_exit -eq 0 ]]; then
+        ok "AWS resources destroyed: ${repo_slug}"
+      else
+        err "tofu destroy failed for ${repo_slug} (exit ${tofu_exit}) — manual cleanup may be needed"
+        EXIT_CODE=1
+      fi
+    done
+
+    rm -rf "${TOFU_TMPDIR}"
+  fi
+fi
+
+# ── Step 5/6: Delete GitHub Repository ───────────────────────────────────────
+step "5/6" "Deleting GitHub repository..."
 if $GITHUB_REPO_EXISTS && ! $KEEP_REPO; then
   progress "Deleting ${GITHUB_REPO_SLUG}..."
   if gh repo delete "${GITHUB_REPO_SLUG}" --yes 2>/dev/null; then
@@ -517,22 +714,84 @@ else
   skip "GitHub repo (nothing to delete)"
 fi
 
-# ── Step 5/5: Unregister Backstage Catalog Entities ──────────────────────────
-step "5/5" "Unregistering Backstage catalog entities..."
+# Also delete AWS infra repos (tofu already destroyed the AWS resources above)
+if ! $KEEP_REPO; then
+  for entry in "${FOUND_AWS_INFRA_REPOS[@]+"${FOUND_AWS_INFRA_REPOS[@]}"}"; do
+    repo_slug="${entry%%|*}"
+    progress "Deleting infra repo ${repo_slug}..."
+    if gh repo delete "${repo_slug}" --yes 2>/dev/null; then
+      ok "Deleted infra repo: ${repo_slug}"
+    else
+      warn "Could not delete ${repo_slug} (check permissions or already deleted)"
+    fi
+  done
+fi
+
+# ── Step 6/6: Unregister Backstage Catalog Entities + Locations ──────────────
+step "6/6" "Unregistering Backstage catalog entities and locations..."
+
+# Delete entities first
 for entry in "${CATALOG_ENTITIES[@]+"${CATALOG_ENTITIES[@]}"}"; do
   ref="${entry%/*}"; uid="${entry##*/}"
-  progress "Unregistering ${ref} (uid: ${uid})..."
+  progress "Unregistering entity ${ref} (uid: ${uid})..."
   http_status=$(curl -s -o /dev/null -w "%{http_code}" \
     -X DELETE \
     -H "Authorization: Bearer ${BACKSTAGE_TOKEN}" \
     "${BACKSTAGE_URL}/api/catalog/entities/by-uid/${uid}" 2>/dev/null || echo "000")
   if [[ "$http_status" == "204" || "$http_status" == "200" ]]; then
-    ok "Unregistered: ${ref}"
+    ok "Unregistered entity: ${ref}"
   else
-    warn "Catalog unregistration HTTP ${http_status} for ${ref} — may need manual cleanup"
+    warn "Catalog entity unregistration HTTP ${http_status} for ${ref} — may need manual cleanup"
     warn "  curl -X DELETE -H 'Authorization: Bearer <token>' ${BACKSTAGE_URL}/api/catalog/entities/by-uid/${uid}"
   fi
 done
+
+# Delete catalog locations — entities deleted above but the location URL record persists
+# and causes 409 Conflict on re-scaffolding the same repo name.
+# Build list of expected catalog-info.yaml URLs from all repos involved.
+if [[ -n "$BACKSTAGE_TOKEN" ]]; then
+  LOCATION_URLS=()
+  _add_location_url() {
+    local url="$1"
+    for existing in "${LOCATION_URLS[@]+"${LOCATION_URLS[@]}"}"; do
+      [[ "$existing" == "$url" ]] && return
+    done
+    LOCATION_URLS+=("$url")
+  }
+  [[ -n "$GITHUB_REPO_SLUG" ]] && \
+    _add_location_url "https://github.com/${GITHUB_REPO_SLUG}/blob/main/catalog-info.yaml"
+  for entry in "${FOUND_AWS_INFRA_REPOS[@]+"${FOUND_AWS_INFRA_REPOS[@]}"}"; do
+    repo_slug="${entry%%|*}"
+    _add_location_url "https://github.com/${repo_slug}/blob/main/catalog-info.yaml"
+  done
+
+  if [[ ${#LOCATION_URLS[@]} -gt 0 ]]; then
+    # Fetch all registered locations once
+    ALL_LOCATIONS=$(curl -s \
+      -H "Authorization: Bearer ${BACKSTAGE_TOKEN}" \
+      "${BACKSTAGE_URL}/api/catalog/locations" 2>/dev/null || echo "[]")
+
+    for target_url in "${LOCATION_URLS[@]}"; do
+      location_id=$(echo "$ALL_LOCATIONS" \
+        | jq -r --arg url "$target_url" '.items[] | select(.target == $url) | .id' 2>/dev/null || true)
+
+      if [[ -n "$location_id" ]]; then
+        progress "Deleting catalog location: ${target_url}..."
+        http_status=$(curl -s -o /dev/null -w "%{http_code}" \
+          -X DELETE \
+          -H "Authorization: Bearer ${BACKSTAGE_TOKEN}" \
+          "${BACKSTAGE_URL}/api/catalog/locations/${location_id}" 2>/dev/null || echo "000")
+        if [[ "$http_status" == "204" || "$http_status" == "200" ]]; then
+          ok "Deleted catalog location: ${target_url}"
+        else
+          warn "Could not delete catalog location HTTP ${http_status}: ${target_url}"
+        fi
+      else
+        skip "Catalog location not found (already removed?): ${target_url}"
+      fi
+    done
+  fi
+fi
 
 # =============================================================================
 # PHASE 4: REPORT

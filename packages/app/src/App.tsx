@@ -9,7 +9,7 @@ import { catalogImportPlugin } from '@backstage/plugin-catalog-import';
 import { ScaffolderPage, scaffolderPlugin } from '@backstage/plugin-scaffolder';
 import { orgPlugin } from '@backstage/plugin-org';
 import { SearchPage } from '@backstage/plugin-search';
-import { UserSettingsPage } from '@backstage/plugin-user-settings';
+import { UserSettingsPage, UserSettingsTab } from '@backstage/plugin-user-settings';
 import { apis } from './apis';
 import { entityPage } from './components/catalog/EntityPage';
 import { CustomCatalogPage } from './components/catalog/CustomCatalogPage';
@@ -66,6 +66,7 @@ import { CustomTechRadarPage } from './components/techRadar/CustomTechRadarPage'
 import { LocalProvisionerPage } from '@internal/plugin-local-provisioner';
 import { OnboardingPage } from '@internal/plugin-onboarding';
 import { UserManagementPage } from '@internal/plugin-user-management';
+import { ConnectDatabasesPage } from '@internal/plugin-dbaas';
 import { DeviceAuthPage } from './components/DeviceAuthPage';
 import { GlobalStyleOverrides } from './components/GlobalStyleOverrides';
 
@@ -143,7 +144,11 @@ const routes = (
     <Route path="/search" element={<SearchPage />}>
       {searchPage}
     </Route>
-    <Route path="/settings" element={<UserSettingsPage />} />
+    <Route path="/settings" element={<UserSettingsPage />}>
+      <UserSettingsTab path="/connect-databases" title="Connect Databases">
+        <ConnectDatabasesPage />
+      </UserSettingsTab>
+    </Route>
     <Route path="/catalog-graph" element={<CustomCatalogGraphPage />} />
     <Route path="/project-registration" element={<ProjectRegistrationPage />} />
     <Route path="/projects/manage" element={<ProjectListPage />} />

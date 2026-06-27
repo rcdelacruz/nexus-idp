@@ -18,6 +18,8 @@ import { createFetchEntityInfoAction } from './scaffolder/actions/fetchEntityInf
 import { createTofuApplyAction } from './scaffolder/actions/tofuApply';
 import { createDispatchWorkflowAction } from './scaffolder/actions/dispatchWorkflow';
 import { createSetupRepoForPromotionAction } from './scaffolder/actions/setupRepoForPromotion';
+import { createDbaasCreateProjectAction } from './scaffolder/actions/dbaasCreateProject';
+import { createAddRepoCollaboratorAction } from './scaffolder/actions/addRepoCollaborator';
 
 export const scaffolderActionsModule = createBackendModule({
   pluginId: 'scaffolder',
@@ -45,6 +47,8 @@ export const scaffolderActionsModule = createBackendModule({
           createTofuApplyAction(),
           createDispatchWorkflowAction(),
           createSetupRepoForPromotionAction(),
+          createDbaasCreateProjectAction({ discovery, auth }),
+          createAddRepoCollaboratorAction(),
         );
       },
     });

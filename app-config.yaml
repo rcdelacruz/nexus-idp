@@ -7,11 +7,11 @@ app:
       key: './key.pem'
 
 organization:
-  name: Your Organization
-  domain: ${ORG_DOMAIN}
-  githubOwner: ${GITHUB_ORG}
-  githubRepo: nexus-idp
-  usersFilePath: org/users.yaml
+  name: Stratpoint Technologies
+  domain: stratpoint.com
+  githubOwner: stratpoint-engineering
+  githubRepo: backstage-main
+  usersFilePath: stratpoint/org/users.yaml
 
 backend:
   logging:
@@ -43,10 +43,12 @@ backend:
     style-src: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com']
     worker-src: ["'self'", 'blob:']
     font-src: ["'self'", 'https://fonts.gstatic.com']
+    # GitHub org avatars used by the DBaaS provider logo component
+    img-src: ["'self'", 'data:', 'https://avatars.githubusercontent.com']
     # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
     # Default Helmet Content-Security-Policy values can be removed by setting the key to false
   cors:
-    origin: [http://localhost:3000]
+    origin: [http://localhost:3000, https://portal.stratpoint.io]
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
     credentials: true
   # This is for local development only, it is not recommended to use this in production
@@ -146,6 +148,12 @@ scaffolder:
         accountId: '${FINOPS_AWS_ACCOUNT_NONPROD}'
         region: us-west-2
         ecrRegistry: '${FINOPS_AWS_ACCOUNT_NONPROD}.dkr.ecr.us-west-2.amazonaws.com'
+        # VPC networking — used by infra templates (RDS, EKS, etc.)
+        vpcId: '${AWS_VPC_ID}'
+        vpcCidr: '${AWS_VPC_CIDR}'
+        privateSubnetIds: '${AWS_PRIVATE_SUBNET_IDS}'
+        # IAM role for GitHub Actions OIDC auth (strat-main-team/* repos)
+        githubActionsRoleArn: '${AWS_GITHUB_ACTIONS_INFRA_ROLE_ARN}'
         targets:
           # ECS clusters are auto-discovered from the Backstage catalog.
           # Run the "Infrastructure — AWS ECS Fargate Cluster" template to provision
@@ -171,9 +179,9 @@ scaffolder:
   # Used by infra templates to store OpenTofu state
   tofu:
     stateBackend:
-      s3Bucket: ${TOFU_STATE_BUCKET}
-      s3Region: ${TOFU_STATE_REGION}
-      dynamoTable: ${TOFU_LOCK_TABLE}
+      s3Bucket: '${TOFU_STATE_BUCKET}'
+      s3Region: '${TOFU_STATE_REGION}'
+      dynamoTable: '${TOFU_LOCK_TABLE}'
       #   targets:
       #     ecs: [...]
 
@@ -187,8 +195,16 @@ catalog:
   orphanStrategy: delete
   providers:
     github:
-      your-org:
-        organization: ${GITHUB_ORG}
+      stratpoint:
+        organization: stratpoint-engineering
+        catalogPath: /catalog-info.yaml
+        filters:
+          branch: main
+        schedule:
+          frequency: { minutes: 30 }
+          timeout: { minutes: 3 }
+      strat-main-team:
+        organization: strat-main-team
         catalogPath: /catalog-info.yaml
         filters:
           branch: main
@@ -330,13 +346,33 @@ engineeringDocs:
     - id: nexus-idp-docs
       label: Nexus IDP Docs
       description: Nexus IDP platform documentation — permissions, user management, integrations
-      repoOwner: ${GITHUB_ORG}
-      repoName: nexus-idp
+      repoOwner: stratpoint-engineering
+      repoName: backstage-main
       branch: main
       contentBase: docs/content
 
+    - id: engineering-hub
+      label: Engineering Hub
+      description: Stratpoint engineering standards, guides, and golden paths
+      repoOwner: stratpoint-engineering
+      repoName: engineering-hub
+      branch: main
+      contentBase: src/content
+
+    # Local Provisioner docs live at plugins/local-provisioner/docs/
+    # Will be wired as an engineering-docs source once plugins are in separate repos.
+
+    # strat-training/kafka is a PUBLIC repo — any valid GITHUB_TOKEN can read it.
+    - id: kafka-training
+      label: Kafka Training
+      description: Kafka training materials, guides, and exercises
+      repoOwner: strat-training
+      repoName: kafka
+      branch: main
+      contentBase: docs
+
 finops:
-  awsAccessPortalUrl: '${AWS_ACCESS_PORTAL_URL}'
+  awsAccessPortalUrl: 'https://stratpoint.awsapps.com/start'
   awsRoleToAssume: 'AccountAdmin'
   aws:
     region: us-east-1

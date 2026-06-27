@@ -50,6 +50,7 @@
     "@backstage/theme": "^0.7.2",
     "@backstage/ui": "^0.13.1",
     "@internal/backstage-plugin-project-registration": "^0.1.0",
+    "@internal/plugin-dbaas": "^0.1.0",
     "@internal/plugin-engineering-docs": "^0.1.0",
     "@internal/plugin-finops": "^0.1.0",
     "@internal/plugin-local-provisioner": "^0.1.0",

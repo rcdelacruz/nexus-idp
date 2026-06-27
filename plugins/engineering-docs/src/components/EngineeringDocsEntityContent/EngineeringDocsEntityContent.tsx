@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Progress, ErrorPanel, EmptyState } from '@backstage/core-components';
 import { useApi } from '@backstage/core-plugin-api';
 import { useEntity } from '@backstage/plugin-catalog-react';
-import { makeStyles, Box } from '@material-ui/core';
+import { makeStyles, Box, IconButton, Tooltip } from '@material-ui/core';
+import { RefreshCw } from 'lucide-react';
 import { engineeringDocsApiRef } from '../../api/EngineeringDocsClient';
 import { NavItem, DocContent } from '../../api/types';
 import { DocNavSidebar } from '../EngineeringDocsPage/DocNavSidebar';
@@ -87,6 +88,7 @@ export const EngineeringDocsEntityContent = () => {
   const [doc, setDoc] = useState<DocContent | undefined>();
   const [docLoading, setDocLoading] = useState(false);
   const [docError, setDocError] = useState<Error | undefined>();
+  const [refreshing, setRefreshing] = useState(false);
 
   const layoutRef = useRef<HTMLDivElement>(null);
 
@@ -171,13 +173,24 @@ export const EngineeringDocsEntityContent = () => {
     );
   }
 
+  const handleRefreshReadme = async () => {
+    if (!source.repo || refreshing) return;
+    setRefreshing(true);
+    try {
+      const fresh = await api.refreshEntityContent(source.repo, source.branch, '.', 'README');
+      setDoc(fresh);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // README mode: no sidebar, just rendered README with optional TOC
   if (readmeMode) {
     return (
       <div ref={layoutRef} className={classes.layout}>
         <div className={classes.contentScroll}>
-          {docLoading && <Progress />}
-          {!docLoading && navError && (
+          {(docLoading || refreshing) && <Progress />}
+          {!docLoading && !refreshing && navError && (
             <Box p={4}>
               <EmptyState
                 title="No docs found"
@@ -186,12 +199,19 @@ export const EngineeringDocsEntityContent = () => {
               />
             </Box>
           )}
-          {!docLoading && !navError && doc && (
+          {!docLoading && !refreshing && !navError && doc && (
             <DocViewer content={doc.content} html={doc.html} currentPath="README.md" onNavigate={() => {}} />
           )}
         </div>
-        {!docLoading && !navError && doc && tocEntries.length > 0 && (
-          <DocTOC entries={tocEntries} />
+        {!docLoading && !navError && doc && (
+          <Box display="flex" flexDirection="column" alignItems="flex-start" style={{ gap: 8, paddingTop: 4, paddingRight: 8 }}>
+            <Tooltip title="Refresh docs from GitHub">
+              <IconButton size="small" onClick={handleRefreshReadme} disabled={refreshing}>
+                <RefreshCw size={14} strokeWidth={1.5} />
+              </IconButton>
+            </Tooltip>
+            {tocEntries.length > 0 && <DocTOC entries={tocEntries} />}
+          </Box>
         )}
       </div>
     );

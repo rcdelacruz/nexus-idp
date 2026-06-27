@@ -13,16 +13,10 @@ import { userManagementApiRef } from '../api/refs';
 
 export { DEPT_TEAM_IDS, DEPT_TEAM_IDS_JWT } from '../constants';
 
+// TEMPORARILY restricted to general-engineers only (revert: restore all teams below).
+// Full list: general-engineers, web-team, mobile-team, data-team, cloud-team, ai-team, qa-team, pm-team, sa-team
 const DEPT_TEAMS: Record<string, string> = {
-  'general-engineers': 'No team yet — Intern / Trainee',
-  'web-team': 'Web',
-  'mobile-team': 'Mobile',
-  'data-team': 'Data',
-  'cloud-team': 'Cloud',
-  'ai-team': 'AI',
-  'qa-team': 'QA',
-  'pm-team': 'PM',
-  'sa-team': 'SolArch',
+  'general-engineers': 'General Engineers',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -616,8 +610,8 @@ export const OnboardingPage = () => {
               alignItems="flex-start"
               style={{
                 ...card, marginBottom: 24,
-                background: semantic.warningBg,
-                border: `1px solid ${semantic.warningBorder}`,
+                background: c.isDark ? semantic.warningBg : semantic.warningBgLight,
+                border: `1px solid ${c.isDark ? semantic.warningBorder : semantic.warningBorderLight}`,
                 gap: 12,
               }}
             >
@@ -626,7 +620,7 @@ export const OnboardingPage = () => {
                 <Typography style={{ fontSize: '0.875rem', fontWeight: 600, color: semantic.warning, marginBottom: 2 }}>
                   Action required — complete your registration
                 </Typography>
-                <Typography style={{ fontSize: '0.8125rem', color: semantic.warningText }}>
+                <Typography style={{ fontSize: '0.8125rem', color: c.isDark ? semantic.warningText : semantic.warningTextLight }}>
                   You're not yet assigned to a team. Complete Step 1 below to join your department.
                   Until then you have access to Engineering Docs, Tech Radar, and this page.
                 </Typography>

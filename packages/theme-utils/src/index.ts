@@ -55,10 +55,13 @@ export const semantic = {
   successBgHover: '#1a3d1a',
   error:          '#e53935',
   errorBg:        '#3b0e0e',
-  warning:        '#fb8c00',
-  warningBg:      '#1a0f00',
-  warningBorder:  '#854d0e',
-  warningText:    '#a16207',
+  warning:           '#fb8c00',
+  warningBg:         '#1a0f00',   // dark mode
+  warningBgLight:    '#fffbeb',   // light mode
+  warningBorder:     '#854d0e',   // dark mode
+  warningBorderLight:'#d97706',   // light mode
+  warningText:       '#a16207',   // dark mode
+  warningTextLight:  '#92400e',   // light mode
   info:           '#38bdf8',
   infoBg:         '#0c4a6e',
   purple:         '#a855f7',

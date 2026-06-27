@@ -98,8 +98,12 @@ spec:
           default: 8080
 
     - title: Database Configuration
-      required: []
+      required: [database]
       properties:
+        database:
+          title: Database
+          type: object
+          ui:field: DatabasePicker
         dbInstances:
           title: CNPG Cluster Instances
           type: integer
@@ -118,13 +122,13 @@ spec:
           title: Enable PgBouncer Connection Pooling
           type: boolean
           default: true
-          description: Adds a CNPG Pooler resource in transaction mode
+          description: Adds a CNPG Pooler resource in transaction mode (only applies to CNPG)
         minioEndpoint:
           title: MinIO / S3 Backup Endpoint
           type: string
           description: >
             S3-compatible endpoint for CNPG WAL backups (e.g. https://minio.example.com).
-            Must be reachable from the Kubernetes cluster. Update if your MinIO address changes.
+            Only applies when CNPG is selected. Update if your MinIO address changes.
           default: 'http://192.168.2.103:9000'
 
   steps:
@@ -132,6 +136,15 @@ spec:
       name: Discover Ingress Domain
       action: kubernetes:get-ingress-domain
       input: {}
+
+    - id: create-cloud-db
+      name: Create Cloud Database Project
+      if: ${{ parameters.database.database === 'create-new' }}
+      action: dbaas:create-project
+      input:
+        provider: ${{ parameters.database.createProvider }}
+        projectName: ${{ parameters.appName }}
+        namespace: ${{ parameters.appName }}-${{ parameters.environment }}
 
     - id: fetch-skeleton
       name: Generate Project Files
@@ -152,6 +165,7 @@ spec:
           frontendPort: ${{ parameters.frontendPort }}
           backendPort: ${{ parameters.backendPort }}
           dbName: ${{ parameters.appName | replace("-", "_") }}
+          dbProvider: ${{ parameters.database.database }}
           dbInstances: ${{ parameters.dbInstances }}
           dbStorageSize: ${{ parameters.dbStorageSize }}
           enableConnectionPooling: ${{ parameters.enableConnectionPooling }}

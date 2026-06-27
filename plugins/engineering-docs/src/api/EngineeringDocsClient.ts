@@ -77,6 +77,16 @@ export class EngineeringDocsClient implements EngineeringDocsApi {
     return this.fetchPost<DocContent>(`${base}/refresh/doc?path=${encodeURIComponent(docPath)}`);
   }
 
+  async refreshEntityContent(
+    repo: string,
+    branch: string,
+    contentBase: string,
+    docPath: string,
+  ): Promise<DocContent> {
+    const params = new URLSearchParams({ repo, branch, base: contentBase, path: docPath });
+    return this.fetchPost<DocContent>(`/docs/entity/refresh/doc?${params}`);
+  }
+
   async refreshNav(sourceId?: string): Promise<NavItem[]> {
     const base = sourceId ? `/docs/sources/${encodeURIComponent(sourceId)}` : '/docs';
     const data = await this.fetchPost<{ nav: NavItem[] }>(`${base}/refresh/nav`);

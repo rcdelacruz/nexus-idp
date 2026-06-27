@@ -44,4 +44,12 @@ export interface EngineeringDocsApi {
 
   /** Force-refresh the nav for a source from GitHub. */
   refreshNav(sourceId?: string): Promise<NavItem[]>;
+
+  /** Force-refresh a doc page for an entity-annotated inline repo (bypasses cache). */
+  refreshEntityContent(
+    repo: string,
+    branch: string,
+    contentBase: string,
+    docPath: string,
+  ): Promise<DocContent>;
 }

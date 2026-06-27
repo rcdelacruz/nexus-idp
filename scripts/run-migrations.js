@@ -2,7 +2,13 @@
 /**
  * Backstage Database Migration Runner
  *
- * Runs database migrations for the local-provisioner-backend plugin.
+ * Runs database migrations for custom backend plugins that need a dedicated DB:
+ *   - local-provisioner-backend (provisioning_tasks, agent_registrations)
+ *
+ * Note: dbaas-backend uses inline migrations via DbaasStore.create() — Backstage's
+ * database.getClient() auto-creates backstage_plugin_dbaas and the store runs
+ * db.migrate.latest() on startup. No init container step needed for dbaas.
+ *
  * Designed to be executed as an init container before the main Backstage app starts.
  *
  * Usage:
@@ -99,48 +105,48 @@ async function runMigrations() {
     }
     log('');
 
-    // Find migrations directory
-    const migrationsDir = path.resolve(
-      __dirname,
-      '../plugins/local-provisioner-backend/src/database/migrations'
-    );
+    // Plugin migration sets: each entry is { label, directory, tableName }
+    const migrationSets = [
+      {
+        label: 'local-provisioner-backend',
+        directory: path.resolve(__dirname, '../plugins/local-provisioner-backend/src/database/migrations'),
+        tableName: 'knex_migrations',
+      },
+    ];
 
-    log(`Migrations directory: ${migrationsDir}`, colors.blue);
+    for (const { label, directory, tableName } of migrationSets) {
+      log(`\n── ${label} ──`, colors.blue);
+      log(`   Directory: ${directory}`, colors.blue);
 
-    // Check if migrations directory exists
-    if (!fs.existsSync(migrationsDir)) {
-      log(`ERROR: Migrations directory not found: ${migrationsDir}`, colors.red);
-      process.exit(1);
-    }
+      if (!fs.existsSync(directory)) {
+        log(`   ERROR: Migrations directory not found: ${directory}`, colors.red);
+        process.exit(1);
+      }
 
-    // List migration files
-    const migrationFiles = fs.readdirSync(migrationsDir)
-      .filter(file => file.endsWith('.js'))
-      .sort();
+      const migrationFiles = fs.readdirSync(directory)
+        .filter(file => file.endsWith('.js'))
+        .sort();
 
-    log(`Found ${migrationFiles.length} migration files:`, colors.blue);
-    migrationFiles.forEach(file => log(`  - ${file}`, colors.blue));
-    log('');
+      log(`   Found ${migrationFiles.length} migration file(s)`, colors.blue);
 
-    // Run migrations
-    log('Running migrations...', colors.yellow);
-    const [batchNo, migrationsList] = await db.migrate.latest({
-      directory: migrationsDir,
-      loadExtensions: ['.js'],
-    });
-
-    if (migrationsList.length === 0) {
-      log('✓ Database is already up to date', colors.green);
-    } else {
-      log(`✓ Batch ${batchNo} run: ${migrationsList.length} migrations`, colors.green);
-      migrationsList.forEach(migration => {
-        log(`  ✓ ${migration}`, colors.green);
+      log('   Running...', colors.yellow);
+      const [batchNo, migrationsList] = await db.migrate.latest({
+        directory,
+        tableName,
+        loadExtensions: ['.js'],
       });
+
+      if (migrationsList.length === 0) {
+        log('   ✓ Already up to date', colors.green);
+      } else {
+        log(`   ✓ Batch ${batchNo}: ${migrationsList.length} migration(s) applied`, colors.green);
+        migrationsList.forEach(m => log(`     ✓ ${m}`, colors.green));
+      }
     }
 
     log('');
     log('='.repeat(80), colors.green);
-    log('Migration completed successfully!', colors.green);
+    log('All migrations completed successfully!', colors.green);
     log('='.repeat(80), colors.green);
 
     process.exit(0);
