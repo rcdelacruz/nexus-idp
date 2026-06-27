@@ -1,3 +1,4 @@
+import React from 'react';
 import { createDevApp } from '@backstage/dev-utils';
 import { projectRegistrationPlugin, ProjectRegistrationPage } from '../src/plugin';
 

@@ -12,7 +12,7 @@ import {
   DialogActions, ListSubheader,
 } from '@material-ui/core';
 import { ChevronDown, Trash2 } from 'lucide-react';
-import { semantic, useColors } from '@stratpoint/theme-utils';
+import { semantic } from '@stratpoint/theme-utils';
 
 
 const ALL_AWS_REGIONS = [
@@ -79,7 +79,7 @@ const fmtDate = (iso?: string) =>
 
 const SafetyBadge = ({ resource }: { resource: UnusedResource }) => {
   let label = 'Safe to delete';
-  let color = semantic.success;
+  let color: string = semantic.success;
 
   if (resource.resourceType === 'ec2') {
     if (resource.state === 'running') {

@@ -19,10 +19,10 @@
     "postpack": "backstage-cli package postpack"
   },
   "dependencies": {
-    "@backstage/core-components": "^0.18.8",
-    "@backstage/core-plugin-api": "^1.12.4",
-    "@backstage/plugin-catalog-react": "^2.1.0",
-    "@backstage/theme": "^0.7.2",
+    "@backstage/core-components": "^0.18.11",
+    "@backstage/core-plugin-api": "^1.12.7",
+    "@backstage/plugin-catalog-react": "^3.1.0",
+    "@backstage/theme": "^0.7.3",
     "@material-ui/core": "^4.9.13",
     "@mdx-js/mdx": "^3.1.1",
     "@stratpoint/theme-utils": "*",
@@ -40,7 +40,7 @@
     "react-router-dom": "^6.0.0"
   },
   "devDependencies": {
-    "@backstage/cli": "^0.36.0",
+    "@backstage/cli": "^0.36.3",
     "@types/react": "^18.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "jest": "^30.0.0",

@@ -5,7 +5,7 @@ import {
   FormControlLabel, Checkbox,
 } from '@material-ui/core';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
-import { semantic, useColors } from '@stratpoint/theme-utils';
+import { semantic } from '@stratpoint/theme-utils';
 import { useApi } from '@backstage/core-plugin-api';
 import { finopsApiRef } from '../../api/FinOpsClient';
 import { UnusedResource } from '../../api/types';

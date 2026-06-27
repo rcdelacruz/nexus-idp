@@ -5,10 +5,10 @@
  * Does NOT use the default Workflow/Stepper — renders RJSF Form directly.
  */
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate, useParams, Navigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import useAsync from 'react-use/lib/useAsync';
 import { stringifyEntityRef } from '@backstage/catalog-model';
-import { useRouteRef, useApi, useApiHolder } from '@backstage/core-plugin-api';
+import { useApi, useApiHolder } from '@backstage/core-plugin-api';
 import { Page, Header, Content, Progress, ErrorPanel } from '@backstage/core-components';
 import { useTemplateSecrets, scaffolderApiRef } from '@backstage/plugin-scaffolder-react';
 import {
@@ -18,7 +18,6 @@ import {
   createAsyncValidators,
 } from '@backstage/plugin-scaffolder-react/alpha';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
-import { rootRouteRef } from '@backstage/plugin-scaffolder';
 import { customizeValidator } from '@rjsf/validator-ajv8';
 import { Box, Button, Tooltip, Typography } from '@material-ui/core';
 import { CheckCircle, FileText, Eye, Loader } from 'lucide-react';
@@ -79,7 +78,6 @@ function useGeistStyles() {
 export const CustomTemplateWizardPage = (props: TemplateWizardPageProps) => {
   const { c, card, sectionLabel, reviewRow, reviewLabel, reviewValue } = useGeistStyles();
   const navigate = useNavigate();
-  const rootRef = useRouteRef(rootRouteRef);
   const { secrets: contextSecrets } = useTemplateSecrets();
   const scaffolderApi = useApi(scaffolderApiRef);
   const catalogApi = useApi(catalogApiRef);
@@ -223,8 +221,6 @@ export const CustomTemplateWizardPage = (props: TemplateWizardPageProps) => {
     }
   }, [isCreating, scaffolderApi, templateRef, formState, contextSecrets, navigate]);
 
-  const onError = useCallback(() => <Navigate to={rootRef()} />, [rootRef]);
-
   // ── Review renderer — same as ProjectRegistrationPage ───────────────────
 
   const renderReview = () => {
@@ -355,7 +351,7 @@ export const CustomTemplateWizardPage = (props: TemplateWizardPageProps) => {
               maxWidth: '100%',
               fontFamily: '"Geist", "Helvetica Neue", Arial, sans-serif',
               fontSize: '0.8125rem',
-              color: c.textTertiary,
+              color: c.textMuted,
               letterSpacing: '-0.006em',
               lineHeight: 1.4,
               margin: '2px 0 0',

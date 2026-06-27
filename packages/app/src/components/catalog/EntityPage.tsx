@@ -64,7 +64,6 @@ import {
 
 import {
   EntityArgoCDContent,
-  EntityArgoCDHistoryCard,
   isArgocdAvailable,
 } from '@roadiehq/backstage-plugin-argo-cd';
 

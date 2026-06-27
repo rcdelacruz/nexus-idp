@@ -1,11 +1,10 @@
-import { PermissionPolicy, PolicyQuery } from '@backstage/plugin-permission-node';
+import { PermissionPolicy, PolicyQuery, PolicyQueryUser } from '@backstage/plugin-permission-node';
 import { DatabaseService, LoggerService } from '@backstage/backend-plugin-api';
 import {
   AuthorizeResult,
   PolicyDecision,
   isResourcePermission,
 } from '@backstage/plugin-permission-common';
-import { BackstageIdentityResponse } from '@backstage/plugin-auth-node';
 import {
   catalogEntityCreatePermission,
   catalogEntityDeletePermission,
@@ -124,9 +123,9 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
 
   async handle(
     request: PolicyQuery,
-    user?: BackstageIdentityResponse,
+    user?: PolicyQueryUser,
   ): Promise<PolicyDecision> {
-    const groups = user?.identity.ownershipEntityRefs ?? [];
+    const groups = user?.info.ownershipEntityRefs ?? [];
     const permissionName = request.permission.name;
 
     // ── Unauthenticated: deny everything ─────────────────────────────────────
@@ -145,7 +144,7 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
 
       // PM (without engineering team): groups, users, and components owned by their project teams.
       if (isPM(groups) && !isAssignedEngineer(groups)) {
-        const projectTeamRefs = await this.getProjectTeamRefs(user.identity.userEntityRef);
+        const projectTeamRefs = await this.getProjectTeamRefs(user.info.userEntityRef);
         const allClaims = [...groups, ...projectTeamRefs];
         return createCatalogConditionalDecision(request.permission, {
           anyOf: [

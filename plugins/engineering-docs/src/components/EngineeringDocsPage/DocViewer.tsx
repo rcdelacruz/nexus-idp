@@ -6,7 +6,7 @@ import rehypeRaw from 'rehype-raw';
 import { makeStyles } from '@material-ui/core';
 import { useColors, getColors, DesignTokens } from '@stratpoint/theme-utils';
 import { atomOneDark, atomOneLight } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
-import { Copy, Check, RefreshCw } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 
 import { slugify } from './DocTOC';
 

@@ -1,5 +1,5 @@
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
-import { catalogProcessingExtensionPoint } from '@backstage/plugin-catalog-node/alpha';
+import { catalogProcessingExtensionPoint } from '@backstage/plugin-catalog-node';
 import { DbaasEntityProvider } from './provider/DbaasEntityProvider';
 import { dbaasStoreReady } from './sharedStore';
 import { resolveSharedProvider } from './sharedProvider';
