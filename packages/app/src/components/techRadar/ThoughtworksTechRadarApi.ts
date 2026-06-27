@@ -132,6 +132,7 @@ export class ThoughtworksTechRadarApi implements TechRadarApi {
         { id: 'adopt', name: 'ADOPT', color: '#43a047', description: 'We strongly recommend this technology. Use it when appropriate.' },
         { id: 'trial', name: 'TRIAL', color: '#1976d2', description: 'Worth pursuing. Understand how to build this capability.' },
         { id: 'assess', name: 'ASSESS', color: '#fb8c00', description: 'Worth exploring to understand how it will affect your enterprise.' },
+        { id: 'caution', name: 'CAUTION', color: '#e65100', description: 'Approach with significant care — known risks that require deliberate mitigation.' },
         { id: 'hold', name: 'HOLD', color: '#e53935', description: 'Proceed with caution.' },
       ],
       entries,
