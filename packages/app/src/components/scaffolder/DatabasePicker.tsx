@@ -60,6 +60,38 @@ function providerLabel(annotationValue: string): string {
   return annotationValue.charAt(0).toUpperCase() + annotationValue.slice(1);
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+  <div style={{
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: 'var(--fg-secondary)',
+    marginBottom: 8,
+  }}>
+    {children}
+  </div>
+);
+
+const Option = ({
+  value,
+  label,
+  disabled = false,
+}: {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}) => (
+  <FormControlLabel
+    value={value}
+    disabled={disabled}
+    control={<Radio size="small" style={{ padding: '4px 8px' }} />}
+    label={<span style={{ fontSize: '0.875rem' }}>{label}</span>}
+  />
+);
+
 export const DatabasePicker = ({
   onChange,
   formData,
@@ -103,7 +135,7 @@ export const DatabasePicker = ({
     Promise.all([dbaasApi.getProviders(), dbaasApi.getConnections()])
       .then(([providers, connections]) => {
         // Unique providers the user has a connection for, that support creation
-        const connectedProviderIds = new Set(connections.map(c => c.provider));
+        const connectedProviderIds = new Set(connections.map(conn => conn.provider));
         setCreatableProviders(
           providers
             .filter(p => p.supportsCreate && connectedProviderIds.has(p.id))
@@ -215,21 +247,23 @@ export const DatabasePicker = ({
     </div>
   );
 
-  const creatableRows = loadingCreatable
-    ? null
-    : creatableError
-      ? (
+  const creatableRows = (() => {
+    if (loadingCreatable) return null;
+    if (creatableError) {
+      return (
         <div style={{ fontSize: '0.8125rem', color: semantic.error, padding: '4px 8px', marginBottom: 4 }}>
           {creatableError}
         </div>
-      )
-      : creatableProviders.map(p => (
-          <Option
-            key={`create-new:${p.id}`}
-            value={`create-new:${p.id}`}
-            label={`${p.displayName} — create new project (uses your connected account)`}
-          />
-        ));
+      );
+    }
+    return creatableProviders.map(p => (
+      <Option
+        key={`create-new:${p.id}`}
+        value={`create-new:${p.id}`}
+        label={`${p.displayName} — create new project (uses your connected account)`}
+      />
+    ));
+  })();
 
   // ── K8s: None | PostgreSQL (CNPG) | DBaaS create-new | DBaaS entities ─────
   if (isK8sTarget) {
@@ -330,35 +364,3 @@ export const DatabasePicker = ({
     </FormControl>
   );
 };
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-  <div style={{
-    fontSize: '0.6875rem',
-    fontWeight: 600,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-    color: 'var(--fg-secondary)',
-    marginBottom: 8,
-  }}>
-    {children}
-  </div>
-);
-
-const Option = ({
-  value,
-  label,
-  disabled = false,
-}: {
-  value: string;
-  label: string;
-  disabled?: boolean;
-}) => (
-  <FormControlLabel
-    value={value}
-    disabled={disabled}
-    control={<Radio size="small" style={{ padding: '4px 8px' }} />}
-    label={<span style={{ fontSize: '0.875rem' }}>{label}</span>}
-  />
-);
