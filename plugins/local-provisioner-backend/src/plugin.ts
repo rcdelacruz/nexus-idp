@@ -8,6 +8,7 @@ import {
 } from '@backstage/backend-plugin-api';
 import { createRouter } from './service/router';
 import { PUBLIC_AGENT_PATHS } from './util/publicPaths';
+import { resolveEmailDomainFromConfig, setEmailDomain } from './util/identity';
 
 /**
  * Local Provisioner backend plugin
@@ -41,6 +42,15 @@ export const localProvisionerPlugin = createBackendPlugin({
         permissions,
       }) {
         logger.info('Initializing Local Provisioner backend plugin');
+
+        // Resolve the org email domain from config once, before any request is served. This
+        // keeps entity-ref → email translation config-driven (no hardcoded org domain) while
+        // preserving existing identities (the deployment's Google allowedDomains).
+        const resolvedDomain = resolveEmailDomainFromConfig(config);
+        setEmailDomain(resolvedDomain);
+        logger.info(
+          `Local Provisioner identity domain: ${resolvedDomain ?? 'localhost (unconfigured)'}`,
+        );
 
         // Create router with all routes
         const router = await createRouter({
