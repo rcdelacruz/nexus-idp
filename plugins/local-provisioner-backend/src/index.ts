@@ -4,18 +4,20 @@
 
 export { localProvisionerPlugin as default } from './plugin';
 export { localProvisionerPlugin } from './plugin';
+export { localProvisionerCatalogModule } from './module';
 export {
   localProvisionerPermissions,
   localProvisionerPermissionsList,
 } from './permissions';
+// Enums are runtime values — export as values, not types.
+export { TaskStatus, TaskType, ResourceType, ResourceState } from './types';
 export type {
   ProvisioningTask,
   AgentRegistration,
-  TaskStatus,
-  TaskType,
+  Resource,
+  ConnectionDetails,
   CreateTaskRequest,
   UpdateTaskStatusRequest,
-  AgentAuthRequest,
   AgentAuthResponse,
   AgentRegisterRequest,
   AgentRegisterResponse,

@@ -24,6 +24,7 @@ import {
   DialogContentText,
   DialogActions,
   Button,
+  useTheme,
 } from '@material-ui/core';
 import { AgentRegistration } from '../../api/types';
 import { CheckCircle, ZapOff, Monitor, Filter, MoreVertical, Square, Trash2, Play, Info } from 'lucide-react';
@@ -82,6 +83,7 @@ const useStyles = makeStyles(theme => ({
       backgroundColor: theme.palette.action.selected,
     },
   },
+  // Colour is applied inline in the render (bulletproof); this class is layout only.
   statusChip: {
     fontWeight: 600,
     marginLeft: theme.spacing(1),
@@ -141,6 +143,7 @@ export const AgentList = ({
   onRevoke,
 }: AgentListProps) => {
   const classes = useStyles();
+  const theme = useTheme();
   const [menuAnchor, setMenuAnchor] = useState<{ element: HTMLElement; agentId: string } | null>(null);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
@@ -148,20 +151,41 @@ export const AgentList = ({
   const [selectedAgentForAction, setSelectedAgentForAction] = useState<AgentRegistration | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const getStatusColor = (isConnected: boolean): 'default' | 'primary' => {
-    return isConnected ? 'primary' : 'default';
+  // Connectivity is based on HEARTBEAT freshness, not the SSE connection. SSE is unreliable
+  // through proxies (e.g. Cloudflare tunnels buffer/drop it) and task delivery now falls back to
+  // polling, so an agent that is heartbeating IS online regardless of SSE state. Using isConnected
+  // (SSE) here made a live, heartbeating agent show as offline/gray.
+  const getConnectivity = (agent: AgentRegistration): 'online' | 'degraded' | 'offline' => {
+    // Prefer the server-computed age (skew-free); fall back to client clock only if absent.
+    const ageSec =
+      agent.lastSeenAgeSeconds != null
+        ? agent.lastSeenAgeSeconds
+        : (Date.now() - new Date(agent.lastSeenAt).getTime()) / 1000;
+    // Heartbeat interval is 30s; tolerate a couple of missed beats (and brief backend restarts).
+    if (ageSec <= 90) return 'online';
+    if (ageSec <= 300) return 'degraded'; // 1.5–5 min: slow/intermittent
+    return 'offline'; // no heartbeat for 5+ min
   };
 
-  const getStatusIcon = (isConnected: boolean) => {
-    return isConnected ? (
-      <CheckCircle size={16} strokeWidth={1.5} />
-    ) : (
-      <ZapOff size={16} strokeWidth={1.5} />
-    );
+  // Explicit colours (design tokens from theme.ts) applied inline — inline styles beat any CSS
+  // class/specificity and don't depend on theme.palette.status resolving. This is deliberately
+  // the most robust option after class-based colouring repeatedly rendered gray.
+  const connectivityColor = (c: 'online' | 'degraded' | 'offline'): string => {
+    const dark = theme.palette.type === 'dark';
+    if (c === 'online') return dark ? '#50e3c2' : '#079669'; // green
+    if (c === 'degraded') return dark ? '#f5a623' : '#d97706'; // amber
+    return theme.palette.text.secondary; // gray
   };
 
-  const getStatusLabel = (isConnected: boolean): string => {
-    return isConnected ? 'Online' : 'Offline';
+  const getStatusIcon = (connectivity: 'online' | 'degraded' | 'offline', color: string) => {
+    if (connectivity === 'offline') return <ZapOff size={16} strokeWidth={1.5} color={color} />;
+    return <CheckCircle size={16} strokeWidth={1.5} color={color} />;
+  };
+
+  const getStatusLabel = (connectivity: 'online' | 'degraded' | 'offline'): string => {
+    if (connectivity === 'online') return 'Online';
+    if (connectivity === 'degraded') return 'Degraded';
+    return 'Offline';
   };
 
   const formatLastSeen = (dateString: string): string => {
@@ -327,13 +351,25 @@ export const AgentList = ({
                         <Typography className={classes.hostname}>
                           {getDisplayName(agent)}
                         </Typography>
-                        <Chip
-                          className={classes.statusChip}
-                          label={getStatusLabel(agent.isConnected)}
-                          color={getStatusColor(agent.isConnected)}
-                          icon={getStatusIcon(agent.isConnected)}
-                          size="small"
-                        />
+                        {(() => {
+                          const connectivity = getConnectivity(agent);
+                          const color = connectivityColor(connectivity);
+                          return (
+                            <Chip
+                              variant="outlined"
+                              className={classes.statusChip}
+                              // Inline styles win over MUI's label/outlined rules unconditionally.
+                              style={{ color, borderColor: color }}
+                              label={
+                                <span style={{ color, fontWeight: 600 }}>
+                                  {getStatusLabel(connectivity)}
+                                </span>
+                              }
+                              icon={getStatusIcon(connectivity, color)}
+                              size="small"
+                            />
+                          );
+                        })()}
                       </Box>
                     }
                     secondary={
@@ -344,12 +380,14 @@ export const AgentList = ({
                         <Typography className={classes.lastSeen}>
                           {formatLastSeen(agent.lastSeenAt)}
                         </Typography>
-                        {!agent.isConnected && (
+                        {getConnectivity(agent) === 'offline' && (
                           <Typography className={classes.taskCount} style={{ color: '#ff9800', marginTop: 4 }}>
-                            ⚠️ Agent offline - Click menu to start
+                            ⚠️ Offline — no heartbeat for a while. Start it with{' '}
+                            <code>backstage-agent start</code>, or if your session expired,{' '}
+                            <code>backstage-agent login</code>.
                           </Typography>
                         )}
-                        {agent.isConnected && taskCount > 0 && (
+                        {getConnectivity(agent) !== 'offline' && taskCount > 0 && (
                           <Typography className={classes.taskCount}>
                             {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
                           </Typography>

@@ -17,11 +17,11 @@ Before installing the Backstage Agent, ensure you have:
    - [Download Docker Desktop](https://www.docker.com/products/docker-desktop/)
    - Verify: `docker --version`
 
-3. **Google Account** - With @stratpoint.com domain
+3. **Google Account** - With @example.com domain
    - Required for OAuth authentication
 
 4. **Network Access** - Ability to connect to Backstage portal
-   - Production: `https://portal.stratpoint.io`
+   - Production: `https://your-backstage-instance`
    - Local Dev: `http://localhost:7007`
 
 ---
@@ -30,11 +30,11 @@ Before installing the Backstage Agent, ensure you have:
 
 ### Option 1: Install from Monorepo (Development)
 
-If you have the backstage-main-strat-eng repository cloned:
+If you have the backstage-main repository cloned:
 
 ```bash
 # Navigate to agent package
-cd /path/to/backstage-main-strat-eng/packages/backstage-agent
+cd /path/to/backstage-main/packages/backstage-agent
 
 # Install dependencies
 yarn install
@@ -72,7 +72,7 @@ backstage-agent login --url http://localhost:7007
 
 **For production:**
 ```bash
-backstage-agent login --url https://portal.stratpoint.io
+backstage-agent login --url https://your-backstage-instance
 ```
 
 ### Step 2: Complete Device Authorization
@@ -91,7 +91,7 @@ Waiting for authorization... (expires in 10 minutes)
 ### Step 3: Authorize in Browser
 
 1. Open the displayed URL in your browser
-2. Sign in with your Google account (@stratpoint.com)
+2. Sign in with your Google account (@example.com)
 3. Enter the displayed code (e.g., `ABCD-1234`)
 4. Click "Authorize"
 
@@ -224,7 +224,7 @@ Each task directory contains:
 backstage-agent login --url http://localhost:7007
 ```
 
-Tokens expire after 30 days and must be refreshed.
+Tokens expire after 7 days and must be refreshed with `backstage-agent login`.
 
 ---
 
@@ -296,18 +296,15 @@ LOG_LEVEL=debug backstage-agent start
 
 ### Graceful Shutdown
 
-Stop the agent gracefully:
+The agent runs as a background daemon (started by `login` or `start`), so `Ctrl+C` won't stop it.
+Use:
 
 ```
-Press Ctrl+C
+backstage-agent stop
 ```
 
-The agent will:
-1. Stop accepting new tasks
-2. Finish active task (if any)
-3. Send final heartbeat
-4. Close SSE connection
-5. Exit
+The agent will close its SSE connection and exit. Provisioned resources keep running on Docker;
+remove one with `backstage-agent resource remove <name>`.
 
 ---
 
@@ -318,7 +315,7 @@ The agent will:
 - Tokens are stored in `~/.backstage-agent/config.json`
 - File permissions: `600` (owner read/write only)
 - Never commit this file to version control
-- Tokens expire after 30 days
+- Tokens expire after 7 days
 
 ### Network Security
 
@@ -365,8 +362,8 @@ docker-compose down -v
 
 For issues or questions:
 
-- **Backstage Issues**: File in `backstage-main-strat-eng` repository
-- **Agent Bugs**: File in `backstage-main-strat-eng/packages/backstage-agent`
+- **Backstage Issues**: File in `backstage-main` repository
+- **Agent Bugs**: File in `backstage-main/packages/backstage-agent`
 - **Training Questions**: Contact DevOps team
 
 ---

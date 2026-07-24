@@ -3,12 +3,65 @@
  */
 
 import { Knex } from 'knex';
+import { randomUUID } from 'crypto';
 import {
   ProvisioningTask,
   AgentRegistration,
   TaskStatus,
+  TaskType,
   CreateTaskRequest,
+  Resource,
+  ResourceState,
+  isProvisionTask,
+  resourceTypeForTask,
 } from '../types';
+
+/**
+ * Fold a resource's task history (chronological) into its current state. The latest completed
+ * task drives state: deprovision → removed, stop → stopped, start/restart/provision → running,
+ * a failed latest task → error, an in-flight task → provisioning.
+ */
+export function foldTasksToResource(tasks: ProvisioningTask[]): Resource | undefined {
+  const provision = [...tasks].reverse().find(t => isProvisionTask(t.task_type));
+  if (!provision) return undefined; // no provision task → not a resource we own
+
+  const latest = tasks[tasks.length - 1];
+  const latestCompleted = [...tasks]
+    .reverse()
+    .find(t => t.status === TaskStatus.COMPLETED);
+
+  let state: ResourceState;
+  if (latest.status === TaskStatus.PENDING || latest.status === TaskStatus.IN_PROGRESS) {
+    state = ResourceState.PROVISIONING;
+  } else if (latest.status === TaskStatus.FAILED) {
+    state = ResourceState.ERROR;
+  } else if (!latestCompleted) {
+    state = ResourceState.ERROR;
+  } else if (latestCompleted.task_type === TaskType.DEPROVISION) {
+    state = ResourceState.REMOVED;
+  } else if (latestCompleted.task_type === TaskType.STOP) {
+    state = ResourceState.STOPPED;
+  } else {
+    state = ResourceState.RUNNING; // provision / start / restart
+  }
+
+  const connProvision = [...tasks]
+    .reverse()
+    .find(t => isProvisionTask(t.task_type) && t.connection_details);
+
+  return {
+    resource_name: provision.resource_name,
+    resource_type: resourceTypeForTask(provision.task_type),
+    agent_id: provision.agent_id,
+    user_id: provision.user_id,
+    state,
+    connection_details: connProvision?.connection_details,
+    catalog_entity_ref: provision.catalog_entity_ref,
+    provisioned_at: provision.completed_at ?? provision.created_at,
+    updated_at: latest.updated_at,
+    latest_task_id: latest.task_id,
+  };
+}
 
 /**
  * TaskStore handles all database operations for provisioning tasks and agents
@@ -81,14 +134,17 @@ export class TaskStore {
     status: TaskStatus,
     metadata?: Record<string, any>,
     errorMessage?: string,
+    extra?: { logs?: string; connectionDetails?: Record<string, any> },
   ): Promise<void> {
     const updateData: any = {
       status,
       updated_at: this.db.fn.now(),
     };
 
-    if (status === TaskStatus.IN_PROGRESS && !metadata) {
-      updateData.started_at = this.db.fn.now();
+    // Set started_at only on the first transition to in-progress (idempotent across interim
+    // progress updates that now carry metadata).
+    if (status === TaskStatus.IN_PROGRESS) {
+      updateData.started_at = this.db.raw('COALESCE(started_at, NOW())');
     }
 
     if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED) {
@@ -99,13 +155,51 @@ export class TaskStore {
       updateData.error_message = errorMessage;
     }
 
-    if (metadata && metadata.catalogEntityRef) {
-      updateData.catalog_entity_ref = metadata.catalogEntityRef;
+    if (metadata) {
+      updateData.metadata = JSON.stringify(metadata);
+      if (metadata.catalogEntityRef) {
+        updateData.catalog_entity_ref = metadata.catalogEntityRef;
+      }
+    }
+
+    if (extra?.logs) {
+      updateData.logs = extra.logs;
+    }
+
+    if (extra?.connectionDetails) {
+      updateData.connection_details = JSON.stringify(extra.connectionDetails);
     }
 
     await this.db('provisioning_tasks')
       .where({ task_id: taskId })
       .update(updateData);
+  }
+
+  /**
+   * Fold all tasks into the current set of provisioned resources (resource-centric view).
+   * A resource is keyed by (agent_id, resource_name); its state is derived from the latest
+   * completed lifecycle task. Torn-down resources are excluded.
+   */
+  async getActiveProvisionedResources(): Promise<Resource[]> {
+    const rows = await this.db('provisioning_tasks').orderBy('created_at', 'asc');
+    const tasks = rows.map(r => this.mapTaskFromDb(r));
+
+    const byResource = new Map<string, ProvisioningTask[]>();
+    for (const t of tasks) {
+      const key = `${t.agent_id}::${t.resource_name}`;
+      const group = byResource.get(key);
+      if (group) group.push(t);
+      else byResource.set(key, [t]);
+    }
+
+    const resources: Resource[] = [];
+    for (const group of byResource.values()) {
+      const resource = foldTasksToResource(group);
+      if (resource && resource.state !== ResourceState.REMOVED) {
+        resources.push(resource);
+      }
+    }
+    return resources;
   }
 
   /**
@@ -126,8 +220,11 @@ export class TaskStore {
     osPlatform?: string,
     agentVersion?: string,
   ): Promise<AgentRegistration> {
+    // agent_id has no DB default (migration 004 made it a NOT NULL varchar), so generate one —
+    // otherwise the insert violates the not-null constraint (was a 500 on POST /agent/register).
     const [agent] = await this.db('agent_registrations')
       .insert({
+        agent_id: randomUUID(),
         user_id: userId,
         machine_name: machineName,
         os_platform: osPlatform,
@@ -254,6 +351,10 @@ export class TaskStore {
    * Map database row to ProvisioningTask
    */
   private mapTaskFromDb(row: any): ProvisioningTask {
+    const parseJson = (v: any) => {
+      if (v === null || v === undefined) return undefined;
+      return typeof v === 'string' ? JSON.parse(v) : v;
+    };
     return {
       task_id: row.task_id,
       agent_id: row.agent_id,
@@ -264,6 +365,9 @@ export class TaskStore {
       status: row.status,
       catalog_entity_ref: row.catalog_entity_ref,
       error_message: row.error_message,
+      logs: row.logs ?? undefined,
+      metadata: parseJson(row.metadata),
+      connection_details: parseJson(row.connection_details),
       created_at: new Date(row.created_at),
       updated_at: new Date(row.updated_at),
       started_at: row.started_at ? new Date(row.started_at) : undefined,

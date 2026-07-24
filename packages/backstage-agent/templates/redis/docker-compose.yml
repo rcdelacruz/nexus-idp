@@ -1,0 +1,7 @@
+services:
+  {{resourceName}}:
+    image: redis:7-alpine
+    container_name: {{resourceName}}
+    ports:
+      - "{{port}}:6379"
+    restart: unless-stopped

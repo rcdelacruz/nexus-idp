@@ -23,6 +23,33 @@ export enum TaskStatus {
 }
 
 /**
+ * Task type enum (matches backend). Provision types create a resource; lifecycle types act on
+ * an existing resource identified by config.targetTaskId / config.targetResourceName.
+ */
+export enum TaskType {
+  PROVISION_KAFKA = 'provision-kafka',
+  PROVISION_POSTGRES = 'provision-postgres',
+  PROVISION_REDIS = 'provision-redis',
+  PROVISION_MONGODB = 'provision-mongodb',
+  DEPROVISION = 'deprovision',
+  STOP = 'stop',
+  START = 'start',
+  RESTART = 'restart',
+}
+
+const LIFECYCLE_TASK_TYPES: string[] = [
+  TaskType.DEPROVISION,
+  TaskType.STOP,
+  TaskType.START,
+  TaskType.RESTART,
+];
+
+/** True for lifecycle task types acting on an existing resource (not a fresh provision). */
+export function isLifecycleTask(taskType: string): boolean {
+  return LIFECYCLE_TASK_TYPES.includes(taskType);
+}
+
+/**
  * Provisioning task from backend
  */
 export interface ProvisioningTask {
@@ -54,13 +81,38 @@ export interface SSETaskEvent {
 }
 
 /**
- * Task execution result
+ * Task execution result reported back to the backend.
+ * `connectionDetails` and `metadata` (container status, ports, pull progress) are surfaced in
+ * the UI as "how to connect" and live status.
  */
 export interface TaskExecutionResult {
   success: boolean;
   metadata?: Record<string, any>;
+  connectionDetails?: ConnectionDetails;
   error?: string;
   logs?: string;
+}
+
+/** How to connect to a provisioned resource. */
+export interface ConnectionDetails {
+  host?: string;
+  ports?: Record<string, number>;
+  connectionString?: string;
+  ui?: string;
+  [key: string]: any;
+}
+
+/** A locally-provisioned resource tracked in ~/.backstage-agent/resources.json (offline-usable). */
+export interface LocalResource {
+  resourceName: string;
+  taskType: string;
+  taskId: string;
+  taskDir: string;
+  state: 'running' | 'stopped' | 'error';
+  ports?: Record<string, number>;
+  connectionDetails?: ConnectionDetails;
+  provisionedAt: string;
+  updatedAt: string;
 }
 
 /**

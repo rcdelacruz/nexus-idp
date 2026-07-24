@@ -5,7 +5,7 @@
 import { Command } from 'commander';
 import { GoogleAuthClient } from '../auth/GoogleAuthClient';
 import { TokenManager } from '../auth/TokenManager';
-import { startAgent } from '../utils/agentStarter';
+import { launchDaemon } from '../utils/daemonLauncher';
 import { displaySuccess, displayInfo, displayBanner } from '../utils/logo';
 import logger from '../utils/logger';
 
@@ -52,17 +52,15 @@ export const loginCommand = new Command('login')
       displayInfo(`Token expires: ${new Date(authResponse.expiresAt).toLocaleString()}`);
       console.log('');
 
-      // Auto-start agent unless --no-start is specified
+      // Auto-start agent as a DETACHED daemon unless --no-start is specified. This keeps the
+      // agent online after the login command exits / the terminal closes (it used to run in the
+      // foreground, so Ctrl+C dropped you offline).
       if (shouldStart) {
         console.log('');
-        logger.info('Starting agent automatically...');
-        logger.info('(Use --no-start flag to skip auto-start)');
+        logger.info('Starting agent in the background...');
         console.log('');
-
-        // Start the agent (will show logo and connect)
-        await startAgent({ showLogo: true });
-
-        // Note: startAgent keeps the process running, so we never reach here
+        const result = await launchDaemon();
+        process.exit(result.ok ? 0 : 1);
       } else {
         console.log('');
         displayInfo('Agent ready! Run "backstage-agent start" when you\'re ready to connect.');

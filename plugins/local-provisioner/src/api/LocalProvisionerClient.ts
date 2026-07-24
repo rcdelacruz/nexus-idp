@@ -43,6 +43,15 @@ export interface LocalProvisionerApi {
   getTaskById(taskId: string): Promise<ProvisioningTask>;
   createTask(request: CreateTaskRequest): Promise<ProvisioningTask>;
   deleteTask(taskId: string): Promise<void>;
+  /** Re-send a stuck task to its agent (recovery). */
+  dispatchTask(taskId: string): Promise<void>;
+  /** Retry a failed task by re-creating it with the same config. */
+  retryTask(task: ProvisioningTask): Promise<ProvisioningTask>;
+  /** Lifecycle op on a provisioned resource (stop/start/restart/deprovision). */
+  lifecycleAction(
+    task: ProvisioningTask,
+    action: 'stop' | 'start' | 'restart' | 'deprovision',
+  ): Promise<ProvisioningTask>;
   getTaskStats(): Promise<TaskStats>;
   getAgentStatus(): Promise<AgentRegistration | null>;
   getAgents(): Promise<AgentRegistration[]>;
@@ -150,9 +159,10 @@ export class LocalProvisionerClient implements LocalProvisionerApi {
     });
 
     if (!response.ok) {
-      if (response.status === 400) {
-        const error = await response.json();
-        throw new Error(error.error || 'Invalid request');
+      // 400 (bad request) and 409 (agent offline) both carry a helpful message — surface it.
+      if (response.status === 400 || response.status === 409) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || error.error || 'Invalid request');
       }
       throw new Error(`Failed to create task: ${response.statusText}`);
     }
@@ -187,6 +197,61 @@ export class LocalProvisionerClient implements LocalProvisionerApi {
       }
       throw new Error(`Failed to delete task: ${response.statusText}`);
     }
+  }
+
+  /**
+   * Re-send a stuck task to its agent (recovery for the strand-on-restart case).
+   */
+  async dispatchTask(taskId: string): Promise<void> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.getAuthHeaders();
+
+    const response = await fetch(`${baseUrl}/tasks/${taskId}/dispatch`, {
+      method: 'POST',
+      headers,
+    });
+
+    if (!response.ok) {
+      if (response.status === 409) {
+        throw new Error(
+          'Agent not connected. Start the agent (`backstage-agent start`), then retry.',
+        );
+      }
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Failed to dispatch task: ${response.statusText}`);
+    }
+  }
+
+  /**
+   * Retry a failed task by re-creating it with the same type, resource, agent and config.
+   */
+  async retryTask(task: ProvisioningTask): Promise<ProvisioningTask> {
+    return this.createTask({
+      agent_id: task.agentId,
+      task_type: task.taskType,
+      resource_name: task.resourceName,
+      config: task.config,
+    });
+  }
+
+  /**
+   * Perform a lifecycle action on a provisioned resource. Reuses the task queue: creates a
+   * lifecycle task targeting the original provision task, which the agent dispatches to the
+   * corresponding docker-compose op.
+   */
+  async lifecycleAction(
+    task: ProvisioningTask,
+    action: 'stop' | 'start' | 'restart' | 'deprovision',
+  ): Promise<ProvisioningTask> {
+    return this.createTask({
+      agent_id: task.agentId,
+      task_type: action,
+      resource_name: task.resourceName,
+      config: {
+        targetTaskId: task.id,
+        targetResourceName: task.resourceName,
+      },
+    });
   }
 
   /**

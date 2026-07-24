@@ -5,15 +5,16 @@
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { Config } from '@backstage/config';
 import { Response } from 'express';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { TaskStore } from '../database/TaskStore';
 import { TaskQueueService } from './TaskQueueService';
 import {
   AgentRegistration,
-  AgentAuthRequest,
   AgentAuthResponse,
   AgentRegisterRequest,
   SSETaskEvent,
 } from '../types';
+import { extractEmailFromEntityRef as sharedExtractEmail } from '../util/identity';
 
 /**
  * SSE connection tracking
@@ -54,6 +55,9 @@ export class AgentService {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private readonly HEARTBEAT_INTERVAL_MS: number;
   private readonly DEVICE_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+  // Single source of truth for the service-token lifetime — the signed `exp` and the `expiresAt`
+  // reported to the agent are both derived from this, so they can't drift apart.
+  private readonly SERVICE_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
   constructor(
     private readonly logger: LoggerService,
@@ -232,7 +236,7 @@ export class AgentService {
       }
     }
 
-    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    const expiresAt = Date.now() + this.SERVICE_TOKEN_TTL_SECONDS * 1000;
 
     // Clean up device code
     this.deviceCodes.delete(deviceCode);
@@ -243,50 +247,6 @@ export class AgentService {
       agentId,
       expiresAt,
       reconnected,
-    };
-  }
-
-  /**
-   * Authenticate agent with Google OAuth token (DEPRECATED - use device code flow)
-   * NOTE: In full implementation, this would verify the Google token
-   * For MVP, we'll do basic validation
-   */
-  async authenticateAgent(
-    _request: AgentAuthRequest,
-  ): Promise<AgentAuthResponse> {
-    this.logger.info('Agent authentication requested');
-
-    // TODO: Verify Google OAuth token via Backstage auth service
-    // For MVP, we'll extract user email from token (simplified)
-    // const userEmail = await this.verifyGoogleToken(request.googleToken);
-
-    // TEMPORARY: For MVP, assume token validation succeeds
-    const userEmail = 'developer@stratpoint.com'; // Replace with actual verification
-
-    // Generate service token (in production, use proper JWT)
-    const serviceToken = this.generateServiceToken(userEmail);
-
-    // Get or create default agent for user
-    const agents = await this.taskStore.getAgentsByUser(userEmail);
-    let agentId: string;
-
-    if (agents.length > 0) {
-      // Use most recent agent
-      agentId = agents[0].agent_id;
-      this.logger.info(`Using existing agent: ${agentId}`, { userEmail });
-    } else {
-      // Create new agent
-      const agent = await this.taskStore.registerAgent(userEmail);
-      agentId = agent.agent_id;
-      this.logger.info(`Created new agent: ${agentId}`, { userEmail });
-    }
-
-    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
-
-    return {
-      serviceToken,
-      agentId,
-      expiresAt,
     };
   }
 
@@ -532,19 +492,98 @@ export class AgentService {
   }
 
   /**
-   * Generate service token (simplified for MVP)
-   * TODO: Use proper JWT with signing in production
+   * Signing key for agent service tokens.
+   *
+   * Reuses `backend.auth.keys[0].secret` (BACKEND_SECRET), which is already required in every
+   * environment. Read lazily rather than in the constructor so a misconfiguration surfaces at
+   * token issuance with a clear message rather than at plugin startup.
+   */
+  private getTokenSigningKey(): string {
+    const keys = this.config.getOptionalConfigArray('backend.auth.keys');
+    const secret = keys?.[0]?.getOptionalString('secret');
+
+    if (!secret) {
+      throw new Error(
+        'Cannot issue agent service tokens: backend.auth.keys[0].secret is not configured. ' +
+          'Set the BACKEND_SECRET environment variable.',
+      );
+    }
+
+    return secret;
+  }
+
+  /**
+   * Generate a signed service token.
+   *
+   * Format: `<base64url(payload)>.<base64url(HMAC-SHA256)>`
+   *
+   * Uses node:crypto rather than a JWT library deliberately — this plugin ships in a Docker
+   * image that has previously broken on undeclared transitive dependencies, and the payload
+   * ({sub, iat, exp}) does not need full JWT semantics.
    */
   private generateServiceToken(userEmail: string): string {
-    // In production, use proper JWT with RSA/HMAC signing
-    // For MVP, use base64-encoded JSON
     const payload = {
       sub: userEmail,
       iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours
+      exp: Math.floor(Date.now() / 1000) + this.SERVICE_TOKEN_TTL_SECONDS,
     };
 
-    return Buffer.from(JSON.stringify(payload)).toString('base64');
+    const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const signature = createHmac('sha256', this.getTokenSigningKey())
+      .update(body)
+      .digest('base64url');
+
+    return `${body}.${signature}`;
+  }
+
+  /**
+   * Verify a service token and return the user email it asserts, or null.
+   *
+   * Returns null for: malformed tokens, bad signatures, and expired tokens. Callers must not
+   * distinguish between these in responses — the agent's remedy is the same in every case
+   * (`backstage-agent login`).
+   *
+   * Unsigned legacy tokens (bare base64 JSON, no `.` separator) are rejected here. They were
+   * forgeable by anyone, which is the whole reason for this change.
+   */
+  verifyServiceToken(token: string): string | null {
+    const separator = token.lastIndexOf('.');
+    if (separator <= 0) {
+      return null; // No signature — legacy unsigned token or malformed
+    }
+
+    const body = token.slice(0, separator);
+    const signature = token.slice(separator + 1);
+
+    let expected: string;
+    try {
+      expected = createHmac('sha256', this.getTokenSigningKey())
+        .update(body)
+        .digest('base64url');
+    } catch (error: any) {
+      this.logger.error(`Cannot verify service token: ${error.message}`);
+      return null;
+    }
+
+    const provided = Buffer.from(signature);
+    const computed = Buffer.from(expected);
+
+    // timingSafeEqual throws on length mismatch, so compare lengths first.
+    if (provided.length !== computed.length || !timingSafeEqual(provided, computed)) {
+      return null;
+    }
+
+    try {
+      const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+        return null; // Expired
+      }
+
+      return typeof payload.sub === 'string' ? payload.sub : null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -580,25 +619,12 @@ export class AgentService {
   }
 
   /**
-   * Extract email from Backstage user entity reference
-   * Example: "user:default/john.doe" -> "john.doe@stratpoint.com"
+   * Extract email from a Backstage user entity reference.
+   * Example: "user:default/john.doe" -> "john.doe@<configured-domain>".
+   * Delegates to the shared helper (config-driven domain, no hardcoded org).
    */
   private extractEmailFromEntityRef(entityRef: string): string {
-    // Format: "user:default/username" or "user:default/email@domain.com"
-    const parts = entityRef.split('/');
-    if (parts.length !== 2) {
-      throw new Error(`Invalid user entity reference: ${entityRef}`);
-    }
-
-    const username = parts[1];
-
-    // If already an email, return as-is
-    if (username.includes('@')) {
-      return username;
-    }
-
-    // Otherwise, append domain (assuming Stratpoint domain)
-    return `${username}@stratpoint.com`;
+    return sharedExtractEmail(entityRef);
   }
 
   /**
@@ -624,11 +650,12 @@ export class AgentService {
     taskId: string,
     status: string,
     metadata?: Record<string, any>,
-    errorMessage?: string
+    errorMessage?: string,
+    extra?: { logs?: string; connectionDetails?: Record<string, any> },
   ): Promise<void> {
     // Convert string to TaskStatus enum
     const taskStatus = status as any; // Type assertion since we validate in the route handler
-    await this.taskQueueService.updateTaskStatus(taskId, taskStatus, metadata, errorMessage);
+    await this.taskQueueService.updateTaskStatus(taskId, taskStatus, metadata, errorMessage, extra);
 
     this.logger.info('Task status updated', { taskId, status });
   }
@@ -638,6 +665,35 @@ export class AgentService {
    */
   async getAgentById(agentId: string): Promise<any | null> {
     return await this.taskStore.getAgentById(agentId);
+  }
+
+  /**
+   * Whether an agent is currently online: an active SSE connection, or a heartbeat within the
+   * last 90s. Used to refuse queuing tasks (provision or lifecycle) to a dead agent — which
+   * would otherwise sit "pending" forever.
+   */
+  async isAgentOnline(agentId: string): Promise<boolean> {
+    if (this.isAgentConnected(agentId)) return true;
+    const agent = await this.taskStore.getAgentById(agentId);
+    if (!agent?.last_seen) return false;
+    const ageMs = Date.now() - new Date(agent.last_seen).getTime();
+    return ageMs <= 90_000;
+  }
+
+  /**
+   * Return pending tasks for an agent, verifying it belongs to the user (same ownership check as
+   * the SSE connect). Backs the agent's polling fallback — reliable task delivery through proxies
+   * (e.g. a Cloudflare tunnel) that buffer SSE streams.
+   */
+  async getPendingTasksForOwnedAgent(agentId: string, userId: string) {
+    const agent = await this.taskStore.getAgentById(agentId);
+    if (!agent) {
+      throw new Error(`Agent ${agentId} not found`);
+    }
+    if (agent.user_id !== userId) {
+      throw new Error(`Agent ${agentId} does not belong to user ${userId}`);
+    }
+    return this.taskQueueService.getPendingTasksForAgent(agentId);
   }
 
   /**

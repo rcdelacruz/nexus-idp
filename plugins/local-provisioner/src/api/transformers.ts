@@ -38,6 +38,9 @@ export function transformTask(
     status: backendTask.status,
     catalogEntityRef: backendTask.catalog_entity_ref,
     errorMessage: backendTask.error_message,
+    logs: backendTask.logs,
+    metadata: backendTask.metadata,
+    connectionDetails: backendTask.connection_details,
     createdAt: backendTask.created_at,
     updatedAt: backendTask.updated_at,
     startedAt: backendTask.started_at,
@@ -60,6 +63,7 @@ export function transformAgent(
     platformVersion: backendAgent.platform_version,
     agentVersion: backendAgent.agent_version,
     lastSeenAt: backendAgent.last_seen,
+    lastSeenAgeSeconds: backendAgent.last_seen_age_seconds,
     createdAt: backendAgent.created_at,
     isConnected: backendAgent.is_connected,
   };

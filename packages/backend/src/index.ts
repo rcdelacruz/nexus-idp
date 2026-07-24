@@ -24,9 +24,9 @@ backend.add(import('@backstage/plugin-techdocs-backend'));
 
 // auth plugin
 backend.add(import('@backstage/plugin-auth-backend'));
-// Custom Google module: auto-provisions @stratpoint.com users to general-engineers on first login
+// Custom Google module: auto-provisions users in the configured allowed domain to general-engineers on first login
 backend.add(import('./plugins/google-auto-provision'));
-// Custom GitHub module: enforces verified @stratpoint.com email on GitHub account before sign-in
+// Custom GitHub module: enforces a verified allowed-domain email on the GitHub account before sign-in
 backend.add(import('./plugins/github-email-enforcement'));
 
 // catalog plugin
@@ -83,6 +83,10 @@ backend.add(
 // local provisioner
 backend.add(
   import('@stratpoint/plugin-local-provisioner-backend').then(m => ({ default: m.localProvisionerPlugin }))
+);
+// local provisioner — catalog entity provider (provisioned resources appear in the catalog)
+backend.add(
+  import('@stratpoint/plugin-local-provisioner-backend').then(m => ({ default: m.localProvisionerCatalogModule }))
 );
 
 // cors proxy (enables SwaggerUI "Try it out" through server-side forwarding)

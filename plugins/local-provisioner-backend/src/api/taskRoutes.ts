@@ -2,11 +2,24 @@
  * API routes for task management
  */
 
-import { Router } from 'express';
+import { Request, Router } from 'express';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { TaskQueueService } from '../service/TaskQueueService';
 import { AgentService } from '../service/AgentService';
 import { CreateTaskRequest } from '../types';
+
+/**
+ * Resolve the authenticated user's email, as attached by the auth middleware in
+ * `service/router.ts`. Task rows are keyed on email (`user_id`).
+ *
+ * Returns undefined rather than defaulting: these routes are all behind authentication, so a
+ * missing identity means something is wrong, and substituting a placeholder would silently
+ * merge every user's tasks into one account (which is exactly what happened before
+ * 2026-07-24).
+ */
+function getUserId(req: Request): string | undefined {
+  return (req as any).user?.email;
+}
 
 /**
  * Create task-related API routes
@@ -27,9 +40,15 @@ export function createTaskRoutes(
    */
   router.get('/', async (req, res) => {
     try {
-      // Get user ID from Backstage auth
-      // @ts-ignore - req.user will be added by auth middleware
-      const userId = req.user?.email || 'developer@stratpoint.com';
+      // Identity is resolved by the auth middleware in service/router.ts.
+      // No fallback: an unresolved user must fail loudly, not silently share one identity.
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Could not resolve authenticated user',
+        });
+      }
 
       const tasks = await taskQueueService.getTasksForUser(userId);
 
@@ -68,9 +87,15 @@ export function createTaskRoutes(
         });
       }
 
-      // Verify task belongs to user
-      // @ts-ignore - req.user will be added by auth middleware
-      const userId = req.user?.email || 'developer@stratpoint.com';
+      // Verify task belongs to user.
+      // No fallback: without a resolved identity this ownership check is meaningless.
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Could not resolve authenticated user',
+        });
+      }
       if (task.user_id !== userId) {
         return res.status(403).json({
           error: 'Access denied',
@@ -93,9 +118,15 @@ export function createTaskRoutes(
    */
   router.post('/', async (req, res) => {
     try {
-      // Get user ID from Backstage auth
-      // @ts-ignore - req.user will be added by auth middleware
-      const userId = req.user?.email || 'developer@stratpoint.com';
+      // Identity is resolved by the auth middleware in service/router.ts.
+      // No fallback: an unresolved user must fail loudly, not silently share one identity.
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Could not resolve authenticated user',
+        });
+      }
 
       const createRequest: CreateTaskRequest = req.body;
 
@@ -121,6 +152,19 @@ export function createTaskRoutes(
       if (!createRequest.config) {
         return res.status(400).json({
           error: 'Missing config in request body',
+        });
+      }
+
+      // Single chokepoint guard: refuse to queue ANY task (provision or lifecycle stop/start/
+      // restart/deprovision) to an offline agent — it would sit "pending" forever. Every path
+      // (scaffolder, direct API, UI lifecycle buttons) creates tasks here, so this one check
+      // covers them all.
+      if (agentService && !(await agentService.isAgentOnline(createRequest.agent_id))) {
+        return res.status(409).json({
+          error: 'Agent offline',
+          message:
+            'The target agent is not online, so this task cannot run. Start it with ' +
+            '`backstage-agent start` (or `backstage-agent login` if your session expired), then retry.',
         });
       }
 
@@ -168,9 +212,15 @@ export function createTaskRoutes(
     try {
       const { taskId } = req.params;
 
-      // Get user ID from Backstage auth
-      // @ts-ignore - req.user will be added by auth middleware
-      const userId = req.user?.email || 'developer@stratpoint.com';
+      // Identity is resolved by the auth middleware in service/router.ts.
+      // No fallback: an unresolved user must fail loudly, not silently share one identity.
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Could not resolve authenticated user',
+        });
+      }
 
       await taskQueueService.deleteTask(taskId, userId);
 
@@ -201,14 +251,71 @@ export function createTaskRoutes(
   });
 
   /**
+   * POST /tasks/:taskId/dispatch
+   * Re-send a task to its agent (stuck-task recovery). If a task is stuck in pending/in-progress
+   * because its SSE delivery was missed (e.g. the backend restarted mid-flight), this re-triggers
+   * delivery to the connected agent — the one-click fix for the strand-on-restart failure.
+   */
+  router.post('/:taskId/dispatch', async (req, res) => {
+    try {
+      const { taskId } = req.params;
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Could not resolve authenticated user',
+        });
+      }
+
+      const task = await taskQueueService.getTask(taskId);
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found', taskId });
+      }
+      if (task.user_id !== userId) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You do not have permission to dispatch this task',
+        });
+      }
+
+      if (!agentService) {
+        return res.status(503).json({ error: 'Agent service unavailable' });
+      }
+      if (!agentService.isAgentConnected(task.agent_id)) {
+        return res.status(409).json({
+          error: 'Agent not connected',
+          message:
+            'The target agent is not currently connected. Start the agent (`backstage-agent start`), then retry.',
+        });
+      }
+
+      await agentService.sendPendingTasks(task.agent_id);
+      logger.info(`Re-dispatched task ${taskId} to agent ${task.agent_id}`, { taskId, userId });
+
+      return res.status(200).json({ message: 'Task re-dispatched to agent', taskId });
+    } catch (error: any) {
+      return res.status(500).json({
+        error: 'Failed to dispatch task',
+        message: error.message,
+      });
+    }
+  });
+
+  /**
    * GET /tasks/stats
    * Get task statistics for current user
    */
   router.get('/stats/summary', async (req, res) => {
     try {
-      // Get user ID from Backstage auth
-      // @ts-ignore - req.user will be added by auth middleware
-      const userId = req.user?.email || 'developer@stratpoint.com';
+      // Identity is resolved by the auth middleware in service/router.ts.
+      // No fallback: an unresolved user must fail loudly, not silently share one identity.
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Could not resolve authenticated user',
+        });
+      }
 
       const stats = await taskQueueService.getTaskStats(userId);
 

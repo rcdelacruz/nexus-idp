@@ -28,8 +28,8 @@ The Nexus Agent CLI uses the **OAuth 2.0 Device Authorization Grant** (RFC 8628)
 | Device code expiry | 10 minutes |
 | User code format | Human-readable (33^8 combinations) |
 | Device code format | Cryptographic (62^32 combinations) |
-| Service token expiry | 30 days |
-| Token contents | User identity for RBAC |
+| Service token expiry | 7 days |
+| Token contents | User identity claim — **not cryptographically verified** (the token is unsigned; do not treat it as an authorization boundary) |
 
 ## Token Storage
 

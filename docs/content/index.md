@@ -38,3 +38,4 @@ New users are auto-provisioned into `general-engineers` on first Google or GitHu
 - [Scaffolder Templates](scaffolder-templates.md) — template architecture, nextjs-fullstack guide, documentation template, custom actions, CI/CD setup, lessons learned
 - [Deployment Operations](deployment-operations.md) — k8s deploy procedure, Dockerfile rules, env vars, troubleshooting
 - [Design System](design-system.md) — Geist design tokens, components, and rules for contributors
+- [Local Provisioner Architecture](local-provisioner-architecture.md) — pull-based agent design, task lifecycle, data model, and extension points

@@ -11,7 +11,8 @@ This plugin enables self-service provisioning of local development resources (Ka
 - **Task Queue Management**: PostgreSQL-based queue for provisioning tasks
 - **Agent API**: RESTful endpoints for agent registration and authentication
 - **Server-Sent Events (SSE)**: Real-time task delivery to local agents
-- **Catalog Integration**: Auto-registers provisioned resources in Software Catalog
+- **Catalog Integration** *(planned — not active)*: `CatalogService` exists but is not wired
+  into the router, so provisioned resources are not currently registered as catalog entities
 - **Permission Control**: RBAC-based access control for provisioning operations
 
 ## Installation

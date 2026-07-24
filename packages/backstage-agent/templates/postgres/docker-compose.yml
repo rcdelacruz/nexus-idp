@@ -1,0 +1,15 @@
+services:
+  {{resourceName}}:
+    image: postgres:16-alpine
+    container_name: {{resourceName}}
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: dev
+    ports:
+      - "{{port}}:5432"
+    volumes:
+      - {{resourceName}}-data:/var/lib/postgresql/data
+    restart: unless-stopped
+volumes:
+  {{resourceName}}-data:

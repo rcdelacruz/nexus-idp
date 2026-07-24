@@ -24,10 +24,16 @@ This plugin is already integrated into the Backstage app at `/local-provisioner`
 
 This frontend plugin connects to the `@stratpoint/plugin-local-provisioner-backend` API endpoints:
 
-- `GET /api/local-provisioner/tasks` - List user's tasks
-- `GET /api/local-provisioner/tasks/:id` - Get task details
-- `GET /api/local-provisioner/agent` - Get agent status
+- `GET /api/local-provisioner/tasks` - List user's tasks (returns `{ tasks, total }`)
+- `GET /api/local-provisioner/tasks/:taskId` - Get task details
 - `POST /api/local-provisioner/tasks` - Create new task
+- `DELETE /api/local-provisioner/tasks/:taskId` - Cancel/delete a task
+- `GET /api/local-provisioner/tasks/stats/summary` - Task statistics
+- `GET /api/local-provisioner/agent` - List the user's registered agents
+
+The agent-facing endpoints (device-code auth, registration, SSE, heartbeat, status
+callbacks) are consumed by the `backstage-agent` CLI, not by this plugin. See
+[Local Provisioner Architecture](../../docs/content/local-provisioner-architecture.md).
 
 ### Type System and Transformation Layer
 

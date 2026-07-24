@@ -7,7 +7,7 @@
 
 import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
 import { InputError } from '@backstage/errors';
-import { DiscoveryService } from '@backstage/backend-plugin-api';
+import { AuthService, DiscoveryService } from '@backstage/backend-plugin-api';
 import fs from 'fs-extra';
 import path from 'path';
 import Mustache from 'mustache';
@@ -15,10 +15,11 @@ import Mustache from 'mustache';
 
 export interface LocalProvisionActionOptions {
   discovery: DiscoveryService;
+  auth: AuthService;
 }
 
 export const createLocalProvisionAction = (options: LocalProvisionActionOptions) => {
-  const { discovery } = options;
+  const { discovery, auth } = options;
 
   return createTemplateAction({
     id: 'stratpoint:local-provision',
@@ -80,10 +81,16 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
         throw new InputError('User email not found. Please ensure you are logged in with a valid user.');
       }
 
-      // Note: In new Backstage backend system, credentials are handled via BackstageCredentials
-      // For scaffolder actions calling HTTP APIs, we use a placeholder token
-      // TODO: Implement proper credential forwarding when Backstage API supports it
-      const token = 'scaffolder-internal-token';
+      // Mint an on-behalf-of token for the user who initiated the scaffolder run, so the
+      // local-provisioner API resolves req.user to that user and returns *their* agent and
+      // creates the task under their identity. Sibling actions target catalog/dbaas with
+      // service credentials, but local-provisioner scopes every endpoint by user email and
+      // its middleware only accepts user principals — so we delegate the initiator's identity
+      // rather than using getOwnServiceCredentials().
+      const { token } = await auth.getPluginRequestToken({
+        onBehalfOf: await ctx.getInitiatorCredentials(),
+        targetPluginId: 'local-provisioner',
+      });
 
       // Get base URL for local-provisioner plugin using injected discovery service
       const baseUrl = await discovery.getBaseUrl('local-provisioner');
@@ -119,14 +126,38 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
         throw new InputError(
           'No agent found for your user. Please install and start the Backstage agent:\n\n' +
           '  1. Install: npm install -g @stratpoint/backstage-agent\n' +
-          '  2. Login: backstage-agent login --url http://localhost:7007\n' +
+          '  2. Login: backstage-agent login --url <your-backstage-url>\n' +
           '  3. Start: backstage-agent start\n\n' +
           'Then try running this template again.'
         );
       }
 
-      // Use the most recently active agent (API returns sorted by last_seen desc)
-      const activeAgent = agents[0];
+      // Do NOT queue to an offline agent — the task would sit "pending" forever. Require a
+      // currently-online agent (connected, or a fresh heartbeat within the last 90s).
+      const ONLINE_MAX_AGE_SECONDS = 90;
+      const isOnline = (a: any): boolean => {
+        if (a.is_connected) return true;
+        const age = a.last_seen_age_seconds;
+        return typeof age === 'number' && age <= ONLINE_MAX_AGE_SECONDS;
+      };
+
+      const onlineAgents = agents.filter(isOnline);
+      if (onlineAgents.length === 0) {
+        const mostRecent = agents[0];
+        const lastSeen =
+          typeof mostRecent?.last_seen_age_seconds === 'number'
+            ? `last seen ${mostRecent.last_seen_age_seconds}s ago`
+            : 'never seen';
+        throw new InputError(
+          `Your Backstage agent is offline (${lastSeen}), so this resource cannot be provisioned.\n\n` +
+          'Start it on the machine where you want the resource, then try again:\n' +
+          '  backstage-agent start\n\n' +
+          '(If your session expired: backstage-agent login)',
+        );
+      }
+
+      // Use the most recently active ONLINE agent.
+      const activeAgent = onlineAgents[0];
 
       ctx.logger.info(`Using agent: ${activeAgent.agent_id} (last seen: ${activeAgent.last_seen})`);
 

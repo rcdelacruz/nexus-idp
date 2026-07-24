@@ -5,10 +5,8 @@
 import { Router, Request } from 'express';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { AgentService } from '../service/AgentService';
-import {
-  AgentAuthRequest,
-  AgentRegisterRequest,
-} from '../types';
+import { AgentRegisterRequest } from '../types';
+import { extractEmailFromEntityRef } from '../util/identity';
 import rateLimit from 'express-rate-limit';
 
 /**
@@ -38,56 +36,47 @@ const deviceTokenLimiter = rateLimit({
 });
 
 /**
- * Validate service token from Authorization header
- * Returns user email or null if invalid
+ * Validate the service token in the Authorization header.
+ * Returns the asserted user email, or null if the token is missing, malformed, unsigned,
+ * incorrectly signed, or expired.
+ *
+ * Signature verification lives in AgentService because that is where the signing key
+ * (backend.auth.keys[0].secret) is reachable.
  */
-function validateServiceToken(req: Request): string | null {
+function validateServiceToken(
+  req: Request,
+  agentService: AgentService,
+): string | null {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
   }
 
-  const serviceToken = authHeader.substring(7);
-
-  try {
-    const payload = JSON.parse(Buffer.from(serviceToken, 'base64').toString());
-
-    // Check token expiration
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return null; // Expired
-    }
-
-    return payload.sub; // User email
-  } catch (error) {
-    return null; // Invalid token
-  }
+  return agentService.verifyServiceToken(authHeader.substring(7));
 }
 
 /**
- * Extract email from Backstage user entity reference
- * Example: "user:default/ronaldo.delacruz" -> "ronaldo.delacruz@stratpoint.com"
+ * Standard 401 body for agent endpoints.
+ *
+ * The remedy is identical for every rejection reason (expired, forged, legacy-unsigned), so
+ * the message states it plainly rather than leaking which check failed.
  */
-function extractEmailFromEntityRef(entityRef: string): string {
-  const parts = entityRef.split('/');
-  if (parts.length !== 2) {
-    throw new Error(`Invalid user entity reference: ${entityRef}`);
-  }
+const INVALID_TOKEN_RESPONSE = {
+  error: 'Unauthorized',
+  message:
+    'Valid service token required. Run `backstage-agent login` to obtain a new token.',
+};
 
-  const username = parts[1];
-
-  // If already an email, return as-is
-  if (username.includes('@')) {
-    return username;
-  }
-
-  // Otherwise, append domain
-  return `${username}@stratpoint.com`;
-}
+/**
+ * Extract email from Backstage user entity reference
+ * Example: "user:default/jane.doe" -> "jane.doe@<configured-domain>"
+ */
+// extractEmailFromEntityRef now lives in ../util/identity (shared with router.ts)
 
 /**
  * Create agent-related API routes
  */
-export function createAgentRoutes(agentService: AgentService, logger: LoggerService, httpAuth?: any): Router {
+export function createAgentRoutes(agentService: AgentService, logger: LoggerService): Router {
   const router = Router();
 
   /**
@@ -261,307 +250,6 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
     }
   });
 
-  /**
-   * GET /agent/auth-callback
-   * OAuth callback handler for CLI agent authentication
-   *
-   * This endpoint is invoked AFTER successful Google OAuth.
-   * It generates a service token and displays it to the user for manual copy/paste.
-   *
-   * Flow:
-   * 1. User runs: backstage-agent login --url http://localhost:7007
-   * 2. CLI opens browser to: /api/local-provisioner/agent/auth-start
-   * 3. User completes Google OAuth
-   * 4. This callback displays the token in the browser
-   * 5. User copies token and pastes it into CLI prompt
-   */
-  router.get('/auth-callback', async (req, res) => {
-    try {
-      // Try to get user credentials from httpAuth (handles cookie/session auth after OAuth)
-      let userEntityRef: string | undefined;
-
-      if (httpAuth) {
-        try {
-          const credentials = await httpAuth.credentials(req, {
-            allow: ['user'],
-            allowLimitedAccess: true
-          });
-          userEntityRef = credentials.principal.userEntityRef;
-        } catch (error) {
-          // Auth failed - will show error page below
-        }
-      } else {
-        // Fallback: check if middleware already set req.user
-        // @ts-ignore
-        userEntityRef = req.user?.userEntityRef;
-      }
-
-      if (!userEntityRef) {
-        return res.status(401).send(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Authentication Failed</title>
-            <style>
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                margin: 0;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              }
-              .container {
-                background: white;
-                padding: 40px;
-                border-radius: 12px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-                max-width: 500px;
-                text-align: center;
-              }
-              h1 { color: #e53e3e; margin-top: 0; }
-              p { color: #4a5568; line-height: 1.6; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>⚠️ Authentication Required</h1>
-              <p>You must be authenticated with Google to generate an agent token.</p>
-              <p><a href="/api/local-provisioner/agent/auth-start">Click here to authenticate</a></p>
-            </div>
-          </body>
-          </html>
-        `);
-      }
-
-      // Generate agent token for this user
-      const authResponse = await agentService.authenticateAgent({
-        googleToken: userEntityRef, // Use userEntityRef as the identifier
-      });
-
-      // Display token to user for manual copy/paste
-      return res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Agent Token Generated</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              margin: 0;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              padding: 20px;
-            }
-            .container {
-              background: white;
-              padding: 40px;
-              border-radius: 12px;
-              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-              max-width: 600px;
-              width: 100%;
-            }
-            h1 {
-              color: #48bb78;
-              margin-top: 0;
-              text-align: center;
-            }
-            .info {
-              background: #f7fafc;
-              border-left: 4px solid #4299e1;
-              padding: 15px;
-              margin: 20px 0;
-              border-radius: 4px;
-            }
-            .token-box {
-              background: #2d3748;
-              color: #68d391;
-              padding: 20px;
-              border-radius: 8px;
-              font-family: 'Courier New', monospace;
-              word-break: break-all;
-              margin: 20px 0;
-              position: relative;
-            }
-            .copy-btn {
-              background: #4299e1;
-              color: white;
-              border: none;
-              padding: 10px 20px;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 14px;
-              width: 100%;
-              margin-top: 10px;
-              transition: background 0.2s;
-            }
-            .copy-btn:hover {
-              background: #3182ce;
-            }
-            .copy-btn:active {
-              background: #2c5282;
-            }
-            .success {
-              color: #48bb78;
-              font-weight: bold;
-              display: none;
-              text-align: center;
-              margin-top: 10px;
-            }
-            .instructions {
-              color: #4a5568;
-              line-height: 1.6;
-              margin: 15px 0;
-            }
-            code {
-              background: #edf2f7;
-              padding: 2px 6px;
-              border-radius: 3px;
-              font-family: 'Courier New', monospace;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>✅ Agent Token Generated</h1>
-
-            <div class="info">
-              <strong>Agent ID:</strong> ${authResponse.agentId}<br>
-              <strong>User:</strong> ${userEntityRef}
-            </div>
-
-            <div class="instructions">
-              <strong>Copy the token below and paste it into your terminal:</strong>
-            </div>
-
-            <div class="token-box" id="tokenBox">${authResponse.serviceToken}</div>
-
-            <button class="copy-btn" onclick="copyToken()">
-              📋 Copy Token to Clipboard
-            </button>
-
-            <div class="success" id="successMessage">✓ Token copied to clipboard!</div>
-
-            <div class="instructions" style="margin-top: 30px;">
-              <strong>Next steps:</strong>
-              <ol style="text-align: left; padding-left: 20px;">
-                <li>Return to your terminal</li>
-                <li>Paste the token when prompted</li>
-                <li>Run <code>backstage-agent start</code> to begin receiving tasks</li>
-              </ol>
-            </div>
-
-            <p style="color: #718096; font-size: 12px; text-align: center; margin-top: 30px;">
-              ⚠️ Keep this token secure. It provides access to your Backstage agent.
-            </p>
-          </div>
-
-          <script>
-            function copyToken() {
-              const tokenBox = document.getElementById('tokenBox');
-              const successMessage = document.getElementById('successMessage');
-
-              // Copy to clipboard
-              navigator.clipboard.writeText(tokenBox.textContent).then(() => {
-                // Show success message
-                successMessage.style.display = 'block';
-
-                // Hide after 3 seconds
-                setTimeout(() => {
-                  successMessage.style.display = 'none';
-                }, 3000);
-              }).catch(err => {
-                alert('Failed to copy token. Please select and copy manually.');
-              });
-            }
-          </script>
-        </body>
-        </html>
-      `);
-    } catch (error: any) {
-      return res.status(500).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Authentication Failed</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              height: 100vh;
-              margin: 0;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            }
-            .container {
-              background: white;
-              padding: 40px;
-              border-radius: 12px;
-              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-              max-width: 500px;
-              text-align: center;
-            }
-            h1 { color: #e53e3e; margin-top: 0; }
-            .error { color: #c53030; background: #fff5f5; padding: 15px; border-radius: 6px; margin-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>❌ Authentication Failed</h1>
-            <p>Failed to generate agent token.</p>
-            <div class="error"><strong>Error:</strong> ${error.message}</div>
-            <p style="margin-top: 20px;">
-              <a href="/api/local-provisioner/agent/auth-start">Try again</a>
-            </p>
-          </div>
-        </body>
-        </html>
-      `);
-    }
-  });
-
-  /**
-   * GET /agent/auth-start
-   * Initiates the OAuth flow for CLI authentication
-   * This is the entry point for the CLI login flow
-   */
-  router.get('/auth-start', async (req, res) => {
-    // Redirect to Google OAuth with our callback URL
-    const callbackUrl = `${req.protocol}://${req.get('host')}/api/local-provisioner/agent/auth-callback`;
-    const googleAuthUrl = `/api/auth/google/start?redirect=${encodeURIComponent(callbackUrl)}&env=development`;
-
-    res.redirect(googleAuthUrl);
-  });
-
-  /**
-   * POST /agent/auth
-   * Authenticate agent with Google OAuth token
-   */
-  router.post('/auth', async (req, res) => {
-    try {
-      const authRequest: AgentAuthRequest = req.body;
-
-      if (!authRequest.googleToken) {
-        return res.status(400).json({
-          error: 'Missing googleToken in request body',
-        });
-      }
-
-      const authResponse = await agentService.authenticateAgent(authRequest);
-
-      return res.status(200).json(authResponse);
-    } catch (error: any) {
-      return res.status(401).json({
-        error: 'Authentication failed',
-        message: error.message,
-      });
-    }
-  });
 
   /**
    * POST /agent/register
@@ -570,35 +258,10 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
    */
   router.post('/register', async (req, res) => {
     try {
-      // Extract and validate service token from Authorization header
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({
-          error: 'Unauthorized',
-          message: 'Valid Backstage authentication required',
-        });
-      }
-
-      const serviceToken = authHeader.substring(7); // Remove 'Bearer ' prefix
-
-      // Decode service token (base64-encoded JSON for MVP)
-      let userEmail: string;
-      try {
-        const payload = JSON.parse(Buffer.from(serviceToken, 'base64').toString());
-        userEmail = payload.sub;
-
-        // Check token expiration
-        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-          return res.status(401).json({
-            error: 'Unauthorized',
-            message: 'Token has expired',
-          });
-        }
-      } catch (error) {
-        return res.status(401).json({
-          error: 'Unauthorized',
-          message: 'Invalid service token',
-        });
+      // Verify the signed service token from the Authorization header
+      const userEmail = validateServiceToken(req, agentService);
+      if (!userEmail) {
+        return res.status(401).json(INVALID_TOKEN_RESPONSE);
       }
 
       const registerRequest: AgentRegisterRequest = req.body;
@@ -630,13 +293,10 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
       const { agentId } = req.params;
 
       // Validate service token
-      const userEmail = validateServiceToken(req);
+      const userEmail = validateServiceToken(req, agentService);
       if (!userEmail) {
         if (!res.headersSent) {
-          res.status(401).json({
-            error: 'Unauthorized',
-            message: 'Valid service token required',
-          });
+          res.status(401).json(INVALID_TOKEN_RESPONSE);
         }
         return;
       }
@@ -667,12 +327,9 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
   router.post('/heartbeat', async (req, res) => {
     try {
       // Validate service token
-      const userEmail = validateServiceToken(req);
+      const userEmail = validateServiceToken(req, agentService);
       if (!userEmail) {
-        return res.status(401).json({
-          error: 'Unauthorized',
-          message: 'Valid service token required',
-        });
+        return res.status(401).json(INVALID_TOKEN_RESPONSE);
       }
 
       const { agentId } = req.body;
@@ -686,8 +343,22 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
       // Update agent last_seen timestamp
       await agentService.updateAgentHeartbeat(agentId, userEmail);
 
+      // Piggyback pending tasks on the heartbeat response so the agent needs no separate poll.
+      // The heartbeat already runs every 30s and is a short request/response that sails through
+      // proxies (unlike SSE) — folding delivery in here removes ~2/3 of agent request volume and
+      // the 100s-timeout / streaming risk entirely.
+      let tasks: any[] = [];
+      try {
+        tasks = await agentService.getPendingTasksForOwnedAgent(agentId, userEmail);
+      } catch (err: any) {
+        // A pending-tasks failure must not break the heartbeat itself.
+        logger.warn(`Heartbeat: failed to fetch pending tasks for ${agentId}: ${err.message}`);
+      }
+
       return res.status(200).json({
         message: 'Heartbeat received',
+        tasks,
+        total: tasks.length,
       });
     } catch (error: any) {
       return res.status(500).json({
@@ -705,16 +376,13 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
   router.put('/tasks/:taskId/status', async (req, res) => {
     try {
       // Validate service token
-      const userEmail = validateServiceToken(req);
+      const userEmail = validateServiceToken(req, agentService);
       if (!userEmail) {
-        return res.status(401).json({
-          error: 'Unauthorized',
-          message: 'Valid service token required',
-        });
+        return res.status(401).json(INVALID_TOKEN_RESPONSE);
       }
 
       const { taskId } = req.params;
-      const { status, metadata, error: errorMessage } = req.body;
+      const { status, metadata, error: errorMessage, logs, connectionDetails } = req.body;
 
       if (!status) {
         return res.status(400).json({
@@ -730,8 +398,11 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
         });
       }
 
-      // Update task status via agent service
-      await agentService.updateTaskStatus(taskId, status, metadata, errorMessage);
+      // Update task status via agent service (logs + connection details persisted for the UI)
+      await agentService.updateTaskStatus(taskId, status, metadata, errorMessage, {
+        logs,
+        connectionDetails,
+      });
 
       return res.status(200).json({
         message: 'Task status updated successfully',
@@ -778,6 +449,31 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
   });
 
   /**
+   * GET /agent/tasks/pending?agentId=...
+   * Polling fallback for task delivery. The agent polls this (plain request/response, which
+   * survives proxies that buffer SSE) to fetch its pending tasks. Authed via service token.
+   */
+  router.get('/tasks/pending', async (req, res) => {
+    try {
+      const userEmail = validateServiceToken(req, agentService);
+      if (!userEmail) {
+        return res.status(401).json(INVALID_TOKEN_RESPONSE);
+      }
+      const agentId = String(req.query.agentId || '');
+      if (!agentId) {
+        return res.status(400).json({ error: 'Missing agentId query parameter' });
+      }
+      const tasks = await agentService.getPendingTasksForOwnedAgent(agentId, userEmail);
+      return res.status(200).json({ tasks, total: tasks.length });
+    } catch (error: any) {
+      if (error.message?.includes('does not belong')) {
+        return res.status(403).json({ error: 'Forbidden', message: error.message });
+      }
+      return res.status(500).json({ error: 'Failed to fetch pending tasks', message: error.message });
+    }
+  });
+
+  /**
    * GET /debug/connections
    * Debug endpoint to see SSE connections
    */
@@ -806,17 +502,20 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
       const userId = extractEmailFromEntityRef(userEntityRef);
       const agentRegistrations = await agentService.getAgentsForUser(userId);
 
-      // Add connection status to each agent
+      // Add connection status + a SERVER-computed heartbeat age. Computing the age here (server
+      // clock vs server-written last_seen) makes the UI immune to client clock skew — the chip
+      // no longer subtracts a server timestamp from the browser's clock.
+      const now = Date.now();
       const agentsWithStatus = agentRegistrations.map(agent => {
         const isConnected = agentService.isAgentConnected(agent.agent_id);
-        console.log(`[AgentRoutes] Agent ${agent.agent_id}: isConnected=${isConnected}`);
+        const lastSeenMs = agent.last_seen ? new Date(agent.last_seen).getTime() : 0;
+        const lastSeenAgeSeconds = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
         return {
           ...agent,
           is_connected: isConnected,
+          last_seen_age_seconds: lastSeenAgeSeconds,
         };
       });
-
-      console.log('[AgentRoutes] Returning agents:', JSON.stringify(agentsWithStatus, null, 2));
 
       return res.status(200).json({
         agents: agentsWithStatus,

@@ -34,7 +34,7 @@ export const scaffolderActionsModule = createBackendModule({
       },
       async init({ scaffolder, config, discovery, auth }) {
         scaffolder.addActions(
-          createLocalProvisionAction({ discovery }),
+          createLocalProvisionAction({ discovery, auth }),
           createKubernetesApplyAction(),
           createPullSecretAction(),
           createAppSecretsAction(),

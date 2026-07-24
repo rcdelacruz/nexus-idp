@@ -1,0 +1,11 @@
+services:
+  {{resourceName}}:
+    image: mongo:7
+    container_name: {{resourceName}}
+    ports:
+      - "{{port}}:27017"
+    volumes:
+      - {{resourceName}}-data:/data/db
+    restart: unless-stopped
+volumes:
+  {{resourceName}}-data:

@@ -31,6 +31,9 @@ export interface BackendProvisioningTask {
   status: BackendTaskStatus;
   catalog_entity_ref?: string;
   error_message?: string;
+  logs?: string;
+  metadata?: Record<string, unknown>;
+  connection_details?: ConnectionDetails;
   created_at: string; // ISO date string
   updated_at: string;
   started_at?: string;
@@ -49,6 +52,7 @@ export interface BackendAgentRegistration {
   platform_version?: string; // Detailed version (e.g., "macOS 14.2")
   agent_version?: string;
   last_seen: string; // ISO date string
+  last_seen_age_seconds?: number | null; // server-computed (skew-free)
   created_at: string;
   is_connected: boolean;
 }
@@ -105,6 +109,17 @@ export interface BackendCreateTaskResponse {
 export type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
 
 /**
+ * How to connect to a provisioned resource (surfaced in the UI with copy buttons).
+ */
+export interface ConnectionDetails {
+  host?: string;
+  ports?: Record<string, number>;
+  connectionString?: string;
+  ui?: string;
+  [key: string]: unknown;
+}
+
+/**
  * Provisioning task for frontend components
  */
 export interface ProvisioningTask {
@@ -117,6 +132,9 @@ export interface ProvisioningTask {
   status: TaskStatus;
   catalogEntityRef?: string;
   errorMessage?: string;
+  logs?: string;
+  metadata?: Record<string, unknown>;
+  connectionDetails?: ConnectionDetails;
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
@@ -135,6 +153,7 @@ export interface AgentRegistration {
   platformVersion?: string; // Detailed version (e.g., "macOS 14.2")
   agentVersion?: string;
   lastSeenAt: string;
+  lastSeenAgeSeconds?: number | null; // server-computed heartbeat age (skew-free)
   createdAt: string;
   isConnected: boolean;
 }

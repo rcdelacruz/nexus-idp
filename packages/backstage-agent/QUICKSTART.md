@@ -18,7 +18,7 @@ Before you begin, ensure you have:
   - Local: `http://localhost:7007`
   - Production: Your Backstage URL
 
-- [x] **Google account** with @stratpoint.com email
+- [x] **Google account** with @your-company.com email
   - Required for authentication
 
 ## Step 1: Build the Agent
@@ -54,7 +54,7 @@ backstage-agent login --url http://localhost:7007
 
 **What happens:**
 1. Browser opens for Google sign-in
-2. Sign in with your @stratpoint.com account
+2. Sign in with your @your-company.com account
 3. Tokens saved to `~/.backstage-agent/config.json`
 4. Agent registered with Backstage
 

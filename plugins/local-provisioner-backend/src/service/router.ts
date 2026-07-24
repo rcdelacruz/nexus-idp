@@ -9,16 +9,26 @@ import {
   DiscoveryService,
   LoggerService,
   HttpAuthService,
+  PermissionsService,
 } from '@backstage/backend-plugin-api';
+import { AuthorizeResult } from '@backstage/plugin-permission-common';
 import { Config } from '@backstage/config';
 
 import { TaskStore } from '../database/TaskStore';
+import { resolveSharedTaskStore } from '../sharedStore';
+import {
+  taskCreatePermission,
+  taskReadPermission,
+  taskDeletePermission,
+} from '../permissions';
 import { TaskQueueService } from './TaskQueueService';
 import { AgentService } from './AgentService';
 // import { CatalogService } from './CatalogService'; // Reserved for future use
 import { createAgentRoutes } from '../api/agentRoutes';
 import { createTaskRoutes } from '../api/taskRoutes';
 import { createHealthRoutes } from '../api/healthRoutes';
+import { extractEmailFromEntityRef } from '../util/identity';
+import { isPublicAgentPath } from '../util/publicPaths';
 
 /**
  * Router dependencies
@@ -29,6 +39,28 @@ export interface RouterOptions {
   discovery: DiscoveryService;
   config: Config;
   httpAuth: HttpAuthService;
+  permissions: PermissionsService;
+}
+
+/**
+ * Map a task-route request to the permission it requires, or undefined if none applies.
+ * Only the UI-facing `/tasks` surface is permission-gated; agent endpoints use service tokens.
+ * Paths here are relative to the plugin mount (the middleware runs before `/tasks` prefixing,
+ * so `req.path` includes it).
+ */
+function permissionForRequest(method: string, path: string) {
+  if (!path.startsWith('/tasks')) return undefined;
+  switch (method) {
+    case 'POST':
+      // Covers create (/tasks) and re-dispatch (/tasks/:id/dispatch).
+      return taskCreatePermission;
+    case 'DELETE':
+      return taskDeletePermission;
+    case 'GET':
+      return taskReadPermission;
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -37,7 +69,7 @@ export interface RouterOptions {
 export async function createRouter(
   options: RouterOptions,
 ): Promise<Router> {
-  const { logger, database, config, httpAuth } = options;
+  const { logger, database, config, httpAuth, permissions } = options;
   // discovery reserved for future CatalogService integration
 
   logger.info('Initializing Local Provisioner plugin router');
@@ -81,6 +113,8 @@ export async function createRouter(
 
   // Initialize services
   const taskStore = new TaskStore(db);
+  // Bridge TaskStore to the catalog module's EntityProvider (resolves taskStoreReady).
+  resolveSharedTaskStore(taskStore);
   const taskQueueService = new TaskQueueService(logger, taskStore);
   const agentService = new AgentService(
     logger,
@@ -110,24 +144,12 @@ export async function createRouter(
     next();
   });
 
-  // Authentication middleware for protected routes
-  // Public paths: /health/*, / (root info endpoint), /agent/auth-start (OAuth entry point), /agent/auth-callback (OAuth callback), /agent/device/* (device flow), /agent/register (accepts service token), /agent/events/* (SSE, validates service token), /agent/heartbeat (accepts service token), /agent/tasks/*/status (task status updates)
-  // Protected paths: /tasks/* (UI-facing task management)
+  // Authentication middleware (layer 2). Public agent paths are defined once in
+  // util/publicPaths and shared with the framework barrier in plugin.ts so the two cannot
+  // drift. Everything not public requires a Backstage credential; identity is attached to
+  // req.user for downstream handlers.
   router.use(async (req, res, next) => {
-    // Skip authentication for public paths
-    const isPublicPath =
-      req.path === '/' ||
-      req.path.startsWith('/health') ||
-      req.path === '/agent/auth-start' ||
-      req.path === '/agent/auth-callback' ||
-      req.path === '/agent/device/code' ||
-      req.path === '/agent/device/token' ||
-      req.path === '/agent/register' ||
-      req.path.startsWith('/agent/events/') ||
-      req.path === '/agent/heartbeat' ||
-      req.path.match(/^\/agent\/tasks\/[^/]+\/status$/);
-
-    if (isPublicPath) {
+    if (isPublicAgentPath(req.path)) {
       logger.debug('Skipping authentication for public path', {
         path: req.path,
       });
@@ -138,10 +160,32 @@ export async function createRouter(
     try {
       const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
 
-      // Attach user info to request for downstream handlers
+      // Attach user info to request for downstream handlers.
+      //
+      // `email` is required: task rows are keyed on user email (`user_id`), and taskRoutes
+      // reads `req.user.email`. Before 2026-07-24 this object carried only `userEntityRef`,
+      // so every task operation silently fell back to a hardcoded address and all users
+      // shared one identity.
       (req as any).user = {
         userEntityRef: credentials.principal.userEntityRef,
+        email: extractEmailFromEntityRef(credentials.principal.userEntityRef),
       };
+
+      // RBAC (layer 3): map the UI-facing task routes to a permission and enforce it. The
+      // permission framework's policy decides ALLOW/DENY (previously these were defined but
+      // never enforced). Agent endpoints are excluded — they authenticate via service token.
+      const permission = permissionForRequest(req.method, req.path);
+      if (permission) {
+        const [decision] = await permissions.authorize([{ permission }], { credentials });
+        if (decision.result !== AuthorizeResult.ALLOW) {
+          logger.warn('Authorization denied', { path: req.path, permission: permission.name });
+          res.status(403).json({
+            error: 'Forbidden',
+            message: `You do not have permission: ${permission.name}`,
+          });
+          return undefined;
+        }
+      }
 
       logger.debug('Authentication successful', {
         path: req.path,
@@ -167,7 +211,7 @@ export async function createRouter(
   // Health endpoints are public (configured via httpRouter.addAuthPolicy in plugin.ts)
   router.use('/health', createHealthRoutes(db));
   // Agent and task endpoints require authentication (enforced by middleware above)
-  router.use('/agent', createAgentRoutes(agentService, logger, httpAuth));
+  router.use('/agent', createAgentRoutes(agentService, logger));
   router.use('/tasks', createTaskRoutes(taskQueueService, logger, agentService));
 
 

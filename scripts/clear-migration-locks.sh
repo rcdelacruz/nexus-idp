@@ -14,8 +14,13 @@ POSTGRES_PASSWORD=$(kubectl get secret -n backstage backstage-secrets -o jsonpat
 echo "Clearing migration locks from Backstage databases..."
 echo ""
 
-# Clear locks from both databases
-for DB in "backstage" "backstage_plugin_local_provisioner"; do
+# Clear locks from both databases.
+#
+# NOTE: the local-provisioner database is named with a HYPHEN — Backstage derives it from the
+# plugin id ('local-provisioner') and does not substitute underscores. This script previously
+# targeted `backstage_plugin_local_provisioner`, which is a different, empty database; lock
+# clearing for this plugin therefore silently did nothing. Fixed 2026-07-24.
+for DB in "backstage" "backstage_plugin_local-provisioner"; do
     echo "Checking database: $DB"
 
     # Try to clear the lock

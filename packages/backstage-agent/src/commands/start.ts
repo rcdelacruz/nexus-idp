@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { TokenManager } from '../auth/TokenManager';
 import { displayLogo, displaySuccess, displayInfo, displayError } from '../utils/logo';
+import { checkForUpdate } from '../utils/versionCheck';
 
 export const startCommand = new Command('start')
   .description('Start the Backstage Agent as a background daemon')
@@ -125,6 +126,20 @@ export const startCommand = new Command('start')
       displayInfo(`  ${logFile}`);
       displayInfo(`  ${errorLogFile}`);
       console.log('');
+
+      // Non-blocking: notify if a newer agent version is available (never fails start).
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const version: string = require('../../package.json').version;
+        const info = await checkForUpdate(version);
+        if (info?.updateAvailable) {
+          displayInfo(`A new agent version is available (${info.current} -> ${info.latest}).`);
+          displayInfo('  Run: backstage-agent update');
+          console.log('');
+        }
+      } catch {
+        // ignore — update check must never block startup
+      }
 
     } catch (error: any) {
       console.log('');

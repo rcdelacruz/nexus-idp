@@ -13,17 +13,96 @@ export enum TaskStatus {
 }
 
 /**
- * Task type enum
+ * Task type enum.
+ *
+ * Provision tasks create a resource; lifecycle tasks (deprovision/stop/start/restart) act on an
+ * already-provisioned resource identified by `config.targetTaskId` / `config.targetResourceName`.
  */
 export enum TaskType {
   PROVISION_KAFKA = 'provision-kafka',
   PROVISION_POSTGRES = 'provision-postgres',
   PROVISION_REDIS = 'provision-redis',
   PROVISION_MONGODB = 'provision-mongodb',
+  // Lifecycle operations on an existing resource
+  DEPROVISION = 'deprovision',
+  STOP = 'stop',
+  START = 'start',
+  RESTART = 'restart',
+}
+
+/** Resource types that can be provisioned. */
+export enum ResourceType {
+  KAFKA = 'kafka',
+  POSTGRES = 'postgres',
+  REDIS = 'redis',
+  MONGODB = 'mongodb',
+}
+
+/** Lifecycle state of a provisioned resource, derived from its latest task. */
+export enum ResourceState {
+  PROVISIONING = 'provisioning',
+  RUNNING = 'running',
+  STOPPED = 'stopped',
+  ERROR = 'error',
+  REMOVED = 'removed',
+}
+
+const PROVISION_TASK_TYPES: string[] = [
+  TaskType.PROVISION_KAFKA,
+  TaskType.PROVISION_POSTGRES,
+  TaskType.PROVISION_REDIS,
+  TaskType.PROVISION_MONGODB,
+];
+
+const LIFECYCLE_TASK_TYPES: string[] = [
+  TaskType.DEPROVISION,
+  TaskType.STOP,
+  TaskType.START,
+  TaskType.RESTART,
+];
+
+/** True for provision-* task types (creating a resource). */
+export function isProvisionTask(taskType: string): boolean {
+  return PROVISION_TASK_TYPES.includes(taskType);
+}
+
+/** True for lifecycle task types acting on an existing resource. */
+export function isLifecycleTask(taskType: string): boolean {
+  return LIFECYCLE_TASK_TYPES.includes(taskType);
+}
+
+/** Map a provision task type to its resource type (e.g. provision-kafka -> kafka). */
+export function resourceTypeForTask(taskType: string): ResourceType | undefined {
+  switch (taskType) {
+    case TaskType.PROVISION_KAFKA:
+      return ResourceType.KAFKA;
+    case TaskType.PROVISION_POSTGRES:
+      return ResourceType.POSTGRES;
+    case TaskType.PROVISION_REDIS:
+      return ResourceType.REDIS;
+    case TaskType.PROVISION_MONGODB:
+      return ResourceType.MONGODB;
+    default:
+      return undefined;
+  }
 }
 
 /**
- * Provisioning task database entity
+ * Connection details for a provisioned resource, surfaced to the user ("how to connect").
+ */
+export interface ConnectionDetails {
+  host?: string;
+  ports?: Record<string, number>; // service -> host port
+  connectionString?: string;
+  ui?: string; // e.g. a management UI URL
+  [key: string]: any;
+}
+
+/**
+ * Provisioning task database entity.
+ *
+ * `logs` and `metadata` (container status, ports, pull progress, connection details) are
+ * reported by the agent and persisted so the UI can show live output and connection info.
  */
 export interface ProvisioningTask {
   task_id: string;
@@ -35,10 +114,30 @@ export interface ProvisioningTask {
   status: TaskStatus;
   catalog_entity_ref?: string;
   error_message?: string;
+  logs?: string;
+  metadata?: Record<string, any>;
+  connection_details?: ConnectionDetails;
   created_at: Date;
   updated_at: Date;
   started_at?: Date;
   completed_at?: Date;
+}
+
+/**
+ * A provisioned resource — the folded view of all tasks for one resource_name on one agent.
+ * This is the resource-centric model the UI and catalog present, rather than raw task rows.
+ */
+export interface Resource {
+  resource_name: string;
+  resource_type?: ResourceType;
+  agent_id: string;
+  user_id: string;
+  state: ResourceState;
+  connection_details?: ConnectionDetails;
+  catalog_entity_ref?: string;
+  provisioned_at?: Date;
+  updated_at: Date;
+  latest_task_id: string;
 }
 
 /**
@@ -76,14 +175,7 @@ export interface UpdateTaskStatusRequest {
 }
 
 /**
- * Agent authentication request
- */
-export interface AgentAuthRequest {
-  googleToken: string;
-}
-
-/**
- * Agent authentication response
+ * Agent authentication response (device code flow)
  */
 export interface AgentAuthResponse {
   serviceToken: string;

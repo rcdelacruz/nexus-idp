@@ -4,6 +4,7 @@
 
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { TaskStore } from '../database/TaskStore';
+import { refreshCatalog } from '../sharedStore';
 import {
   ProvisioningTask,
   TaskStatus,
@@ -83,6 +84,7 @@ export class TaskQueueService {
     status: TaskStatus,
     metadata?: Record<string, any>,
     errorMessage?: string,
+    extra?: { logs?: string; connectionDetails?: Record<string, any> },
   ): Promise<void> {
     this.logger.info(`Updating task ${taskId} status to ${status}`, {
       taskId,
@@ -91,13 +93,17 @@ export class TaskQueueService {
       hasError: !!errorMessage,
     });
 
-    await this.taskStore.updateTaskStatus(taskId, status, metadata, errorMessage);
+    await this.taskStore.updateTaskStatus(taskId, status, metadata, errorMessage, extra);
 
     if (status === TaskStatus.COMPLETED) {
       this.logger.info(`Task ${taskId} completed successfully`, {
         taskId,
         metadata,
       });
+      // Reflect provision/teardown in the catalog immediately rather than at the next cycle.
+      refreshCatalog().catch(err =>
+        this.logger.warn(`Catalog refresh after task ${taskId} failed: ${err.message}`),
+      );
     } else if (status === TaskStatus.FAILED) {
       this.logger.error(`Task ${taskId} failed`, {
         taskId,

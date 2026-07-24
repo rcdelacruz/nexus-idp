@@ -7,6 +7,7 @@ import {
   createBackendPlugin,
 } from '@backstage/backend-plugin-api';
 import { createRouter } from './service/router';
+import { PUBLIC_AGENT_PATHS } from './util/publicPaths';
 
 /**
  * Local Provisioner backend plugin
@@ -28,6 +29,7 @@ export const localProvisionerPlugin = createBackendPlugin({
         config: coreServices.rootConfig,
         discovery: coreServices.discovery,
         httpAuth: coreServices.httpAuth,
+        permissions: coreServices.permissions,
       },
       async init({
         logger,
@@ -36,6 +38,7 @@ export const localProvisionerPlugin = createBackendPlugin({
         config,
         discovery,
         httpAuth,
+        permissions,
       }) {
         logger.info('Initializing Local Provisioner backend plugin');
 
@@ -46,71 +49,21 @@ export const localProvisionerPlugin = createBackendPlugin({
           discovery,
           config,
           httpAuth,
+          permissions,
         });
 
-        // Configure auth policies for httpRouter service
-        // NOTE: These policies work at the httpRouter level for Backstage's auth framework.
-        // However, custom Express middleware inside router.ts must also check paths
-        // to properly skip authentication for public endpoints.
-        httpRouter.addAuthPolicy({
-          path: '/health',
-          allow: 'unauthenticated',
-        });
-
-        httpRouter.addAuthPolicy({
-          path: '/',
-          allow: 'unauthenticated',
-        });
-
-        // OAuth start endpoint must be public (initiates auth flow)
-        httpRouter.addAuthPolicy({
-          path: '/agent/auth-start',
-          allow: 'unauthenticated',
-        });
-
-        // OAuth callback endpoint must be public (receives redirect after Google OAuth)
-        httpRouter.addAuthPolicy({
-          path: '/agent/auth-callback',
-          allow: 'unauthenticated',
-        });
-
-        // Device code flow endpoints - public
-        httpRouter.addAuthPolicy({
-          path: '/agent/device/code',
-          allow: 'unauthenticated',
-        });
-
-        httpRouter.addAuthPolicy({
-          path: '/agent/device/token',
-          allow: 'unauthenticated',
-        });
-
-        // Agent registration endpoint - accepts service token from device flow
-        httpRouter.addAuthPolicy({
-          path: '/agent/register',
-          allow: 'unauthenticated',
-        });
-
-        // SSE endpoint - accepts service token
-        httpRouter.addAuthPolicy({
-          path: '/agent/events/:agentId',
-          allow: 'unauthenticated',
-        });
-
-        // Heartbeat endpoint - accepts service token
-        httpRouter.addAuthPolicy({
-          path: '/agent/heartbeat',
-          allow: 'unauthenticated',
-        });
-
-        // Task status update endpoint - accepts service token
-        httpRouter.addAuthPolicy({
-          path: '/agent/tasks/:taskId/status',
-          allow: 'unauthenticated',
-        });
-
-        // Device authorize endpoint requires authentication (user must be logged in)
-        // No need for explicit policy - default is authenticated
+        // Framework credentials barrier (layer 1). Deny-by-default: every route requires a
+        // Backstage credential UNLESS it is one of the public agent endpoints below. The
+        // agent endpoints carry a custom HMAC service token that the framework cannot
+        // validate, so they must be marked unauthenticated here and verified in the handler.
+        //
+        // Previously a blanket `{ path: '/', allow: 'unauthenticated' }` was registered, which
+        // path-to-regexp resolves to a match-everything predicate — disabling framework auth
+        // for the entire plugin. That is removed; PUBLIC_AGENT_PATHS is now the sole public
+        // surface, shared with the router middleware (layer 2) so the two cannot drift.
+        for (const path of PUBLIC_AGENT_PATHS) {
+          httpRouter.addAuthPolicy({ path, allow: 'unauthenticated' });
+        }
 
         // Mount the router
         httpRouter.use(router as any);

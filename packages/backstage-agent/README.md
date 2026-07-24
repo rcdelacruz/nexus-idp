@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@stratpoint/backstage-agent.svg)](https://www.npmjs.com/package/@stratpoint/backstage-agent)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org)
 
 Local Provisioner Agent for Backstage - Provisions local development resources using Docker Compose.
 
@@ -12,19 +12,24 @@ The Backstage Agent is a CLI tool that runs on a developer's machine to provisio
 
 ## Features
 
-- Google OAuth authentication (reuses Backstage credentials)
-- Real-time task reception via SSE
-- Docker Compose-based resource provisioning
-- Support for multiple resource types (Kafka, PostgreSQL, Redis, MongoDB)
-- Automatic reconnection with exponential backoff
-- Graceful shutdown handling
-- Comprehensive logging
+- **Device-code authentication** (RFC 8628) — reuses Backstage Google OAuth, no manual token copy/paste
+- **Real-time task reception** via SSE with automatic reconnection (exponential backoff)
+- **Full resource lifecycle** — provision, stop, start, restart, and tear down (Kafka, PostgreSQL, Redis, MongoDB)
+- **Offline & slow-internet resilience:**
+  - Image pulls with progress + a hard timeout (never hangs); cached images skip the pull → fully offline provisioning
+  - `prewarm` to pull images ahead of time on a good connection
+  - Local resource registry + offline management CLI (`resources`, `resource stop|start|restart|logs|remove`)
+  - Offline outbox — status updates queued when the portal is unreachable, flushed on reconnect
+- **Self-update** — `backstage-agent update`, plus an update-available notice on start
+- **Connection details reported** back to the portal ("how to connect")
+- Graceful shutdown, comprehensive logging
 
 ## Prerequisites
 
-- **Node.js**: 18.x or higher
+- **Node.js**: 20.x or higher (18 is end-of-life; the platform uses 22.x)
 - **Docker**: Installed and running
-- **Docker Compose**: Installed
+- **Docker Compose**: Installed (`docker compose` v2 or legacy `docker-compose` — the agent
+  detects whichever is available)
 - **Backstage Instance**: Running with Local Provisioner plugin
 
 ## Installation
@@ -56,8 +61,8 @@ If you're developing the agent or want to install from the monorepo:
 
 ```bash
 # Clone the repository
-git clone https://github.com/stratpoint-engineering/backstage-main-strat-eng.git
-cd backstage-main-strat-eng/packages/backstage-agent
+git clone https://github.com/stratpoint-engineering/backstage-main.git
+cd backstage-main/packages/backstage-agent
 
 # Install dependencies
 yarn install
@@ -69,96 +74,125 @@ yarn build
 npm link
 ```
 
-## Configuration
+## Configuration & local storage
 
-The agent stores configuration in `~/.backstage-agent/config.json`:
+Everything the agent writes lives under **`~/.backstage-agent/`**:
+
+```
+~/.backstage-agent/
+├── config.json          # credentials: backstageUrl, agentId, serviceToken, expiresAt
+├── resources.json       # local registry of provisioned resources (name → taskDir, state, ports)
+├── outbox.json          # status updates queued while offline (created on demand)
+├── agent.pid            # PID of the running daemon
+└── tasks/
+    └── <taskId>/
+        └── docker-compose.yml   # the rendered compose file for that resource
+```
+
+**`config.json`** (permissions `600`, owner-only):
 
 ```json
 {
-  "backstageUrl": "http://localhost:7007",
-  "agentId": "abc-123-xyz",
-  "serviceToken": "eyJ...",
+  "backstageUrl": "https://your-backstage-instance",
+  "agentId": "agent-your-machine",
+  "serviceToken": "…",
   "expiresAt": 1735228800000
 }
 ```
 
-Task data and Docker Compose files are stored in `~/.backstage-agent/tasks/{taskId}/`.
+**Where a resource's files are.** Each provisioned resource has its `docker-compose.yml` in
+`~/.backstage-agent/tasks/<taskId>/`. To find a resource's folder:
+
+```bash
+cat ~/.backstage-agent/resources.json    # maps each resource name → its taskDir
+# or
+ls ~/.backstage-agent/tasks/
+```
+
+**Compose definition vs. data.** That folder holds the compose *definition*, not the data. The
+actual data (Kafka topics, Postgres tables, etc.) lives in **Docker named volumes** managed by
+Docker — see `docker volume ls`. This is why **Stop & remove** / `resource remove` runs
+`docker-compose down -v`: the `-v` deletes those volumes, which is why it asks for confirmation.
+
+You can work with a resource directly from its folder — the same commands the offline CLI wraps:
+
+```bash
+cd ~/.backstage-agent/tasks/<taskId>/
+docker compose ps          # containers for this resource
+docker compose logs        # logs (also shown in the portal task detail view)
+```
 
 ## Usage
 
+### Command reference
+
+| Command | What it does | Needs internet |
+|---------|--------------|:---:|
+| `login --url <url>` | Authenticate via device-code flow (opens browser, enter the code, sign in with Google) | yes |
+| `start` | Start the agent daemon; connects via SSE and runs tasks | yes |
+| `stop` | Stop the running agent daemon | no |
+| `status` | Show agent + connection status | yes |
+| `logout` | Clear credentials and stop the agent | no |
+| `resources` | List locally-provisioned resources | **no** |
+| `resource stop\|start\|restart\|logs\|remove <name>` | Manage a resource's lifecycle locally | **no** |
+| `prewarm <type>` | Pre-pull a resource type's images for later offline provisioning | yes |
+| `update [--check]` | Update the agent to the latest published version | yes |
+
 ### Login
 
-Authenticate with your Backstage instance using Google OAuth:
-
 ```bash
-backstage-agent login --url http://localhost:7007
+backstage-agent login --url https://your-backstage-instance
 ```
 
-This will:
-1. Open your browser for Google OAuth
-2. Authenticate with Backstage backend
-3. Save authentication tokens locally
-4. Register your agent with Backstage
+Prints a short code, opens the portal's `/device` page — enter the code and sign in with Google.
+The token is saved to `~/.backstage-agent/config.json` and the agent auto-starts. Tokens are
+valid for 7 days; re-run `login` when one expires.
 
-**Example output:**
-
-```
-2024-12-26 10:00:00 - info: Starting authentication flow...
-2024-12-26 10:00:00 - info: Backstage URL: http://localhost:7007
-2024-12-26 10:00:01 - info: Opening browser for Google OAuth...
-2024-12-26 10:00:01 - info: Please sign in with your Stratpoint Google account
-2024-12-26 10:00:10 - info: Exchanging token with Backstage backend...
-2024-12-26 10:00:11 - info: Registering agent with Backstage...
-
-=================================================
-  Authentication successful!
-=================================================
-Agent ID: abc-123-xyz
-Token expires: 12/27/2024, 10:00:00 AM
-
-Next steps:
-  1. Run "backstage-agent start" to start the agent
-  2. Create provisioning tasks from Backstage UI
-```
-
-### Start Agent
-
-Start the agent to listen for provisioning tasks:
+### Start
 
 ```bash
 backstage-agent start
 ```
 
-This will:
-1. Load authentication tokens
-2. Check Docker availability
-3. Connect to Backstage via SSE
-4. Wait for provisioning tasks
-5. Execute tasks and report status
+Loads credentials, checks Docker, connects via SSE, and waits for tasks. On start it also checks
+for a newer agent version and prints a one-line notice if one is available.
 
-**Example output:**
+### Stop
 
-```
-2024-12-26 10:05:00 - info: Loading agent configuration...
-2024-12-26 10:05:00 - info: Configuration loaded successfully
-2024-12-26 10:05:00 - info: Agent ID: abc-123-xyz
-2024-12-26 10:05:00 - info: Backstage URL: http://localhost:7007
-2024-12-26 10:05:00 - info: Starting Backstage Agent abc-123-xyz
-2024-12-26 10:05:01 - info: Connecting to SSE endpoint: http://localhost:7007/api/local-provisioner/agent/events/abc-123-xyz
-2024-12-26 10:05:02 - info: SSE connection established
-2024-12-26 10:05:02 - info: Agent started successfully. Waiting for tasks...
+```bash
+backstage-agent stop
 ```
 
-### Stop Agent
+### Managing resources offline
 
-Press `Ctrl+C` to gracefully stop the agent:
+Once a resource is provisioned it runs entirely on local Docker — no internet needed. Manage it
+with the local CLI even when the portal is unreachable:
 
+```bash
+backstage-agent resources                     # list what's provisioned locally
+backstage-agent resource logs my-kafka        # tail logs
+backstage-agent resource stop my-kafka        # stop (keeps data)
+backstage-agent resource start my-kafka       # start again
+backstage-agent resource remove my-kafka      # tear down (deletes containers + volumes)
 ```
-^C
-2024-12-26 10:10:00 - info: Received SIGINT signal. Shutting down gracefully...
-2024-12-26 10:10:00 - info: Stopping agent...
-2024-12-26 10:10:01 - info: SSE connection closed
-2024-12-26 10:10:01 - info: Agent stopped
+
+### Slow or no internet
+
+Provisioning needs a one-time image pull. To provision offline later, pull ahead of time on a
+good connection:
+
+```bash
+backstage-agent prewarm kafka                 # then you can provision kafka offline from cache
+```
+
+If the portal is unreachable while a task completes, the status is queued and delivered on the
+next successful heartbeat — nothing is lost.
+
+### Updating
+
+```bash
+backstage-agent update            # update to the latest version
+backstage-agent update --check    # check only, don't install
 ```
 
 ## Task Execution Flow
@@ -209,75 +243,59 @@ Provisions Kafka + Zookeeper with Confluent Platform.
 }
 ```
 
-### PostgreSQL (Coming Soon)
+### PostgreSQL
 
-Provisions PostgreSQL database.
+Provisions a PostgreSQL database. Default port `5432`.
 
-### Redis (Coming Soon)
+### Redis
 
-Provisions Redis cache.
+Provisions a Redis cache. Default port `6379`.
 
-### MongoDB (Coming Soon)
+### MongoDB
 
-Provisions MongoDB database.
+Provisions a MongoDB database. Default port `27017`.
+
+All four can be provisioned from the portal's **Provision resource** dialog or via a scaffolder
+template. After provisioning, connection details (host, ports, connection string) are shown in
+the portal's task detail view and reported back automatically.
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph Cloud["Backstage Portal (cloud)"]
+        Plugin["Local Provisioner Backend<br/>task queue - agent auth - SSE"]
+        Catalog["Catalog<br/>(provisioned resources appear here)"]
+        Plugin -->|EntityProvider| Catalog
+    end
+
+    subgraph Local["Developer's Machine"]
+        subgraph Agent["Backstage Agent CLI"]
+            Auth["Device-code auth (RFC 8628)"]
+            SSE["SSE client - auto-reconnect"]
+            Core["Agent core - dispatch - heartbeat"]
+            Exec["DockerComposeExecutor<br/>pull (timeout + cache) - up/down/stop/start"]
+            Reg["Local registry + outbox<br/>(offline-usable)"]
+            SSE --> Core --> Exec
+            Core --> Reg
+        end
+        Docker["Docker Engine<br/>Kafka - Postgres - Redis - MongoDB"]
+        Exec --> Docker
+    end
+
+    Auth -. "1. login" .-> Plugin
+    Plugin == "2. tasks via SSE (HTTPS + signed token)" ==> SSE
+    Core -. "3. status + connection details" .-> Plugin
+
+    classDef cloud fill:#eef2ff,stroke:#6366f1,color:#111;
+    classDef local fill:#ecfdf5,stroke:#10b981,color:#111;
+    class Cloud,Plugin,Catalog cloud;
+    class Local,Agent,Auth,SSE,Core,Exec,Reg,Docker local;
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Backstage Backend                    │
-│  ┌───────────────────────────────────────────────────┐  │
-│  │       Local Provisioner Backend Plugin            │  │
-│  │  - Task Queue Management (PostgreSQL)             │  │
-│  │  - Agent Registration & Authentication            │  │
-│  │  - SSE Endpoint (/agent/events/:agentId)          │  │
-│  │  - Task Status API                                │  │
-│  └───────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          │ SSE (Server-Sent Events)
-                          │ HTTPS + Bearer Token
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│              Developer's Local Machine                  │
-│                                                         │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │           Backstage Agent CLI                     │ │
-│  │                                                   │ │
-│  │  Components:                                      │ │
-│  │  ┌─────────────────────────────────────────────┐ │ │
-│  │  │  GoogleAuthClient                           │ │ │
-│  │  │  - OAuth flow                               │ │ │
-│  │  │  - Token exchange                           │ │ │
-│  │  └─────────────────────────────────────────────┘ │ │
-│  │  ┌─────────────────────────────────────────────┐ │ │
-│  │  │  SSEClient                                  │ │ │
-│  │  │  - Real-time task reception                │ │ │
-│  │  │  - Auto-reconnection                       │ │ │
-│  │  └─────────────────────────────────────────────┘ │ │
-│  │  ┌─────────────────────────────────────────────┐ │ │
-│  │  │  DockerComposeExecutor                     │ │ │
-│  │  │  - Template rendering (Mustache)           │ │ │
-│  │  │  - Docker Compose execution                │ │ │
-│  │  │  - Container validation                    │ │ │
-│  │  └─────────────────────────────────────────────┘ │ │
-│  │  ┌─────────────────────────────────────────────┐ │ │
-│  │  │  Agent Core                                │ │ │
-│  │  │  - Task coordination                       │ │ │
-│  │  │  - Status reporting                        │ │ │
-│  │  │  - Heartbeat (30s interval)                │ │ │
-│  │  └─────────────────────────────────────────────┘ │ │
-│  └───────────────────────────────────────────────────┘ │
-│                          │                             │
-│                          ▼                             │
-│  ┌───────────────────────────────────────────────────┐ │
-│  │              Docker Engine                        │ │
-│  │  - Kafka + Zookeeper containers                  │ │
-│  │  - PostgreSQL containers                         │ │
-│  │  - Redis containers                              │ │
-│  └───────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────┘
-```
+
+**Offline note:** once a resource is running, the *Local* half operates with no connection to the
+portal — the local registry and the `resource` commands manage it entirely on-machine. Status
+updates that cannot reach the portal are held in the outbox and delivered on reconnect.
 
 ## File Structure
 
@@ -293,14 +311,22 @@ packages/backstage-agent/
 │   │   ├── GoogleAuthClient.ts   # OAuth flow handler
 │   │   └── TokenManager.ts       # Token storage
 │   ├── commands/
-│   │   ├── login.ts              # Login command
-│   │   └── start.ts              # Start command
+│   │   ├── login.ts              # Device-code login
+│   │   ├── start.ts / stop.ts    # Daemon lifecycle
+│   │   ├── status.ts / logout.ts
+│   │   ├── resources.ts          # Offline resource list + lifecycle CLI
+│   │   ├── prewarm.ts            # Pre-pull images for offline use
+│   │   └── update.ts             # Self-update
 │   ├── config/
 │   │   └── ConfigManager.ts      # Config file management
 │   ├── executor/
-│   │   └── DockerComposeExecutor.ts # Docker execution
+│   │   └── DockerComposeExecutor.ts # Docker lifecycle (pull/up/down/stop/start)
+│   ├── registry/
+│   │   ├── LocalResourceRegistry.ts # Offline resource registry
+│   │   └── OutboxQueue.ts        # Offline status-update queue
 │   ├── utils/
-│   │   └── logger.ts             # Winston logger
+│   │   ├── logger.ts             # Winston logger
+│   │   └── versionCheck.ts       # Self-update version check
 │   ├── cli.ts                    # CLI setup
 │   ├── index.ts                  # Main exports
 │   └── types.ts                  # TypeScript types
@@ -364,33 +390,61 @@ The agent supports these environment variables:
 
 ### Connection Issues
 
-**Problem**: "SSE connection error"
+**`SSE connection error: <none>` in the logs — is that a problem?**
 
-**Solution**:
-1. Verify Backstage backend is running
-2. Check network connectivity
-3. Verify authentication token is valid
-4. Check firewall settings
+**No.** Some proxies (e.g. a Cloudflare tunnel) buffer or drop long-lived SSE streams, so you may
+see the agent reconnect every couple of minutes. Task delivery does **not** depend on SSE — it is
+also carried on the agent's regular heartbeat (every 30s), a plain request/response that works
+through any proxy. If tasks run, these warnings are harmless.
 
 ---
 
-**Problem**: Agent disconnects frequently
+**Occasional `Heartbeat failed: 502` / `503`**
 
-**Solution**:
-- Agent auto-reconnects with exponential backoff
-- If persistent, check network stability
-- Review backend logs for issues
+Transient — usually the backend restarting (a deploy). The agent recovers on the next heartbeat.
+Your running resources are unaffected; they run locally on Docker.
 
 ---
 
 ### Task Execution Issues
 
-**Problem**: Task stays in `in-progress` status
+**Task stays `pending` and never starts**
 
-**Solution**:
-1. Check agent logs for errors
-2. Verify Docker Compose execution succeeded
-3. Check backend API is accessible
+The agent isn't picking it up. Check, in order:
+
+1. **Is the agent running and current?** `backstage-agent status` and `backstage-agent --version`
+   (must be the latest — `backstage-agent update`). Versions before 0.1.10 rely on SSE only and
+   can miss tasks behind a proxy.
+2. **Start it:** `backstage-agent start`. On start it polls immediately, so a queued task begins
+   within a few seconds.
+3. **Re-send from the portal:** the task's ⋮ menu → **Re-send to agent**.
+4. **Right agent?** If you have more than one machine registered, make sure the task targets the
+   one that's running.
+
+---
+
+**Task went to `failed`**
+
+Open the task in the portal (row → detail drawer) to read the error and logs, or locally:
+
+```bash
+cd ~/.backstage-agent/tasks/<taskId>/
+docker compose logs
+```
+
+Common causes: a port already in use (`lsof -i :9092`), or Docker low on resources.
+
+---
+
+**A resource is gone from the portal but containers are still running (or vice-versa)**
+
+List and reconcile locally:
+
+```bash
+backstage-agent resources                 # what the agent thinks exists
+docker ps                                 # what's actually running
+backstage-agent resource remove <name>    # stop + delete containers and volumes
+```
 
 ---
 
@@ -442,7 +496,7 @@ backstage-agent start
 - Tokens stored in `~/.backstage-agent/config.json` (user-only access)
 - HTTPS recommended for production
 - Service tokens expire (configurable in backend)
-- Google OAuth domain restriction (`@stratpoint.com`)
+- Google OAuth domain restriction (`@example.com`)
 
 ## Contributing
 
@@ -464,5 +518,5 @@ For issues or questions:
 
 ---
 
-**Version**: 0.1.0
-**Last Updated**: 2024-12-26
+**Version**: 0.1.15
+**Last Updated**: 2026-07-24

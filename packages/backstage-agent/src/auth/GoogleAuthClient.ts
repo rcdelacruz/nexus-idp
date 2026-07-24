@@ -5,7 +5,7 @@
 
 import open from 'open';
 import fetch from 'node-fetch';
-import { AgentAuthResponse, AgentRegisterResponse } from '../types';
+import { AgentRegisterResponse } from '../types';
 import logger from '../utils/logger';
 import { getMachineInfo } from '../utils/machineId';
 
@@ -129,37 +129,6 @@ export class GoogleAuthClient {
     }
 
     throw new Error('Device code expired. Please try again.');
-  }
-
-  /**
-   * Exchange Google token for service token
-   */
-  async exchangeToken(googleToken: string): Promise<AgentAuthResponse> {
-    try {
-      const response = await fetch(
-        `${this.backstageUrl}/api/local-provisioner/agent/auth`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ googleToken }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Token exchange failed: ${response.status} ${error}`);
-      }
-
-      const authResponse = await response.json() as AgentAuthResponse;
-      logger.info(`Successfully exchanged token for agent: ${authResponse.agentId}`);
-
-      return authResponse;
-    } catch (error: any) {
-      logger.error(`Token exchange error: ${error.message}`);
-      throw error;
-    }
   }
 
   /**
