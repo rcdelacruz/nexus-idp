@@ -65,7 +65,7 @@ export const AgentOnboarding = () => {
       <div className={classes.step}>
         <Download size={16} strokeWidth={1.5} className={classes.stepIcon} />
         <Box flex={1}>
-          <div className={classes.stepTitle}>1. Install (requires Node 18+ and Docker)</div>
+          <div className={classes.stepTitle}>1. Install (requires Node 20+ and Docker)</div>
           <Command text="npm install -g @stratpoint/backstage-agent" />
         </Box>
       </div>

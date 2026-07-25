@@ -7,6 +7,8 @@ import { TaskStore } from '../database/TaskStore';
 import { refreshCatalog } from '../sharedStore';
 import {
   ProvisioningTask,
+  Resource,
+  ResourceState,
   TaskStatus,
   CreateTaskRequest,
 } from '../types';
@@ -113,6 +115,21 @@ export class TaskQueueService {
   }
 
   /**
+   * Get a resource's current folded state (agent_id + resource_name pair).
+   */
+  async getResourceState(agentId: string, resourceName: string): Promise<Resource | undefined> {
+    return this.taskStore.getResourceState(agentId, resourceName);
+  }
+
+  /**
+   * Get all active (non-removed) provisioned resources for a user.
+   */
+  async getResourcesForUser(userId: string): Promise<Resource[]> {
+    const resources = await this.taskStore.getActiveProvisionedResources();
+    return resources.filter(r => r.user_id === userId);
+  }
+
+  /**
    * Delete a task
    */
   async deleteTask(taskId: string, userId: string): Promise<void> {
@@ -125,6 +142,17 @@ export class TaskQueueService {
 
     if (task.user_id !== userId) {
       throw new Error(`Task ${taskId} does not belong to user ${userId}`);
+    }
+
+    // Block deleting the task that represents a resource's current, non-removed state —
+    // deleting it would orphan bookkeeping while the agent's containers keep running.
+    // Historical/superseded task rows for the same resource, or any row once the resource
+    // is removed, are still deletable.
+    const resource = await this.taskStore.getResourceState(task.agent_id, task.resource_name);
+    if (resource && resource.state !== ResourceState.REMOVED && resource.latest_task_id === taskId) {
+      throw new Error(
+        `Task ${taskId} is the active state for resource "${task.resource_name}" (${resource.state}) and cannot be deleted`,
+      );
     }
 
     this.logger.info(`Deleting task: ${taskId}`, {

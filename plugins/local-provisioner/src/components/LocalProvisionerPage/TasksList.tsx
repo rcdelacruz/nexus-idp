@@ -13,6 +13,7 @@ import {
   Menu,
   MenuItem,
   ListItemIcon,
+  Checkbox,
   makeStyles,
 } from '@material-ui/core';
 import { Alert } from '@material-ui/lab';
@@ -31,7 +32,7 @@ import {
   Clock,
   Inbox,
 } from 'lucide-react';
-import { ProvisioningTask, TaskStatus } from '../../api/types';
+import { ProvisioningTask, Resource, TaskStatus } from '../../api/types';
 
 export type LifecycleAction = 'stop' | 'start' | 'restart' | 'deprovision';
 
@@ -82,6 +83,8 @@ const useStyles = makeStyles(theme => ({
 
 interface TasksListProps {
   tasks: ProvisioningTask[];
+  /** Live resource state, keyed by `${agentId}::${resourceName}` — see `resourceKey()`. */
+  resources: Record<string, Resource>;
   loading: boolean;
   error: Error | null;
   onView: (task: ProvisioningTask) => void;
@@ -89,7 +92,14 @@ interface TasksListProps {
   onRetry: (task: ProvisioningTask) => void;
   onDispatch: (task: ProvisioningTask) => void;
   onLifecycle: (task: ProvisioningTask, action: LifecycleAction) => void;
+  selectedTaskIds: Set<string>;
+  onToggleSelect: (taskId: string) => void;
+  onToggleSelectAll: () => void;
 }
+
+/** Key resources/tasks by (agent, resource name) — the pair a resource is folded on. */
+export const resourceKey = (agentId: string, resourceName: string) =>
+  `${agentId}::${resourceName}`;
 
 const STATUS_META: Record<
   TaskStatus,
@@ -101,10 +111,9 @@ const STATUS_META: Record<
   pending: { cls: 'pending', icon: <Clock size={13} strokeWidth={2} />, label: 'pending' },
 };
 
-const isProvision = (t: ProvisioningTask) => t.taskType.startsWith('provision-');
-
 export const TasksList = ({
   tasks,
+  resources,
   loading,
   error,
   onView,
@@ -112,6 +121,9 @@ export const TasksList = ({
   onRetry,
   onDispatch,
   onLifecycle,
+  selectedTaskIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }: TasksListProps) => {
   const classes = useStyles();
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -167,6 +179,15 @@ export const TasksList = ({
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  size="small"
+                  indeterminate={selectedTaskIds.size > 0 && selectedTaskIds.size < tasks.length}
+                  checked={tasks.length > 0 && selectedTaskIds.size === tasks.length}
+                  onChange={onToggleSelectAll}
+                  inputProps={{ 'aria-label': 'select all tasks' }}
+                />
+              </TableCell>
               <TableCell>Resource</TableCell>
               <TableCell>Type</TableCell>
               <TableCell>Status</TableCell>
@@ -179,6 +200,14 @@ export const TasksList = ({
               const meta = STATUS_META[task.status];
               return (
                 <TableRow key={task.id} hover style={{ cursor: 'pointer' }}>
+                  <TableCell padding="checkbox" onClick={e => e.stopPropagation()}>
+                    <Checkbox
+                      size="small"
+                      checked={selectedTaskIds.has(task.id)}
+                      onChange={() => onToggleSelect(task.id)}
+                      inputProps={{ 'aria-label': `select task ${task.resourceName}` }}
+                    />
+                  </TableCell>
                   <TableCell onClick={() => onView(task)}>{task.resourceName}</TableCell>
                   <TableCell className={classes.typeCell} onClick={() => onView(task)}>
                     {task.taskType}
@@ -212,7 +241,14 @@ export const TasksList = ({
       </TableContainer>
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
-        {menuTask && [
+        {menuTask && (() => {
+          const resource = resources[resourceKey(menuTask.agentId, menuTask.resourceName)];
+          // Only the row that IS the resource's current/latest task carries lifecycle controls —
+          // otherwise an old superseded provision row would keep showing Stop/Start forever,
+          // disconnected from what actually happened since (the bug this replaces).
+          const state =
+            resource && resource.latestTaskId === menuTask.id ? resource.state : undefined;
+          return [
           <MenuItem key="view" onClick={() => run(() => onView(menuTask))}>
             <ListItemIcon style={{ minWidth: 32 }}>
               <Eye size={16} strokeWidth={1.5} />
@@ -236,8 +272,9 @@ export const TasksList = ({
               Retry
             </MenuItem>
           ),
-          // Lifecycle controls only for a completed provision (a running resource)
-          menuTask.status === 'completed' && isProvision(menuTask) && (
+          // Lifecycle controls reflect the resource's LIVE state, not this row's own status —
+          // only the action(s) valid from the current state are offered.
+          state === 'running' && (
             <MenuItem key="stop" onClick={() => run(() => onLifecycle(menuTask, 'stop'))}>
               <ListItemIcon style={{ minWidth: 32 }}>
                 <Square size={16} strokeWidth={1.5} />
@@ -245,7 +282,7 @@ export const TasksList = ({
               Stop
             </MenuItem>
           ),
-          menuTask.status === 'completed' && isProvision(menuTask) && (
+          state === 'stopped' && (
             <MenuItem key="start" onClick={() => run(() => onLifecycle(menuTask, 'start'))}>
               <ListItemIcon style={{ minWidth: 32 }}>
                 <Play size={16} strokeWidth={1.5} />
@@ -253,7 +290,7 @@ export const TasksList = ({
               Start
             </MenuItem>
           ),
-          menuTask.status === 'completed' && isProvision(menuTask) && (
+          (state === 'running' || state === 'stopped') && (
             <MenuItem key="restart" onClick={() => run(() => onLifecycle(menuTask, 'restart'))}>
               <ListItemIcon style={{ minWidth: 32 }}>
                 <RefreshCw size={16} strokeWidth={1.5} />
@@ -261,7 +298,7 @@ export const TasksList = ({
               Restart
             </MenuItem>
           ),
-          menuTask.status === 'completed' && isProvision(menuTask) && (
+          (state === 'running' || state === 'stopped' || state === 'error') && (
             <MenuItem
               key="teardown"
               className={classes.destructive}
@@ -283,7 +320,8 @@ export const TasksList = ({
             </ListItemIcon>
             Delete task
           </MenuItem>,
-        ].filter(Boolean)}
+          ].filter(Boolean);
+        })()}
       </Menu>
     </>
   );

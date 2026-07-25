@@ -5,7 +5,8 @@
 import { Router, Request } from 'express';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { AgentService } from '../service/AgentService';
-import { AgentRegisterRequest } from '../types';
+import { TaskQueueService } from '../service/TaskQueueService';
+import { AgentRegisterRequest, ResourceState } from '../types';
 import { extractEmailFromEntityRef } from '../util/identity';
 import rateLimit from 'express-rate-limit';
 
@@ -76,7 +77,11 @@ const INVALID_TOKEN_RESPONSE = {
 /**
  * Create agent-related API routes
  */
-export function createAgentRoutes(agentService: AgentService, logger: LoggerService): Router {
+export function createAgentRoutes(
+  agentService: AgentService,
+  logger: LoggerService,
+  taskQueueService?: TaskQueueService,
+): Router {
   const router = Router();
 
   /**
@@ -670,6 +675,30 @@ export function createAgentRoutes(agentService: AgentService, logger: LoggerServ
           error: 'Forbidden',
           message: 'This agent belongs to another user',
         });
+      }
+
+      // Refuse to revoke while the agent still owns active resources — deleting the
+      // registration would orphan them (still running on the dev's machine, but the portal
+      // loses track of them and the catalog entity dangles). Mirrors the deprovision safety
+      // posture: irreversible actions default safe.
+      if (taskQueueService) {
+        const resources = await taskQueueService.getResourcesForUser(userId);
+        const activeOnAgent = resources.filter(
+          r => r.agent_id === agentId && r.state !== ResourceState.REMOVED,
+        );
+        if (activeOnAgent.length > 0) {
+          return res.status(409).json({
+            error: 'Agent has active resources',
+            message:
+              `Cannot revoke this agent — it still owns ${activeOnAgent.length} provisioned ` +
+              `resource(s) (${activeOnAgent.map(r => r.resource_name).join(', ')}). Stop & ` +
+              'remove them first.',
+            resources: activeOnAgent.map(r => ({
+              resourceName: r.resource_name,
+              state: r.state,
+            })),
+          });
+        }
       }
 
       // Disconnect if connected

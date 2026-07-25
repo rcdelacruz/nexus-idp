@@ -13,9 +13,11 @@ import {
   BackendAgentRegistration,
   BackendAgentStatusResponse,
   BackendTaskStats,
+  BackendResource,
   ProvisioningTask,
   AgentRegistration,
   TaskStats,
+  Resource,
 } from './types';
 
 /**
@@ -111,4 +113,29 @@ export function transformTasks(
   backendTasks: BackendProvisioningTask[],
 ): ProvisioningTask[] {
   return backendTasks.map(transformTask);
+}
+
+/**
+ * Transform backend resource (folded view) to frontend resource
+ */
+export function transformResource(backendResource: BackendResource): Resource {
+  return {
+    resourceName: backendResource.resource_name,
+    resourceType: backendResource.resource_type,
+    agentId: backendResource.agent_id,
+    userId: backendResource.user_id,
+    state: backendResource.state,
+    connectionDetails: backendResource.connection_details,
+    catalogEntityRef: backendResource.catalog_entity_ref,
+    provisionedAt: backendResource.provisioned_at,
+    updatedAt: backendResource.updated_at,
+    latestTaskId: backendResource.latest_task_id,
+  };
+}
+
+/**
+ * Transform array of backend resources to frontend resources
+ */
+export function transformResources(backendResources: BackendResource[]): Resource[] {
+  return backendResources.map(transformResource);
 }

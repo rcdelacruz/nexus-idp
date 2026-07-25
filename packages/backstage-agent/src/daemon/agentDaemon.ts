@@ -55,6 +55,19 @@ async function main() {
     // Do NOT handle SIGINT (user Ctrl+C should not stop daemon)
     process.on('SIGTERM', () => shutdown('SIGTERM'));
 
+    // Without these, an uncaught error anywhere outside the already-guarded
+    // heartbeat/status paths kills this detached process silently — no log entry, no trace,
+    // just "the agent went offline" with nothing to explain why. Log before exiting so the
+    // next occurrence is diagnosable.
+    process.on('uncaughtException', error => {
+      logger.error('Agent daemon crashed (uncaughtException):', error);
+      process.exit(1);
+    });
+    process.on('unhandledRejection', reason => {
+      logger.error('Agent daemon crashed (unhandledRejection):', reason as Error);
+      process.exit(1);
+    });
+
     // Start the agent
     await agent.start();
 

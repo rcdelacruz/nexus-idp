@@ -203,6 +203,22 @@ export class TaskStore {
   }
 
   /**
+   * Fold one resource's task history into its current state. Scoped version of
+   * `getActiveProvisionedResources` for callers that only need to validate a single
+   * (agent_id, resource_name) pair (e.g. a lifecycle-transition guard).
+   */
+  async getResourceState(agentId: string, resourceName: string): Promise<Resource | undefined> {
+    const rows = await this.db('provisioning_tasks')
+      .where({ agent_id: agentId, resource_name: resourceName })
+      .orderBy('created_at', 'asc');
+
+    if (rows.length === 0) return undefined;
+
+    const tasks = rows.map(r => this.mapTaskFromDb(r));
+    return foldTasksToResource(tasks);
+  }
+
+  /**
    * Delete a task
    */
   async deleteTask(taskId: string): Promise<void> {

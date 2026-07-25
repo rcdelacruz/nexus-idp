@@ -304,6 +304,10 @@ export class Agent {
         body: JSON.stringify(body),
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          logger.error('Service token invalid or expired — run "backstage-agent login" again');
+          return true;
+        }
         // A 4xx is a real rejection (not offline) — don't queue those forever.
         if (response.status >= 400 && response.status < 500) {
           logger.error(`Status update rejected for task ${taskId}: ${response.status}`);
@@ -337,7 +341,11 @@ export class Agent {
       });
 
       if (!response.ok) {
-        logger.warn(`Heartbeat failed: ${response.status}`);
+        if (response.status === 401) {
+          logger.error('Service token invalid or expired — run "backstage-agent login" again');
+        } else {
+          logger.warn(`Heartbeat failed: ${response.status}`);
+        }
       } else {
         online = true;
         logger.debug('Heartbeat sent successfully');

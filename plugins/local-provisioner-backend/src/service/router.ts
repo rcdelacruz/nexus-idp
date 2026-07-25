@@ -211,7 +211,7 @@ export async function createRouter(
   // Health endpoints are public (configured via httpRouter.addAuthPolicy in plugin.ts)
   router.use('/health', createHealthRoutes(db));
   // Agent and task endpoints require authentication (enforced by middleware above)
-  router.use('/agent', createAgentRoutes(agentService, logger));
+  router.use('/agent', createAgentRoutes(agentService, logger, taskQueueService));
   router.use('/tasks', createTaskRoutes(taskQueueService, logger, agentService));
 
 

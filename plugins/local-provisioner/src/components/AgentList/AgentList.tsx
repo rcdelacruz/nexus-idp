@@ -129,6 +129,8 @@ interface AgentListProps {
   selectedAgentId?: string | null;
   onAgentSelect?: (agentId: string | null) => void;
   taskCounts?: Record<string, number>;
+  /** Count of active (non-removed) provisioned resources per agent — blocks revoke when > 0. */
+  activeResourceCounts?: Record<string, number>;
   onDisconnect?: (agentId: string) => Promise<void>;
   onRevoke?: (agentId: string) => Promise<void>;
 }
@@ -139,6 +141,7 @@ export const AgentList = ({
   selectedAgentId,
   onAgentSelect,
   taskCounts = {},
+  activeResourceCounts = {},
   onDisconnect,
   onRevoke,
 }: AgentListProps) => {
@@ -147,6 +150,7 @@ export const AgentList = ({
   const [menuAnchor, setMenuAnchor] = useState<{ element: HTMLElement; agentId: string } | null>(null);
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
+  const [revokeBlockedDialogOpen, setRevokeBlockedDialogOpen] = useState(false);
   const [startInstructionsOpen, setStartInstructionsOpen] = useState(false);
   const [selectedAgentForAction, setSelectedAgentForAction] = useState<AgentRegistration | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -243,6 +247,11 @@ export const AgentList = ({
 
   const handleRevokeClick = () => {
     handleMenuClose();
+    const count = selectedAgentForAction ? activeResourceCounts[selectedAgentForAction.id] || 0 : 0;
+    if (count > 0) {
+      setRevokeBlockedDialogOpen(true);
+      return;
+    }
     setRevokeDialogOpen(true);
   };
 
@@ -533,6 +542,32 @@ export const AgentList = ({
           </Button>
           <Button onClick={handleRevoke} color="secondary" disabled={actionLoading}>
             {actionLoading ? 'Revoking...' : 'Logout & Revoke'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Revoke Blocked Dialog — shown instead of the confirm dialog when the agent still owns
+          active resources. Deleting the registration would orphan them: they'd keep running on
+          the dev's machine but the portal would lose track of them and the catalog entry would
+          dangle. */}
+      <Dialog
+        open={revokeBlockedDialogOpen}
+        onClose={() => setRevokeBlockedDialogOpen(false)}
+      >
+        <DialogTitle>Can't revoke — resources still provisioned</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            <strong>{selectedAgentForAction?.hostname || selectedAgentForAction?.machineName}</strong>{' '}
+            still owns{' '}
+            {selectedAgentForAction
+              ? activeResourceCounts[selectedAgentForAction.id] || 0
+              : 0}{' '}
+            provisioned resource(s). Stop &amp; remove them first, then revoke the agent.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRevokeBlockedDialogOpen(false)} color="primary">
+            Got it
           </Button>
         </DialogActions>
       </Dialog>

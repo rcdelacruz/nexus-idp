@@ -9,6 +9,10 @@ metadata:
     engineering-docs/source-id: kafka-training
     github.com/project-slug: strat-training/kafka
     backstage.io/source-location: url:https://github.com/strat-training/kafka
+  links:
+    - url: /docs/default/component/kafka-local-provisioning-training
+      title: Hands-on with the Local Provisioner
+      icon: docs
   tags:
     - documentation
     - kafka

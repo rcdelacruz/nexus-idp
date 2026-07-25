@@ -25,7 +25,7 @@ function ownerRef(userId: string): string {
   return `user:default/${username}`;
 }
 
-function toEntity(resource: Resource): Entity {
+function toEntity(resource: Resource, resourceDocsLinks: Record<string, string>): Entity {
   const name = `local-${sanitize(resource.resource_name)}-${resource.agent_id.slice(0, 8)}`;
   const conn = resource.connection_details || {};
   const annotations: Record<string, string> = {
@@ -38,6 +38,12 @@ function toEntity(resource: Resource): Entity {
   if (conn.connectionString) annotations['local-provisioner/connection-string'] = conn.connectionString;
   if (conn.ui) annotations['local-provisioner/ui'] = conn.ui;
 
+  // Deployment-specific, config-driven (see `resourceDocsLinks` in app-config.yaml) — links a
+  // provisioned resource back to related documentation (e.g. training materials) in the catalog.
+  // No hardcoded ref here: this plugin is synced to the white-label downstream, and the ref only
+  // makes sense for this deployment's own catalog content.
+  const docsRef = resource.resource_type ? resourceDocsLinks[resource.resource_type] : undefined;
+
   return {
     apiVersion: 'backstage.io/v1alpha1',
     kind: 'Resource',
@@ -47,13 +53,19 @@ function toEntity(resource: Resource): Entity {
       title: resource.resource_name,
       description: `Locally-provisioned ${resource.resource_type ?? 'resource'} (${resource.state})`,
       annotations,
-      tags: ['local', 'development', ...(resource.resource_type ? [resource.resource_type] : [])],
+      tags: [
+        'local',
+        'development',
+        ...(resource.resource_type ? [resource.resource_type] : []),
+        ...(resource.resource_type?.endsWith('-training') ? ['training', 'local-provisioning'] : []),
+      ],
     },
     spec: {
       type: resource.resource_type ?? 'local-resource',
       owner: ownerRef(resource.user_id),
       lifecycle: 'development',
       system: 'local-development',
+      ...(docsRef ? { dependsOn: [docsRef] } : {}),
     },
   };
 }
@@ -69,6 +81,7 @@ export class LocalProvisionerEntityProvider implements EntityProvider {
   constructor(
     private readonly storePromise: Promise<TaskStore>,
     private readonly logger: LoggerService,
+    private readonly resourceDocsLinks: Record<string, string> = {},
   ) {}
 
   getProviderName(): string {
@@ -92,7 +105,7 @@ export class LocalProvisionerEntityProvider implements EntityProvider {
     const resources = await store.getActiveProvisionedResources();
 
     const entities = resources.map(r => ({
-      entity: toEntity(r),
+      entity: toEntity(r, this.resourceDocsLinks),
       locationKey: LOCATION_KEY,
     }));
 

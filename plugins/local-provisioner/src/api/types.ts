@@ -98,6 +98,34 @@ export interface BackendCreateTaskResponse {
   task: BackendProvisioningTask;
 }
 
+/**
+ * A provisioned resource's live lifecycle state, as returned by the backend.
+ */
+export type BackendResourceState = 'provisioning' | 'running' | 'stopped' | 'error' | 'removed';
+
+/**
+ * Resource-centric (folded) view of a provisioned resource, as returned by backend API.
+ */
+export interface BackendResource {
+  resource_name: string;
+  resource_type?: string;
+  agent_id: string;
+  user_id: string;
+  state: BackendResourceState;
+  connection_details?: ConnectionDetails;
+  catalog_entity_ref?: string;
+  provisioned_at?: string;
+  updated_at: string;
+  latest_task_id: string;
+}
+
+/**
+ * Resources list response from backend
+ */
+export interface BackendResourcesResponse {
+  resources: BackendResource[];
+}
+
 // ============================================================================
 // FRONTEND TYPES (camelCase - used by React components)
 // ============================================================================
@@ -156,6 +184,29 @@ export interface AgentRegistration {
   lastSeenAgeSeconds?: number | null; // server-computed heartbeat age (skew-free)
   createdAt: string;
   isConnected: boolean;
+}
+
+/**
+ * A provisioned resource's live lifecycle state, for frontend components.
+ */
+export type ResourceState = 'provisioning' | 'running' | 'stopped' | 'error' | 'removed';
+
+/**
+ * Resource-centric (folded) view of a provisioned resource, for frontend components. Reflects
+ * the resource's *current* state — unlike a `ProvisioningTask` row, which is a historical log
+ * entry and doesn't update once superseded by a later lifecycle task.
+ */
+export interface Resource {
+  resourceName: string;
+  resourceType?: string;
+  agentId: string;
+  userId: string;
+  state: ResourceState;
+  connectionDetails?: ConnectionDetails;
+  catalogEntityRef?: string;
+  provisionedAt?: string;
+  updatedAt: string;
+  latestTaskId: string;
 }
 
 /**

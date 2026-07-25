@@ -6,7 +6,25 @@ import { Request, Router } from 'express';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { TaskQueueService } from '../service/TaskQueueService';
 import { AgentService } from '../service/AgentService';
-import { CreateTaskRequest } from '../types';
+import { CreateTaskRequest, ResourceState, TaskType, isLifecycleTask } from '../types';
+
+/**
+ * Lifecycle transitions that are no-ops or invalid given a resource's current state — e.g.
+ * clicking "Start" on a resource that's already running. Keyed by task_type, valued by the
+ * ResourceStates it's valid to run from. `deprovision` is valid from anything except `removed`
+ * (already-torn-down); the others require a specific starting state.
+ */
+const VALID_FROM_STATE: Partial<Record<TaskType, ResourceState[]>> = {
+  [TaskType.STOP]: [ResourceState.RUNNING],
+  [TaskType.START]: [ResourceState.STOPPED],
+  [TaskType.RESTART]: [ResourceState.RUNNING, ResourceState.STOPPED],
+  [TaskType.DEPROVISION]: [
+    ResourceState.RUNNING,
+    ResourceState.STOPPED,
+    ResourceState.ERROR,
+    ResourceState.PROVISIONING,
+  ],
+};
 
 /**
  * Resolve the authenticated user's email, as attached by the auth middleware in
@@ -65,6 +83,33 @@ export function createTaskRoutes(
     } catch (error: any) {
       return res.status(500).json({
         error: 'Failed to fetch tasks',
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /tasks/resources
+   * Get the resource-centric (folded) view of the current user's provisioned resources —
+   * used by the UI to know each resource's live state (running/stopped/etc.) rather than
+   * inferring it from a single historical task row.
+   */
+  router.get('/resources', async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Could not resolve authenticated user',
+        });
+      }
+
+      const resources = await taskQueueService.getResourcesForUser(userId);
+
+      return res.status(200).json({ resources });
+    } catch (error: any) {
+      return res.status(500).json({
+        error: 'Failed to fetch resources',
         message: error.message,
       });
     }
@@ -168,6 +213,24 @@ export function createTaskRoutes(
         });
       }
 
+      // Same chokepoint: reject a lifecycle action that doesn't make sense for the resource's
+      // current state (e.g. "Start" on an already-running resource, "Stop" on one that's already
+      // stopped). Provision tasks aren't covered by VALID_FROM_STATE and pass through unchecked.
+      const validFromStates = VALID_FROM_STATE[createRequest.task_type as TaskType];
+      if (isLifecycleTask(createRequest.task_type) && validFromStates) {
+        const resource = await taskQueueService.getResourceState(
+          createRequest.agent_id,
+          createRequest.resource_name,
+        );
+        const currentState = resource?.state ?? ResourceState.ERROR;
+        if (!validFromStates.includes(currentState)) {
+          return res.status(409).json({
+            error: 'Invalid resource state',
+            message: `Cannot ${createRequest.task_type} "${createRequest.resource_name}" — it is currently ${currentState}.`,
+          });
+        }
+      }
+
       const task = await taskQueueService.createTask(userId, createRequest);
 
       logger.info('Task created, notifying agent via SSE', {
@@ -240,6 +303,13 @@ export function createTaskRoutes(
         return res.status(403).json({
           error: 'Access denied',
           message: 'You do not have permission to delete this task',
+        });
+      }
+
+      if (error.message.includes('cannot be deleted')) {
+        return res.status(409).json({
+          error: 'Resource still active',
+          message: error.message,
         });
       }
 

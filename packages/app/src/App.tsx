@@ -43,6 +43,8 @@ import { ProjectPickerField } from './components/scaffolder/ProjectPickerField';
 import { DeploymentTargetPicker } from './components/scaffolder/DeploymentTargetPicker';
 import { DatabasePicker } from './components/scaffolder/DatabasePicker';
 import { ValidatedTextField } from './components/scaffolder/ValidatedTextField';
+import { GitHubUsernameField } from './components/scaffolder/GitHubUsernameField';
+import { SuggestedResourceNameField } from './components/scaffolder/SuggestedResourceNameField';
 import type { TemplateWizardPageProps } from '@backstage/plugin-scaffolder/alpha';
 
 // Injects ProjectPicker field extension into the wizard without needing
@@ -56,6 +58,8 @@ const CustomTemplateWizardPageWithExtensions = (props: TemplateWizardPageProps) 
       { name: 'DeploymentTargetPicker', component: DeploymentTargetPicker as any },
       { name: 'DatabasePicker', component: DatabasePicker as any },
       { name: 'ValidatedTextField', component: ValidatedTextField as any },
+      { name: 'GitHubUsernameField', component: GitHubUsernameField as any },
+      { name: 'SuggestedResourceName', component: SuggestedResourceNameField as any },
     ]}
   />
 );

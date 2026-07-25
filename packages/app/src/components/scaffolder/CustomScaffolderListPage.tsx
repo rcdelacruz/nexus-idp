@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useRouteRef, useApp } from '@backstage/core-plugin-api';
 import { useColors } from '@stratpoint/theme-utils';
 import {
@@ -56,7 +56,22 @@ export const CustomScaffolderListPage = (props: Props) => {
   } = props;
 
   const navigate = useNavigate();
+  const location = useLocation();
   const app = useApp();
+
+  // Training templates are hidden from casual browsing here — only reachable via the
+  // Local Provisioner page's "Provision resource" link, which appends this flag.
+  const trainingAccess =
+    new URLSearchParams(location.search).get('trainingAccess') === '1';
+  const effectiveTemplateFilter = useCallback(
+    (e: any) => {
+      if (templateFilter && !templateFilter(e)) return false;
+      const tags: string[] = e?.metadata?.tags ?? [];
+      const isTraining = e?.spec?.type === 'training' || tags.includes('training');
+      return !isTraining || trainingAccess;
+    },
+    [templateFilter, trainingAccess],
+  );
 
   const registerComponentLink = useRouteRef(
     scaffolderPlugin.externalRoutes.registerComponent,
@@ -179,7 +194,7 @@ export const CustomScaffolderListPage = (props: Props) => {
             <Grid item xs={12}>
               <TemplateGroups
                 groups={groups}
-                templateFilter={templateFilter}
+                templateFilter={effectiveTemplateFilter}
                 TemplateCardComponent={TemplateCardComponent}
                 onTemplateSelected={onTemplateSelected}
                 additionalLinksForEntity={additionalLinksForEntity}

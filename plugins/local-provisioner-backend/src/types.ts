@@ -20,6 +20,7 @@ export enum TaskStatus {
  */
 export enum TaskType {
   PROVISION_KAFKA = 'provision-kafka',
+  PROVISION_KAFKA_TRAINING = 'provision-kafka-training',
   PROVISION_POSTGRES = 'provision-postgres',
   PROVISION_REDIS = 'provision-redis',
   PROVISION_MONGODB = 'provision-mongodb',
@@ -33,6 +34,7 @@ export enum TaskType {
 /** Resource types that can be provisioned. */
 export enum ResourceType {
   KAFKA = 'kafka',
+  KAFKA_TRAINING = 'kafka-training',
   POSTGRES = 'postgres',
   REDIS = 'redis',
   MONGODB = 'mongodb',
@@ -49,6 +51,7 @@ export enum ResourceState {
 
 const PROVISION_TASK_TYPES: string[] = [
   TaskType.PROVISION_KAFKA,
+  TaskType.PROVISION_KAFKA_TRAINING,
   TaskType.PROVISION_POSTGRES,
   TaskType.PROVISION_REDIS,
   TaskType.PROVISION_MONGODB,
@@ -76,6 +79,8 @@ export function resourceTypeForTask(taskType: string): ResourceType | undefined 
   switch (taskType) {
     case TaskType.PROVISION_KAFKA:
       return ResourceType.KAFKA;
+    case TaskType.PROVISION_KAFKA_TRAINING:
+      return ResourceType.KAFKA_TRAINING;
     case TaskType.PROVISION_POSTGRES:
       return ResourceType.POSTGRES;
     case TaskType.PROVISION_REDIS:

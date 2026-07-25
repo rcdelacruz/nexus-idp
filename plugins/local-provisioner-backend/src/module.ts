@@ -3,6 +3,17 @@ import { catalogProcessingExtensionPoint } from '@backstage/plugin-catalog-node'
 import { LocalProvisionerEntityProvider } from './provider/LocalProvisionerEntityProvider';
 import { taskStoreReady, setCatalogRefresher } from './sharedStore';
 
+/** Read `localProvisioner.resourceDocsLinks` (resource type -> catalog entity ref) from config. */
+function readResourceDocsLinks(config: import('@backstage/config').Config): Record<string, string> {
+  const links = config.getOptionalConfig('localProvisioner')?.getOptionalConfig('resourceDocsLinks');
+  if (!links) return {};
+  const result: Record<string, string> = {};
+  for (const key of links.keys()) {
+    result[key] = links.getString(key);
+  }
+  return result;
+}
+
 /**
  * Catalog module that registers LocalProvisionerEntityProvider so provisioned resources appear
  * as catalog Resource entities (with connection details). Fixes the "can't go to the project"
@@ -21,9 +32,11 @@ export const localProvisionerCatalogModule = createBackendModule({
         catalog: catalogProcessingExtensionPoint,
         logger: coreServices.logger,
         scheduler: coreServices.scheduler,
+        config: coreServices.rootConfig,
       },
-      async init({ catalog, logger, scheduler }) {
-        const provider = new LocalProvisionerEntityProvider(taskStoreReady, logger);
+      async init({ catalog, logger, scheduler, config }) {
+        const resourceDocsLinks = readResourceDocsLinks(config);
+        const provider = new LocalProvisionerEntityProvider(taskStoreReady, logger, resourceDocsLinks);
         catalog.addEntityProvider(provider);
 
         // Allow the plugin to trigger an immediate refresh on provision/teardown completion.

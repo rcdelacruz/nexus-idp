@@ -12,9 +12,9 @@ metadata:
     {%- endfor %}
   annotations:
     project-registration/project-id: ${{ values.projectId }}
-    engineering-hub/repo: ${{ values.repoOrg }}/${{ values.repoName }}
-    engineering-hub/branch: ${{ values.branch }}
-    engineering-hub/content-base: ${{ values.contentBase }}
+    engineering-docs/repo: ${{ values.repoOrg }}/${{ values.repoName }}
+    engineering-docs/branch: ${{ values.branch }}
+    engineering-docs/content-base: ${{ values.contentBase }}
     github.com/project-slug: ${{ values.repoOrg }}/${{ values.repoName }}
     backstage.io/source-location: url:https://github.com/${{ values.repoOrg }}/${{ values.repoName }}
   links:

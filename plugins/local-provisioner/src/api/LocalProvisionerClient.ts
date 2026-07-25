@@ -19,12 +19,15 @@ import {
   BackendCreateTaskResponse,
   BackendTaskStats,
   BackendAgentRegistration,
+  BackendResourcesResponse,
+  Resource,
 } from './types';
 import {
   transformTask,
   transformTasks,
   transformAgent,
   transformTaskStats,
+  transformResources,
 } from './transformers';
 
 /**
@@ -53,6 +56,8 @@ export interface LocalProvisionerApi {
     action: 'stop' | 'start' | 'restart' | 'deprovision',
   ): Promise<ProvisioningTask>;
   getTaskStats(): Promise<TaskStats>;
+  /** Resource-centric (folded) view of the current user's provisioned resources, with live state. */
+  getResources(): Promise<Resource[]>;
   getAgentStatus(): Promise<AgentRegistration | null>;
   getAgents(): Promise<AgentRegistration[]>;
   disconnectAgent(agentId: string): Promise<void>;
@@ -277,6 +282,29 @@ export class LocalProvisionerClient implements LocalProvisionerApi {
 
     // Transform to frontend type with inProgress key
     return transformTaskStats(backendStats);
+  }
+
+  /**
+   * Get the resource-centric (folded) view of the current user's provisioned resources.
+   *
+   * Backend returns: { resources: BackendResource[] }
+   * This method transforms to: Resource[]
+   */
+  async getResources(): Promise<Resource[]> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.getAuthHeaders();
+
+    const response = await fetch(`${baseUrl}/tasks/resources`, {
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch resources: ${response.statusText}`);
+    }
+
+    const data: BackendResourcesResponse = await response.json();
+
+    return transformResources(data.resources);
   }
 
   /**

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Content, Header, Page, InfoCard } from '@backstage/core-components';
 import {
   Grid,
@@ -16,12 +16,13 @@ import {
 } from '@material-ui/core';
 import { useApi, alertApiRef } from '@backstage/core-plugin-api';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { localProvisionerApiRef } from '../../api/LocalProvisionerClient';
-import { ProvisioningTask } from '../../api/types';
+import { ProvisioningTask, Resource } from '../../api/types';
 import { useProvisioningTasks } from '../../hooks/useProvisioningTasks';
 import { useAgents } from '../../hooks/useAgents';
-import { TasksList, LifecycleAction } from './TasksList';
+import { useResources } from '../../hooks/useResources';
+import { TasksList, LifecycleAction, resourceKey } from './TasksList';
 import { AgentList } from '../AgentList';
 import { AgentOnboarding } from '../AgentOnboarding/AgentOnboarding';
 import { TaskDetailDrawer } from '../TaskDetails/TaskDetailDrawer';
@@ -40,10 +41,18 @@ export const LocalProvisionerPage = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const { tasks, loading, error } = useProvisioningTasks(refreshKey);
   const { agents, loading: agentsLoading } = useAgents(refreshKey);
+  const { resources } = useResources(refreshKey);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [detailTask, setDetailTask] = useState<ProvisioningTask | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [ackChecked, setAckChecked] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+
+  // Clear selection when the agent filter changes — otherwise "Delete N selected" could
+  // reference tasks from a different agent that aren't even visible in the table anymore.
+  useEffect(() => {
+    setSelectedTaskIds(new Set());
+  }, [selectedAgentId]);
 
   const refresh = useCallback(() => setRefreshKey(prev => prev + 1), []);
   const toast = useCallback(
@@ -64,6 +73,25 @@ export const LocalProvisionerPage = () => {
     });
     return counts;
   }, [tasks]);
+
+  // Live resource state, keyed by (agentId, resourceName) — for state-aware lifecycle controls.
+  const resourceMap = useMemo(() => {
+    const map: Record<string, Resource> = {};
+    resources.forEach(r => {
+      map[resourceKey(r.agentId, r.resourceName)] = r;
+    });
+    return map;
+  }, [resources]);
+
+  // Active (non-removed) resources per agent — used to block deleting/revoking an agent that
+  // still owns running or provisioned resources.
+  const activeResourceCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    resources.forEach(r => {
+      if (r.state !== 'removed') counts[r.agentId] = (counts[r.agentId] || 0) + 1;
+    });
+    return counts;
+  }, [resources]);
 
   const taskCountDisplay = selectedAgentId
     ? `${filteredTasks.length} on selected agent`
@@ -159,6 +187,55 @@ export const LocalProvisionerPage = () => {
     [api, toast, refresh],
   );
 
+  const toggleSelect = useCallback((taskId: string) => {
+    setSelectedTaskIds(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedTaskIds(prev =>
+      prev.size === filteredTasks.length
+        ? new Set()
+        : new Set(filteredTasks.map(t => t.id)),
+    );
+  }, [filteredTasks]);
+
+  // Each delete is still guarded server-side (a task representing a resource's current,
+  // non-removed state is refused with 409) — this just loops the same single-delete call
+  // and reports which ones the server actually accepted.
+  const handleBulkDelete = useCallback(() => {
+    const ids = Array.from(selectedTaskIds);
+    setAckChecked(false);
+    setConfirm({
+      title: `Delete ${ids.length} task${ids.length === 1 ? '' : 's'}?`,
+      message:
+        'Remove the selected tasks from the list. This does not stop any running containers. Tasks still representing an active resource will be skipped.',
+      action: async () => {
+        let deleted = 0;
+        let skipped = 0;
+        for (const id of ids) {
+          try {
+            await api.deleteTask(id);
+            deleted += 1;
+          } catch {
+            skipped += 1;
+          }
+        }
+        setSelectedTaskIds(new Set());
+        refresh();
+        if (skipped === 0) {
+          toast(`Deleted ${deleted} task${deleted === 1 ? '' : 's'}`);
+        } else {
+          toast(`Deleted ${deleted}, skipped ${skipped} — still active`, 'info');
+        }
+      },
+    });
+  }, [api, selectedTaskIds, toast, refresh]);
+
   const handleLifecycle = useCallback(
     (task: ProvisioningTask, action: LifecycleAction) => {
       if (action === 'deprovision') {
@@ -232,7 +309,7 @@ export const LocalProvisionerPage = () => {
                 startIcon={<Plus size={16} strokeWidth={2} />}
                 onClick={() =>
                   navigate(
-                    '/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all',
+                    '/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all&trainingAccess=1',
                   )
                 }
               >
@@ -253,15 +330,31 @@ export const LocalProvisionerPage = () => {
                 selectedAgentId={selectedAgentId}
                 onAgentSelect={setSelectedAgentId}
                 taskCounts={taskCounts}
+                activeResourceCounts={activeResourceCounts}
                 onDisconnect={handleDisconnect}
                 onRevoke={handleRevoke}
               />
             )}
           </Grid>
           <Grid item xs={12} md={8}>
-            <InfoCard title={`Provisioning Tasks (${taskCountDisplay})`}>
+            <InfoCard
+              title={`Provisioning Tasks (${taskCountDisplay})`}
+              action={
+                selectedTaskIds.size > 0 ? (
+                  <Button
+                    size="small"
+                    startIcon={<Trash2 size={14} strokeWidth={1.5} />}
+                    style={{ color: '#e5484d' }}
+                    onClick={handleBulkDelete}
+                  >
+                    Delete {selectedTaskIds.size} selected
+                  </Button>
+                ) : undefined
+              }
+            >
               <TasksList
                 tasks={filteredTasks}
+                resources={resourceMap}
                 loading={loading}
                 error={error}
                 onView={setDetailTask}
@@ -269,6 +362,9 @@ export const LocalProvisionerPage = () => {
                 onRetry={handleRetry}
                 onDispatch={handleDispatch}
                 onLifecycle={handleLifecycle}
+                selectedTaskIds={selectedTaskIds}
+                onToggleSelect={toggleSelect}
+                onToggleSelectAll={toggleSelectAll}
               />
             </InfoCard>
           </Grid>
