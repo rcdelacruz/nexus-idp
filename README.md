@@ -1,6 +1,6 @@
 # Nexus IDP
 
-Stratpoint Engineering's Internal Developer Platform, built on [Backstage](https://backstage.io). Nexus IDP integrates FinOps cost management, Engineering Docs, K8s + ArgoCD monitoring, user onboarding/management, and a Local Provisioning system for spinning up local infrastructure via Docker Compose.
+CoderStudio Labs' Internal Developer Platform, built on [Backstage](https://backstage.io). Nexus IDP integrates FinOps cost management, Engineering Docs, K8s + ArgoCD monitoring, user onboarding/management, and a Local Provisioning system for spinning up local infrastructure via Docker Compose.
 
 **Version:** 1.49.1 | **Node.js:** 20.x or 22.x | **Package manager:** Yarn 4.12.0 (Berry PnP)
 
