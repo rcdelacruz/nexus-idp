@@ -5,6 +5,7 @@
 
 import { coreServices, createBackendModule } from '@backstage/backend-plugin-api';
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node';
+import { notificationService } from '@backstage/plugin-notifications-node';
 import { createLocalProvisionAction } from './scaffolder/actions/localProvision';
 import { createKubernetesApplyAction } from './scaffolder/actions/kubernetesApply';
 import { createPullSecretAction } from './scaffolder/actions/createPullSecret';
@@ -20,6 +21,14 @@ import { createDispatchWorkflowAction } from './scaffolder/actions/dispatchWorkf
 import { createSetupRepoForPromotionAction } from './scaffolder/actions/setupRepoForPromotion';
 import { createDbaasCreateProjectAction } from './scaffolder/actions/dbaasCreateProject';
 import { createAddRepoCollaboratorAction } from './scaffolder/actions/addRepoCollaborator';
+import { createTeardownDiscoverResourcesAction } from './scaffolder/actions/teardownDiscoverResources';
+import { createDeleteArgocdAppAction } from './scaffolder/actions/deleteArgocdApp';
+import { createDeleteNamespaceAction } from './scaffolder/actions/deleteNamespace';
+import { createDeleteGithubRepoAction } from './scaffolder/actions/deleteGithubRepo';
+import { createUnregisterCatalogEntityAction } from './scaffolder/actions/unregisterCatalogEntity';
+import { createNotifySendAction } from './scaffolder/actions/notifySend';
+import { createDestroyAwsInfraAction } from './scaffolder/actions/destroyAwsInfra';
+import { createDeleteS3BackupsAction } from './scaffolder/actions/deleteS3Backups';
 
 export const scaffolderActionsModule = createBackendModule({
   pluginId: 'scaffolder',
@@ -31,8 +40,9 @@ export const scaffolderActionsModule = createBackendModule({
         config: coreServices.rootConfig,
         discovery: coreServices.discovery,
         auth: coreServices.auth,
+        notification: notificationService,
       },
-      async init({ scaffolder, config, discovery, auth }) {
+      async init({ scaffolder, config, discovery, auth, notification }) {
         scaffolder.addActions(
           createLocalProvisionAction({ discovery, auth }),
           createKubernetesApplyAction(),
@@ -49,6 +59,14 @@ export const scaffolderActionsModule = createBackendModule({
           createSetupRepoForPromotionAction(),
           createDbaasCreateProjectAction({ discovery, auth }),
           createAddRepoCollaboratorAction(),
+          createTeardownDiscoverResourcesAction({ discovery, auth }),
+          createDeleteArgocdAppAction(),
+          createDeleteNamespaceAction(),
+          createDeleteGithubRepoAction(),
+          createUnregisterCatalogEntityAction({ discovery, auth }),
+          createNotifySendAction({ notification }),
+          createDestroyAwsInfraAction(),
+          createDeleteS3BackupsAction(),
         );
       },
     });

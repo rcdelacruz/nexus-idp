@@ -22,6 +22,11 @@ backend.add(import('@backstage/plugin-scaffolder-backend-module-github'));
 backend.add(import('./plugins/scaffolder-actions-module'));
 backend.add(import('@backstage/plugin-techdocs-backend'));
 
+// notifications — background scaffolder tasks (e.g. teardown-app) that take minutes
+// notify the user in-app on completion instead of requiring the tab to stay open
+backend.add(import('@backstage/plugin-signals-backend'));
+backend.add(import('@backstage/plugin-notifications-backend'));
+
 // auth plugin
 backend.add(import('@backstage/plugin-auth-backend'));
 // Custom Google module: auto-provisions users in the configured allowed domain to general-engineers on first login

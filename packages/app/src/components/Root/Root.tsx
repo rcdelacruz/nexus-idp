@@ -74,7 +74,7 @@ import { SearchModal, useSearchModal } from '@backstage/plugin-search';
 import {
   Home, LayoutGrid, BookOpen, Code2, Plus, Users,
   HardDrive, DollarSign, Radar, Settings, Sun, Moon, Search, User, LogOut, LucideIcon,
-  ChevronDown, ChevronRight, ClipboardCheck, UserCog, FolderKanban, FilePlus, ListTodo,
+  ChevronDown, ChevronRight, ClipboardCheck, UserCog, FolderKanban, FilePlus, ListTodo, Bell,
 } from 'lucide-react';
 import { NexusLogoMark } from './NexusLogo';
 import { engineeringDocsApiRef } from '@internal/plugin-engineering-docs';
@@ -476,6 +476,7 @@ const AppSidebar = ({ isNewUser, isAdmin, isPM }: { isNewUser?: boolean; isAdmin
             {isOpen && <div className={classes.sectionLabel}>Tools</div>}
             {(isAdmin || isPM) && <ProjectsNavItem />}
             <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" />
+            <NavItem icon={Bell} label="Notifications" to="/notifications" />
             <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
             {isAdmin && <NavItem icon={DollarSign} label="FinOps" to="/finops" />}
           </>

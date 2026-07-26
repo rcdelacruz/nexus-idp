@@ -69,6 +69,8 @@ import {
 
 import { EngineeringDocsEntityContent } from '@internal/plugin-engineering-docs';
 
+import { DangerZoneCard } from './DangerZoneCard';
+
 // Engineering Hub is the default docs renderer for all entities.
 const docsContent = <EngineeringDocsEntityContent />;
 
@@ -150,10 +152,21 @@ const overviewContent = (
   </Grid>
 );
 
+const overviewContentWithDangerZone = (
+  <>
+    {overviewContent}
+    <Grid container spacing={3} style={{ marginTop: 0 }}>
+      <Grid item xs={12}>
+        <DangerZoneCard />
+      </Grid>
+    </Grid>
+  </>
+);
+
 const serviceEntityPage = (
   <EntityLayout>
     <EntityLayout.Route path="/" title="Overview">
-      {overviewContent}
+      {overviewContentWithDangerZone}
     </EntityLayout.Route>
 
     <EntityLayout.Route path="/ci-cd" title="CI/CD">
@@ -226,7 +239,7 @@ const serviceEntityPage = (
 const websiteEntityPage = (
   <EntityLayout>
     <EntityLayout.Route path="/" title="Overview">
-      {overviewContent}
+      {overviewContentWithDangerZone}
     </EntityLayout.Route>
 
     <EntityLayout.Route path="/ci-cd" title="CI/CD">
@@ -427,6 +440,9 @@ const systemPage = (
         </Grid>
         <Grid item md={6}>
           <EntityHasResourcesCard />
+        </Grid>
+        <Grid item xs={12}>
+          <DangerZoneCard />
         </Grid>
       </Grid>
     </EntityLayout.Route>

@@ -68,7 +68,13 @@ export const CustomScaffolderListPage = (props: Props) => {
       if (templateFilter && !templateFilter(e)) return false;
       const tags: string[] = e?.metadata?.tags ?? [];
       const isTraining = e?.spec?.type === 'training' || tags.includes('training');
-      return !isTraining || trainingAccess;
+      if (isTraining && !trainingAccess) return false;
+      // Destructive templates (teardown-app) are never browsable here — the only
+      // entry point is the entity page's Danger Zone card, which links straight
+      // to the wizard, bypassing this list entirely. No access flag/bypass exists,
+      // unlike training — there is no legitimate reason to browse into this.
+      if (tags.includes('destructive')) return false;
+      return true;
     },
     [templateFilter, trainingAccess],
   );

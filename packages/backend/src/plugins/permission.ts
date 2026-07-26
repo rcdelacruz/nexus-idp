@@ -320,11 +320,20 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
             ],
           });
         }
-        // Engineers: CONDITIONAL — deny templates owned by devops-team
+        // Engineers: CONDITIONAL — deny templates owned by devops-team, and deny
+        // teardown-app outright (irreversible destructive action — leads/admins only,
+        // see .claude/plans/teardown-application-plan.md RBAC Policy)
         return createCatalogConditionalDecision(request.permission, {
-          not: catalogConditions.isEntityOwner({
-            claims: ['group:default/devops-team'],
-          }),
+          allOf: [
+            {
+              not: catalogConditions.isEntityOwner({
+                claims: ['group:default/devops-team'],
+              }),
+            },
+            {
+              not: catalogConditions.hasMetadata({ key: 'name', value: 'teardown-app' }),
+            },
+          ],
         });
       }
 

@@ -45,6 +45,8 @@ import { DatabasePicker } from './components/scaffolder/DatabasePicker';
 import { ValidatedTextField } from './components/scaffolder/ValidatedTextField';
 import { GitHubUsernameField } from './components/scaffolder/GitHubUsernameField';
 import { SuggestedResourceNameField } from './components/scaffolder/SuggestedResourceNameField';
+import { TeardownEntityRefField } from './components/scaffolder/TeardownEntityRefField';
+import { ConfirmAppNameField, validateConfirmAppName } from './components/scaffolder/ConfirmAppNameField';
 import type { TemplateWizardPageProps } from '@backstage/plugin-scaffolder/alpha';
 
 // Injects ProjectPicker field extension into the wizard without needing
@@ -60,6 +62,8 @@ const CustomTemplateWizardPageWithExtensions = (props: TemplateWizardPageProps) 
       { name: 'ValidatedTextField', component: ValidatedTextField as any },
       { name: 'GitHubUsernameField', component: GitHubUsernameField as any },
       { name: 'SuggestedResourceName', component: SuggestedResourceNameField as any },
+      { name: 'TeardownEntityRefField', component: TeardownEntityRefField as any },
+      { name: 'ConfirmAppNameField', component: ConfirmAppNameField as any, validation: validateConfirmAppName as any },
     ]}
   />
 );
@@ -72,6 +76,7 @@ import { OnboardingPage } from '@internal/plugin-onboarding';
 import { UserManagementPage } from '@internal/plugin-user-management';
 import { ConnectDatabasesPage } from '@internal/plugin-dbaas';
 import { DeviceAuthPage } from './components/DeviceAuthPage';
+import { NotificationsPage } from '@backstage/plugin-notifications';
 import { GlobalStyleOverrides } from './components/GlobalStyleOverrides';
 
 const app = createApp({
@@ -170,6 +175,7 @@ const routes = (
     <Route path="/local-provisioner" element={<LocalProvisionerPage />} />
     <Route path="/onboarding" element={<OnboardingPage />} />
     <Route path="/user-management" element={<UserManagementPage />} />
+    <Route path="/notifications" element={<NotificationsPage />} />
   </FlatRoutes>
 );
 
