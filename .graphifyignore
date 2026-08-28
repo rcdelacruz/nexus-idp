@@ -1,0 +1,8 @@
+# Vendored / generated bundles that pollute the knowledge graph.
+# The Yarn Berry release is a minified binary — AST-parsing it produces
+# thousands of obfuscated noise nodes that drown out real architecture.
+.yarn/
+
+# Local MCP server config — not part of the app's architecture, just noise
+# (isolated 3-node community, nothing else in the repo references it).
+.mcp.json

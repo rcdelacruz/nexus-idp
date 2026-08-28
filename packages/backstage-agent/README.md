@@ -8,12 +8,12 @@ Local Provisioner Agent for Backstage - Provisions local development resources u
 
 ## Overview
 
-The Backstage Agent is a CLI tool that runs on a developer's machine to provision local development resources (Kafka, PostgreSQL, Redis, etc.) as requested from the Backstage portal. It connects to the Backstage backend via Server-Sent Events (SSE) to receive provisioning tasks in real-time.
+The Backstage Agent is a CLI tool that runs on a developer's machine to provision local development resources (Kafka, PostgreSQL, Redis, etc.) as requested from the Backstage portal. It connects to the Backstage backend via HTTP long-polling to receive provisioning tasks in real-time.
 
 ## Features
 
 - **Device-code authentication** (RFC 8628) — reuses Backstage Google OAuth, no manual token copy/paste
-- **Real-time task reception** via SSE with automatic reconnection (exponential backoff)
+- **Real-time task reception** via HTTP long-polling (a parked poll wakes instantly when work is queued; no SSE, no fixed-interval heartbeat — see Architecture below)
 - **Full resource lifecycle** — provision, stop, start, restart, and tear down (Kafka, PostgreSQL, Redis, MongoDB)
 - **Offline & slow-internet resilience:**
   - Image pulls with progress + a hard timeout (never hangs); cached images skip the pull → fully offline provisioning
@@ -129,7 +129,7 @@ docker compose logs        # logs (also shown in the portal task detail view)
 | Command | What it does | Needs internet |
 |---------|--------------|:---:|
 | `login --url <url>` | Authenticate via device-code flow (opens browser, enter the code, sign in with Google) | yes |
-| `start` | Start the agent daemon; connects via SSE and runs tasks | yes |
+| `start` | Start the agent daemon; long-polls for tasks | yes |
 | `stop` | Stop the running agent daemon | no |
 | `status` | Show agent + connection status | yes |
 | `logout` | Clear credentials and stop the agent | no |
@@ -154,7 +154,7 @@ valid for 7 days; re-run `login` when one expires.
 backstage-agent start
 ```
 
-Loads credentials, checks Docker, connects via SSE, and waits for tasks. On start it also checks
+Loads credentials, checks Docker, and starts long-polling for tasks. On start it also checks
 for a newer agent version and prints a one-line notice if one is available.
 
 ### Stop
@@ -186,7 +186,7 @@ backstage-agent prewarm kafka                 # then you can provision kafka off
 ```
 
 If the portal is unreachable while a task completes, the status is queued and delivered on the
-next successful heartbeat — nothing is lost.
+next successful poll — nothing is lost.
 
 ### Updating
 
@@ -197,9 +197,9 @@ backstage-agent update --check    # check only, don't install
 
 ## Task Execution Flow
 
-1. **Task Received**: Agent receives task via SSE
+1. **Task Received**: Agent picks up the task from its long-poll response
    ```
-   2024-12-26 10:06:00 - info: Received task: task-123 (provision-kafka)
+   2024-12-26 10:06:00 - info: Picked up task task-123 via poll
    2024-12-26 10:06:00 - info: Processing task task-123
    ```
 
@@ -223,48 +223,36 @@ backstage-agent update --check    # check only, don't install
 
 ## Supported Resources
 
-### Kafka
+The agent's executor and bundled compose templates (`templates/kafka`, `templates/postgres`,
+`templates/redis`, `templates/mongodb`) support plain Kafka, PostgreSQL, Redis, and MongoDB —
+but **none of these four are currently reachable from the portal.** The dialog that once exposed
+them (`ProvisionDialog`) was reverted to unused/dead code, and there is no active scaffolder
+template for any of them today. They exist as agent/backend capability, not a live user-facing
+feature — don't advertise them as available until a template or UI path is actually wired up.
 
-Provisions Kafka + Zookeeper with Confluent Platform.
+### Kafka (training)
 
-**Default Configuration**:
-- Kafka version: 7.5.0
-- Port: 9092
-- Zookeeper port: 2181
+The only Kafka path currently reachable from the portal is `kafka-training` (a distinct task
+type from plain `kafka` above), provisioned via the `kafka-training-local` scaffolder template.
+Full Kafka + Zookeeper + optional Schema Registry/Kafka Connect/Postgres/monitoring stack — see
+that template for its actual parameters (kafka version, ports, etc.).
 
-**Template**: `templates/kafka/docker-compose.yml`
+### Capstone training apps (`devops-capstone-training`, `devsecops-capstone-training`)
 
-**Example Task Config**:
-```json
-{
-  "resourceName": "my-kafka",
-  "kafkaVersion": "7.5.0",
-  "port": 9092
-}
-```
-
-### PostgreSQL
-
-Provisions a PostgreSQL database. Default port `5432`.
-
-### Redis
-
-Provisions a Redis cache. Default port `6379`.
-
-### MongoDB
-
-Provisions a MongoDB database. Default port `27017`.
-
-All four can be provisioned from the portal's **Provision resource** dialog or via a scaffolder
-template. After provisioning, connection details (host, ports, connection string) are shown in
-the portal's task detail view and reported back automatically.
+Unlike the four resources above, these build a custom 3-tier app (React frontend, Node/Express
+backend, Postgres) **from source** rather than pulling a public image. Scaffolder-only (not
+reachable from the Provision resource dialog) — the template sends the app's source tree
+alongside the rendered `docker-compose.yml` as a base64-encoded file map
+(`task.config.sourceFiles`), which the agent writes into the task directory before running
+`docker compose up`. Requires 0.1.21+ — earlier versions only ever received the compose file
+text and fail with `unable to prepare context: path ".../app/backend" not found`.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
     subgraph Cloud["Backstage Portal (cloud)"]
-        Plugin["Local Provisioner Backend<br/>task queue - agent auth - SSE"]
+        Plugin["Local Provisioner Backend<br/>task queue - agent auth - long-poll"]
         Catalog["Catalog<br/>(provisioned resources appear here)"]
         Plugin -->|EntityProvider| Catalog
     end
@@ -272,25 +260,24 @@ flowchart TB
     subgraph Local["Developer's Machine"]
         subgraph Agent["Backstage Agent CLI"]
             Auth["Device-code auth (RFC 8628)"]
-            SSE["SSE client - auto-reconnect"]
-            Core["Agent core - dispatch - heartbeat"]
+            Core["Agent core - long-poll loop - dispatch"]
             Exec["DockerComposeExecutor<br/>pull (timeout + cache) - up/down/stop/start"]
             Reg["Local registry + outbox<br/>(offline-usable)"]
-            SSE --> Core --> Exec
+            Core --> Exec
             Core --> Reg
         end
-        Docker["Docker Engine<br/>Kafka - Postgres - Redis - MongoDB"]
+        Docker["Docker Engine<br/>Kafka - Postgres - Redis - MongoDB - capstone apps (built from source)"]
         Exec --> Docker
     end
 
     Auth -. "1. login" .-> Plugin
-    Plugin == "2. tasks via SSE (HTTPS + signed token)" ==> SSE
+    Plugin == "2. GET /agent/poll (bounded, re-issued in a loop) — task delivery + liveness" ==> Core
     Core -. "3. status + connection details" .-> Plugin
 
     classDef cloud fill:#eef2ff,stroke:#6366f1,color:#111;
     classDef local fill:#ecfdf5,stroke:#10b981,color:#111;
     class Cloud,Plugin,Catalog cloud;
-    class Local,Agent,Auth,SSE,Core,Exec,Reg,Docker local;
+    class Local,Agent,Auth,Core,Exec,Reg,Docker local;
 ```
 
 **Offline note:** once a resource is running, the *Local* half operates with no connection to the
@@ -305,8 +292,7 @@ packages/backstage-agent/
 │   └── backstage-agent.js        # CLI entry point (executable)
 ├── src/
 │   ├── agent/
-│   │   ├── Agent.ts              # Main agent coordinator
-│   │   └── SSEClient.ts          # SSE client with reconnection
+│   │   └── Agent.ts              # Main agent coordinator + long-poll loop
 │   ├── auth/
 │   │   ├── GoogleAuthClient.ts   # OAuth flow handler
 │   │   └── TokenManager.ts       # Token storage
@@ -390,19 +376,12 @@ The agent supports these environment variables:
 
 ### Connection Issues
 
-**`SSE connection error: <none>` in the logs — is that a problem?**
+**Occasional `Poll failed: 502` / `503` in the logs**
 
-**No.** Some proxies (e.g. a Cloudflare tunnel) buffer or drop long-lived SSE streams, so you may
-see the agent reconnect every couple of minutes. Task delivery does **not** depend on SSE — it is
-also carried on the agent's regular heartbeat (every 30s), a plain request/response that works
-through any proxy. If tasks run, these warnings are harmless.
-
----
-
-**Occasional `Heartbeat failed: 502` / `503`**
-
-Transient — usually the backend restarting (a deploy). The agent recovers on the next heartbeat.
-Your running resources are unaffected; they run locally on Docker.
+Transient — usually the backend restarting (a deploy). The agent backs off briefly and re-issues
+the poll; task delivery, the shutdown signal, and liveness are all carried on this same
+long-poll loop (no separate SSE stream, no fixed-interval heartbeat, as of 0.1.20). Your running
+resources are unaffected; they run locally on Docker regardless of portal connectivity.
 
 ---
 
@@ -413,8 +392,8 @@ Your running resources are unaffected; they run locally on Docker.
 The agent isn't picking it up. Check, in order:
 
 1. **Is the agent running and current?** `backstage-agent status` and `backstage-agent --version`
-   (must be the latest — `backstage-agent update`). Versions before 0.1.10 rely on SSE only and
-   can miss tasks behind a proxy.
+   (must be the latest — `backstage-agent update`). Versions before 0.1.20 used SSE + a heartbeat
+   fallback, which could miss tasks behind a proxy that buffers/kills long-lived connections.
 2. **Start it:** `backstage-agent start`. On start it polls immediately, so a queued task begins
    within a few seconds.
 3. **Re-send from the portal:** the task's ⋮ menu → **Re-send to agent**.
@@ -518,5 +497,5 @@ For issues or questions:
 
 ---
 
-**Version**: 0.1.15
-**Last Updated**: 2026-07-24
+**Version**: 0.1.21
+**Last Updated**: 2026-07-28

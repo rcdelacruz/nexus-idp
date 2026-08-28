@@ -1,4 +1,4 @@
-app = "backstage-stratpoint"
+app = "backstage-idp"
 primary_region = "sin"  # Singapore (closest to PH)
 
 [build]

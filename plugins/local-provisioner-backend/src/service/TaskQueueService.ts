@@ -65,6 +65,20 @@ export class TaskQueueService {
   }
 
   /**
+   * Get tasks across ALL users (admin activity view). Caller must have already
+   * enforced `taskReadAllPermission` — this method itself does no scoping beyond
+   * the optional `userId` filter.
+   */
+  async getAllTasks(options?: {
+    userId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ProvisioningTask[]> {
+    this.logger.debug('Fetching tasks (admin, all users)', options);
+    return this.taskStore.listAllTasks(options);
+  }
+
+  /**
    * Get pending tasks for a specific agent
    */
   async getPendingTasksForAgent(agentId: string): Promise<ProvisioningTask[]> {

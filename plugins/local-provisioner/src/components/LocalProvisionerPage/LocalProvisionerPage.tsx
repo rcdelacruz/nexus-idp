@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import { localProvisionerApiRef } from '../../api/LocalProvisionerClient';
 import { ProvisioningTask, Resource } from '../../api/types';
+import { getConnectivity } from '../../api/connectivity';
 import { useProvisioningTasks } from '../../hooks/useProvisioningTasks';
 import { useAgents } from '../../hooks/useAgents';
 import { useResources } from '../../hooks/useResources';
@@ -100,14 +101,7 @@ export const LocalProvisionerPage = () => {
   // Provisioning requires a currently-online agent (heartbeat within 90s). Gate the entry point
   // so users can't start the flow offline only to have the scaffolder run fail at the end.
   const hasOnlineAgent = useMemo(
-    () =>
-      agents.some(a => {
-        const ageSec =
-          a.lastSeenAgeSeconds != null
-            ? a.lastSeenAgeSeconds
-            : (Date.now() - new Date(a.lastSeenAt).getTime()) / 1000;
-        return a.isConnected || ageSec <= 90;
-      }),
+    () => agents.some(a => getConnectivity(a) === 'online'),
     [agents],
   );
 

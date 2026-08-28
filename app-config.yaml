@@ -7,11 +7,11 @@ app:
       key: './key.pem'
 
 organization:
-  name: Stratpoint Technologies
-  domain: stratpoint.com
-  githubOwner: stratpoint-engineering
-  githubRepo: backstage-main
-  usersFilePath: stratpoint/org/users.yaml
+  name: 'Your Organization' # displayed in the sidebar/header — replace with your org's name
+  domain: <yourdomain.com> # replace with your org's email domain — used for Google OAuth restriction + GitHub email enforcement
+  githubOwner: <your-github-org> # replace with your GitHub org — used for catalog autodiscovery
+  githubRepo: <your-portal-repo> # replace with the repo name this Backstage instance lives in
+  usersFilePath: example-org/org/users.yaml
 
 backend:
   logging:
@@ -29,7 +29,7 @@ backend:
   reading:
     allow:
       - host: github.com
-      - host: gitlab.coderstudio.co
+      # - host: gitlab.your-org.com # add your self-hosted GitLab host here if you use one
       - host: gitlab.com
       - host: ''
   listen:
@@ -48,7 +48,7 @@ backend:
     # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
     # Default Helmet Content-Security-Policy values can be removed by setting the key to false
   cors:
-    origin: [http://localhost:3000, https://portal.stratpoint.io]
+    origin: [http://localhost:3000, https://<your-domain>]
     methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
     credentials: true
   # This is for local development only, it is not recommended to use this in production
@@ -77,9 +77,10 @@ integrations:
     #   apiBaseUrl: https://ghe.example.net/api/v3
     #   token: ${GHE_TOKEN}
   gitlab:
-    - host: gitlab.coderstudio.co
-      token: ${GITLAB_TOKEN}
-      apiBaseUrl: https://gitlab.coderstudio.co/api/v4
+    ### Example for how to add a self-hosted GitLab instance:
+    # - host: gitlab.your-org.com
+    #   token: ${GITLAB_TOKEN}
+    #   apiBaseUrl: https://gitlab.your-org.com/api/v4
     - host: gitlab.com
       token: ${GITLAB_COM_TOKEN}
       apiBaseUrl: https://gitlab.com/api/v4
@@ -100,7 +101,7 @@ techdocs:
   reading:
     allow:
       - host: github.com
-      - host: gitlab.coderstudio.co
+      # - host: gitlab.your-org.com # add your self-hosted GitLab host here if you use one
 
 auth:
   environment: development
@@ -118,7 +119,7 @@ auth:
         clientId: ${AUTH_GOOGLE_CLIENT_ID}
         clientSecret: ${AUTH_GOOGLE_CLIENT_SECRET}
         # Sign-in resolver is handled by the custom google-auto-provision module
-        # which auto-provisions @stratpoint.com users into general-engineers on first login
+        # which auto-provisions users in your configured domain into general-engineers on first login
 
 scaffolder:
   github:
@@ -132,7 +133,7 @@ scaffolder:
     githubUrl: ${ENGINEERING_STANDARDS_REPO_URL}
   # Base domain for scaffolded app ingress URLs.
   # Set in .env as SCAFFOLDER_INGRESS_DOMAIN
-  # Examples: 192.168.2.210.nip.io, apps.coderstudio.co, apps.example.com
+  # Examples: 192.168.1.10.nip.io, apps.your-domain.com, apps.example.com
   ingressDomain: ${SCAFFOLDER_INGRESS_DOMAIN}
 
   # ── Infra Targets ────────────────────────────────────────────────────────
@@ -143,8 +144,8 @@ scaffolder:
   # Cloud-provisioned k8s clusters (EKS) are auto-discovered from the catalog.
   targets:
     aws:
-      - name: stratpoint-nonprod
-        displayName: 'Stratpoint (Non-prod)'
+      - name: nonprod
+        displayName: 'Non-prod'
         accountId: '${FINOPS_AWS_ACCOUNT_NONPROD}'
         region: us-west-2
         ecrRegistry: '${FINOPS_AWS_ACCOUNT_NONPROD}.dkr.ecr.us-west-2.amazonaws.com'
@@ -152,7 +153,7 @@ scaffolder:
         vpcId: '${AWS_VPC_ID}'
         vpcCidr: '${AWS_VPC_CIDR}'
         privateSubnetIds: '${AWS_PRIVATE_SUBNET_IDS}'
-        # IAM role for GitHub Actions OIDC auth (strat-main-team/* repos)
+        # IAM role for GitHub Actions OIDC auth (your-org/* repos)
         githubActionsRoleArn: '${AWS_GITHUB_ACTIONS_INFRA_ROLE_ARN}'
         targets:
           # ECS clusters are auto-discovered from the Backstage catalog.
@@ -193,28 +194,21 @@ catalog:
     - allow: [Component, System, API, Resource, Location, Group, User]
   # Orphan strategy: delete entities whose source repo no longer has catalog-info.yaml
   orphanStrategy: delete
-  providers:
-    github:
-      stratpoint:
-        organization: stratpoint-engineering
-        catalogPath: /catalog-info.yaml
-        filters:
-          branch: main
-        schedule:
-          frequency: { minutes: 30 }
-          timeout: { minutes: 3 }
-      strat-main-team:
-        organization: strat-main-team
-        catalogPath: /catalog-info.yaml
-        filters:
-          branch: main
-        schedule:
-          frequency: { minutes: 30 }
-          timeout: { minutes: 3 }
+  # providers:
+  #   github:
+  #     # Autodiscover catalog-info.yaml across every repo in your GitHub org(s):
+  #     your-org:
+  #       organization: your-github-org
+  #       catalogPath: /catalog-info.yaml
+  #       filters:
+  #         branch: main
+  #       schedule:
+  #         frequency: { minutes: 30 }
+  #         timeout: { minutes: 3 }
   locations:
-    # Stratpoint Organization - Root catalog location
+    # Example organization - Root catalog location (replace with your own org's catalog)
     - type: file
-      target: ../../stratpoint/catalog-info.yaml
+      target: ../../example-org/catalog-info.yaml
       rules:
         - allow: [Location, Component, System, API, Resource, Group, User]
 
@@ -229,12 +223,11 @@ catalog:
       rules:
         - allow: [Template]
 
-    # Stratpoint Templates - maintained in separate repository (private)
+    # Your organization's templates - maintained in a separate repository (private)
     # See app-config.local.yaml for development template references
-    # Production templates loaded from: https://github.com/stratpoint-engineering/engineering-standards.git
-    # Uncomment for production:
+    # Uncomment for production, pointing at your own templates repo:
     # - type: url
-    #   target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/projects/catalog-info.yaml
+    #   target: https://github.com/your-org/engineering-standards/blob/main/templates/projects/catalog-info.yaml
     #   rules:
     #     - allow: [Template, Location, Component, System, Domain, Group]
 
@@ -245,8 +238,6 @@ catalog:
       #   - allow: [Component, System, API, Resource, Location, Group, User]
       # owner: group:default/backstage-admins
 
-    # - type: url
-    #   target: https://gitlab.coderstudio.co/stratpoint/engineering-standards/-/blob/main/catalog-info.yml
     # - type: url
     #   target: https://raw.githubusercontent.com/devxp-tech/backstage-catalog/main/devxp/all.yaml
     #   rules:
@@ -346,33 +337,25 @@ engineeringDocs:
     - id: nexus-idp-docs
       label: Nexus IDP Docs
       description: Nexus IDP platform documentation — permissions, user management, integrations
-      repoOwner: stratpoint-engineering
-      repoName: backstage-main
+      repoOwner: rcdelacruz
+      repoName: nexus-idp
       branch: main
       contentBase: docs/content
 
-    - id: engineering-hub
-      label: Engineering Hub
-      description: Stratpoint engineering standards, guides, and golden paths
-      repoOwner: stratpoint-engineering
-      repoName: engineering-hub
-      branch: main
-      contentBase: src/content
+    # Add your own engineering standards / golden-path docs source(s) here, e.g.:
+    # - id: engineering-hub
+    #   label: Engineering Hub
+    #   description: Your org's engineering standards, guides, and golden paths
+    #   repoOwner: your-org
+    #   repoName: engineering-hub
+    #   branch: main
+    #   contentBase: src/content
 
     # Local Provisioner docs live at plugins/local-provisioner/docs/
     # Will be wired as an engineering-docs source once plugins are in separate repos.
 
-    # strat-training/kafka is a PUBLIC repo — any valid GITHUB_TOKEN can read it.
-    - id: kafka-training
-      label: Kafka Training
-      description: Kafka training materials, guides, and exercises
-      repoOwner: strat-training
-      repoName: kafka
-      branch: main
-      contentBase: docs
-
 finops:
-  awsAccessPortalUrl: 'https://stratpoint.awsapps.com/start'
+  awsAccessPortalUrl: 'https://<your-org>.awsapps.com/start'
   awsRoleToAssume: 'AccountAdmin'
   aws:
     region: us-east-1

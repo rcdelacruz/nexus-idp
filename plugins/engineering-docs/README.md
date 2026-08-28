@@ -66,7 +66,7 @@ engineeringHub:
 
 #### Step 2 — Create a catalog entity YAML
 
-Create `stratpoint/components/<id>-docs.yaml`:
+Create `example-org/components/<id>-docs.yaml`:
 
 ```yaml
 apiVersion: backstage.io/v1alpha1
@@ -85,11 +85,11 @@ metadata:
 spec:
   type: documentation
   lifecycle: production
-  owner: my-team               # must be a group that exists in stratpoint/org/groups.yaml
+  owner: my-team               # must be a group that exists in example-org/org/groups.yaml
   system: internal-developer-platform
 ```
 
-> `stratpoint/catalog-info.yaml` already includes `./components/*.yaml`, so no extra registration step is needed.
+> `example-org/catalog-info.yaml` already includes `./components/*.yaml`, so no extra registration step is needed.
 
 > **Note on entity `links`:** Backstage requires full absolute URLs in the `links` field. Relative paths like `/engineering-hub?source=x` are rejected by catalog validation. Don't add internal links here — the Docs tab is the primary access point.
 
@@ -344,7 +344,7 @@ Tabs are made interactive by directly manipulating the DOM in a `useEffect` rath
 The table of contents is built by scanning `<h2 id="...">` and `<h3 id="...">` elements in the pre-rendered HTML string. Markdown-based extraction can diverge from MdxRenderer's heading slugify output when headings contain inline code or emoji.
 
 ### `owner` must exist in groups.yaml
-The `owner:` field in entity YAMLs must reference a group that exists in `stratpoint/org/groups.yaml`. If the group doesn't exist, the catalog shows a relation error on the entity page. Use `devops-team` for documentation components unless there's a more specific team.
+The `owner:` field in entity YAMLs must reference a group that exists in `example-org/org/groups.yaml`. If the group doesn't exist, the catalog shows a relation error on the entity page. Use `devops-team` for documentation components unless there's a more specific team.
 
 ### GITHUB_TOKEN scope
 `GITHUB_TOKEN` must have read access to every configured and annotated repository — both the sources listed in `app-config.yaml` and any inline repos from Option B annotations. A fine-grained PAT with `Contents: Read` on the relevant repos is sufficient.

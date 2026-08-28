@@ -7,19 +7,60 @@
 
 import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
 import { InputError } from '@backstage/errors';
-import { AuthService, DiscoveryService } from '@backstage/backend-plugin-api';
+import { AuthService, DiscoveryService, RootConfigService } from '@backstage/backend-plugin-api';
 import fs from 'fs-extra';
 import path from 'path';
 import Mustache from 'mustache';
 
+/**
+ * Recursively reads every file under `dir` (relative to the workspace) and returns a
+ * { "<dirBasename>/<relativePath>": "<base64>" } map — e.g. sourceDir `./rendered/app` yields
+ * keys like "app/backend/Dockerfile". Sent to the agent alongside the compose file so
+ * `build: context: ./app/...` has something to actually build from — previously only the
+ * rendered docker-compose.yml text ever reached the agent, so any template referencing a
+ * fetched source directory (rather than a public image) failed with "path ... not found".
+ */
+async function collectSourceFiles(absDir: string, dirBasename: string): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  const walk = async (current: string, relPrefix: string) => {
+    for (const entry of await fs.readdir(current, { withFileTypes: true })) {
+      const abs = path.join(current, entry.name);
+      const rel = path.posix.join(relPrefix, entry.name);
+      if (entry.isDirectory()) {
+        await walk(abs, rel);
+      } else if (entry.isFile()) {
+        const content = await fs.readFile(abs);
+        result[path.posix.join(dirBasename, rel)] = content.toString('base64');
+      }
+    }
+  };
+  await walk(absDir, '');
+  return result;
+}
+
+/**
+ * Derives an email from a Backstage user entity ref (e.g. `user:default/jane.doe` ->
+ * `jane.doe@<domain>`) when the catalog User entity isn't available. Mirrors
+ * extractEmailFromEntityRef in plugins/local-provisioner-backend/src/util/identity.ts (not
+ * importable across workspace packages, so duplicated here — keep both in sync if either
+ * changes).
+ */
+function deriveEmailFromRef(ref: string | undefined, domain: string): string | undefined {
+  if (!ref) return undefined;
+  const parts = ref.split('/');
+  if (parts.length !== 2) return undefined;
+  const username = parts[1];
+  return username.includes('@') ? username : `${username}@${domain}`;
+}
 
 export interface LocalProvisionActionOptions {
   discovery: DiscoveryService;
   auth: AuthService;
+  config: RootConfigService;
 }
 
 export const createLocalProvisionAction = (options: LocalProvisionActionOptions) => {
-  const { discovery, auth } = options;
+  const { discovery, auth, config: rootConfig } = options;
 
   return createTemplateAction({
     id: 'stratpoint:local-provision',
@@ -29,6 +70,7 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
         taskType: z => z.string({ description: 'Type of provisioning task (e.g., provision-kafka)' }),
         resourceName: z => z.string({ description: 'Unique name for the resource' }),
         dockerComposeFile: z => z.string({ description: 'Path to the rendered docker-compose.yml file (relative to workspace)' }),
+        sourceDir: z => z.string({ description: 'Path (relative to workspace) to a fetched source directory the compose file builds images from, e.g. ./rendered/app — sent to the agent alongside the compose file so `build: context:` has something to build. Omit for templates that only reference public images.' }).optional(),
         config: z => z.record(z.string(), z.unknown()).optional(),
       },
       output: {
@@ -38,7 +80,7 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
       },
     },
     async handler(ctx) {
-      const { taskType, resourceName, dockerComposeFile, config = {} } = ctx.input;
+      const { taskType, resourceName, dockerComposeFile, sourceDir, config = {} } = ctx.input;
 
       ctx.logger.info(`Queuing ${taskType} task for resource: ${resourceName}`);
 
@@ -54,6 +96,20 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
 
       const dockerComposeTemplate = await fs.readFile(dockerComposePath, 'utf-8');
       ctx.logger.debug(`Read docker-compose.yml template (${dockerComposeTemplate.length} bytes)`);
+
+      // If the compose file builds images from a fetched source directory (rather than only
+      // referencing public images), bundle that source into the task payload so the agent has
+      // something to build from — it never receives anything from the workspace besides what
+      // we explicitly send here.
+      let sourceFiles: Record<string, string> | undefined;
+      if (sourceDir) {
+        const sourceAbsPath = path.join(ctx.workspacePath, sourceDir);
+        if (!await fs.pathExists(sourceAbsPath)) {
+          throw new InputError(`sourceDir not found: ${sourceDir}`);
+        }
+        sourceFiles = await collectSourceFiles(sourceAbsPath, path.basename(sourceDir));
+        ctx.logger.info(`Bundled ${Object.keys(sourceFiles).length} source file(s) from ${sourceDir}`);
+      }
 
       // Render template with Mustache using config values
       // Template uses {{ values.X }} syntax, so wrap config in values object
@@ -74,8 +130,14 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
       const dockerComposeContent = Mustache.render(dockerComposeTemplate, templateData);
       ctx.logger.debug(`Rendered docker-compose.yml (${dockerComposeContent.length} bytes)`);
 
-      // Get user information from context
-      const userEmail = ctx.user?.entity?.spec?.profile?.email as string;
+      // Get user information from context. The catalog User entity may not exist yet — new
+      // users aren't synced into the catalog until they're assigned a dept team (see
+      // UserEntityProvider's ghost-row filter), but they can already reach this action via
+      // training templates. Fall back to deriving the email from the raw entity ref, which
+      // comes straight from the initiator's identity token, not a catalog lookup.
+      const userEmail =
+        (ctx.user?.entity?.spec?.profile?.email as string | undefined) ??
+        deriveEmailFromRef(ctx.user?.ref, rootConfig.getString('organization.domain'));
 
       if (!userEmail) {
         throw new InputError('User email not found. Please ensure you are logged in with a valid user.');
@@ -177,6 +239,7 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
             config: {
               ...config,
               dockerCompose: dockerComposeContent, // Pass rendered docker-compose.yml
+              ...(sourceFiles ? { sourceFiles } : {}),
             },
             priority: 5,
           }),

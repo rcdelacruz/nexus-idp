@@ -7,7 +7,8 @@ import {
   Tooltip,
   makeStyles,
 } from '@material-ui/core';
-import { X, Copy, Check, Terminal, Plug, Info } from 'lucide-react';
+import { X, Copy, Check, Terminal, Plug, Info, Github, Gitlab, ExternalLink, LayoutGrid, BookOpen } from 'lucide-react';
+import { parseEntityRef } from '@backstage/catalog-model';
 import { ProvisioningTask } from '../../api/types';
 
 const useStyles = makeStyles(theme => ({
@@ -70,18 +71,55 @@ function CopyRow({ label, value }: { label: string; value: string }) {
       setTimeout(() => setCopied(false), 1500);
     });
   };
+  // Only genuine http(s) URLs are browsable — a raw host:port or a non-HTTP connection
+  // string (postgresql://, redis://, a bare Kafka broker address) does nothing useful if
+  // opened in a browser, so the link-out affordance is added, not swapped in, and only when
+  // it would actually work.
+  const isHttpUrl = /^https?:\/\//i.test(value);
   return (
     <div className={classes.connRow}>
       <span className={classes.connValue} title={value}>
         {label ? `${label}: ` : ''}
         {value}
       </span>
+      {isHttpUrl && (
+        <Tooltip title="Open">
+          <IconButton
+            size="small"
+            aria-label="open"
+            component="a"
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLink size={14} strokeWidth={1.5} />
+          </IconButton>
+        </Tooltip>
+      )}
       <Tooltip title={copied ? 'Copied' : 'Copy'}>
         <IconButton size="small" onClick={copy} aria-label="copy">
           {copied ? <Check size={14} strokeWidth={2} color="#079669" /> : <Copy size={14} strokeWidth={1.5} />}
         </IconButton>
       </Tooltip>
     </div>
+  );
+}
+
+function LinkRow({ value }: { value: string }) {
+  const classes = useStyles();
+  return (
+    <a
+      href={value}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={classes.connRow}
+      style={{ textDecoration: 'none', color: 'inherit' }}
+    >
+      <span className={classes.connValue} title={value}>
+        {value}
+      </span>
+      <ExternalLink size={14} strokeWidth={1.5} />
+    </a>
   );
 }
 
@@ -96,6 +134,27 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
 
   const conn = task.connectionDetails;
   const phase = (task.metadata as any)?.phase as string | undefined;
+  // Set by the scaffolder template that provisioned this resource (see e.g.
+  // kafka-training-local's queue-task step, which forwards its publish:github step's
+  // remoteUrl) — not every resource has one, only types provisioned via a template that
+  // creates a companion GitHub repo. devops/devsecops-capstone-training forward whichever
+  // of githubRepoUrl/gitlabRepoUrl actually ran (gated by the trainee's ciTool choice).
+  const githubRepoUrl = (task.config as any)?.githubRepoUrl as string | undefined;
+  const gitlabRepoUrl = (task.config as any)?.gitlabRepoUrl as string | undefined;
+
+  const catalogHref = task.catalogEntityRef ? (() => {
+    try {
+      const { kind, namespace, name } = parseEntityRef(task.catalogEntityRef!);
+      return `/catalog/${namespace ?? 'default'}/${kind.toLowerCase()}/${name}`;
+    } catch {
+      return undefined;
+    }
+  })() : undefined;
+
+  // Set from `localProvisioner.resourceDocsUrls` config (resource type -> engineering-docs
+  // source id) — a direct link to related documentation (e.g. training materials), when
+  // configured. Already a full relative URL (built server-side), no parsing needed here.
+  const docsHref = task.docsUrl;
 
   return (
     <Drawer anchor="right" open={Boolean(task)} onClose={onClose} classes={{ paper: classes.drawer }}>
@@ -141,9 +200,50 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
             {conn.connectionString && <CopyRow label="" value={conn.connectionString} />}
             {conn.ui && <CopyRow label="UI" value={conn.ui} />}
             {conn.ports &&
-              Object.entries(conn.ports).map(([svc, port]) => (
-                <CopyRow key={svc} label={svc} value={`${conn.host ?? 'localhost'}:${port}`} />
-              ))}
+              // Skip whichever port conn.ui already covers (e.g. capstone's frontendPort) —
+              // otherwise it's shown twice, once as the "UI" link and once again here as a
+              // plain, non-clickable duplicate of the exact same port.
+              Object.entries(conn.ports)
+                .filter(([, port]) => !conn.ui || !conn.ui.endsWith(`:${port}`))
+                .map(([svc, port]) => (
+                  <CopyRow key={svc} label={svc} value={`${conn.host ?? 'localhost'}:${port}`} />
+                ))}
+          </>
+        )}
+
+        {githubRepoUrl && (
+          <>
+            <div className={classes.sectionLabel}>
+              <Github size={12} strokeWidth={2} /> GitHub repo
+            </div>
+            <LinkRow value={githubRepoUrl} />
+          </>
+        )}
+
+        {gitlabRepoUrl && (
+          <>
+            <div className={classes.sectionLabel}>
+              <Gitlab size={12} strokeWidth={2} /> GitLab repo
+            </div>
+            <LinkRow value={gitlabRepoUrl} />
+          </>
+        )}
+
+        {catalogHref && (
+          <>
+            <div className={classes.sectionLabel}>
+              <LayoutGrid size={12} strokeWidth={2} /> Catalog
+            </div>
+            <LinkRow value={catalogHref} />
+          </>
+        )}
+
+        {docsHref && (
+          <>
+            <div className={classes.sectionLabel}>
+              <BookOpen size={12} strokeWidth={2} /> Training materials
+            </div>
+            <LinkRow value={docsHref} />
           </>
         )}
 

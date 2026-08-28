@@ -27,7 +27,7 @@ import {
 } from '@backstage/core-components';
 import { createApp } from '@backstage/app-defaults';
 import { UnifiedThemeProvider } from '@backstage/theme';
-import { stratpointDarkTheme, stratpointLightTheme } from './theme';
+import { nexusDarkTheme, nexusLightTheme } from './theme';
 import { Moon, Sun } from 'lucide-react';
 import { AppRouter, FlatRoutes } from '@backstage/core-app-api';
 import { CustomCatalogGraphPage } from './components/catalogGraph/CustomCatalogGraphPage';
@@ -44,6 +44,7 @@ import { DeploymentTargetPicker } from './components/scaffolder/DeploymentTarget
 import { DatabasePicker } from './components/scaffolder/DatabasePicker';
 import { ValidatedTextField } from './components/scaffolder/ValidatedTextField';
 import { GitHubUsernameField } from './components/scaffolder/GitHubUsernameField';
+import { GitLabUsernameField, validateGitLabUsername } from './components/scaffolder/GitLabUsernameField';
 import { SuggestedResourceNameField } from './components/scaffolder/SuggestedResourceNameField';
 import { TeardownEntityRefField } from './components/scaffolder/TeardownEntityRefField';
 import { ConfirmAppNameField, validateConfirmAppName } from './components/scaffolder/ConfirmAppNameField';
@@ -61,6 +62,7 @@ const CustomTemplateWizardPageWithExtensions = (props: TemplateWizardPageProps) 
       { name: 'DatabasePicker', component: DatabasePicker as any },
       { name: 'ValidatedTextField', component: ValidatedTextField as any },
       { name: 'GitHubUsernameField', component: GitHubUsernameField as any },
+      { name: 'GitLabUsernameField', component: GitLabUsernameField as any, validation: validateGitLabUsername as any },
       { name: 'SuggestedResourceName', component: SuggestedResourceNameField as any },
       { name: 'TeardownEntityRefField', component: TeardownEntityRefField as any },
       { name: 'ConfirmAppNameField', component: ConfirmAppNameField as any, validation: validateConfirmAppName as any },
@@ -88,7 +90,7 @@ const app = createApp({
       variant: 'dark',
       icon: <Moon size={16} strokeWidth={1.5} />,
       Provider: ({ children }) => (
-        <UnifiedThemeProvider theme={stratpointDarkTheme} children={children} />
+        <UnifiedThemeProvider theme={nexusDarkTheme} children={children} />
       ),
     },
     {
@@ -97,7 +99,7 @@ const app = createApp({
       variant: 'light',
       icon: <Sun size={16} strokeWidth={1.5} />,
       Provider: ({ children }) => (
-        <UnifiedThemeProvider theme={stratpointLightTheme} children={children} />
+        <UnifiedThemeProvider theme={nexusLightTheme} children={children} />
       ),
     },
   ],

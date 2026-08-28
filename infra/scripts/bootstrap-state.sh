@@ -4,11 +4,11 @@
 
 set -euo pipefail
 
-PROFILE="cost-admin-nonprod"
-REGION="ap-southeast-1"
-ACCOUNT_ID="746540123485"
-BUCKET="stratpoint-tofu-state-prod"
-TABLE="stratpoint-tofu-locks"
+PROFILE="${AWS_PROFILE:-default}"
+REGION="${AWS_REGION:-ap-southeast-1}"
+ACCOUNT_ID="${AWS_ACCOUNT_ID:?set AWS_ACCOUNT_ID}"
+BUCKET="${TOFU_STATE_BUCKET:-your-org-tofu-state-prod}"
+TABLE="${TOFU_LOCK_TABLE:-your-org-tofu-locks}"
 
 echo "==> Creating S3 bucket: $BUCKET"
 aws s3api create-bucket \
@@ -47,9 +47,8 @@ aws s3api put-bucket-tagging \
   --tagging 'TagSet=[
     {Key=Project,Value=backstage-idp},
     {Key=Environment,Value=production},
-    {Key=Owner,Value=stratpoint-platform},
+    {Key=Owner,Value=platform-team},
     {Key=ManagedBy,Value=opentofu},
-    {Key=CreditProgram,Value=APFP_SANDBOX_03_02_2026},
     {Key=CostCenter,Value=platform-engineering}
   ]' \
   --profile "$PROFILE"
@@ -65,9 +64,8 @@ aws dynamodb create-table \
   --tags \
     Key=Project,Value=backstage-idp \
     Key=Environment,Value=production \
-    Key=Owner,Value=stratpoint-platform \
+    Key=Owner,Value=platform-team \
     Key=ManagedBy,Value=opentofu \
-    Key=CreditProgram,Value=APFP_SANDBOX_03_02_2026 \
     Key=CostCenter,Value=platform-engineering \
   2>/dev/null || echo "    (table already exists)"
 

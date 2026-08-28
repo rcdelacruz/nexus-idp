@@ -24,6 +24,8 @@ export enum TaskType {
   PROVISION_POSTGRES = 'provision-postgres',
   PROVISION_REDIS = 'provision-redis',
   PROVISION_MONGODB = 'provision-mongodb',
+  PROVISION_DEVOPS_CAPSTONE_TRAINING = 'provision-devops-capstone-training',
+  PROVISION_DEVSECOPS_CAPSTONE_TRAINING = 'provision-devsecops-capstone-training',
   // Lifecycle operations on an existing resource
   DEPROVISION = 'deprovision',
   STOP = 'stop',
@@ -38,6 +40,8 @@ export enum ResourceType {
   POSTGRES = 'postgres',
   REDIS = 'redis',
   MONGODB = 'mongodb',
+  DEVOPS_CAPSTONE_TRAINING = 'devops-capstone-training',
+  DEVSECOPS_CAPSTONE_TRAINING = 'devsecops-capstone-training',
 }
 
 /** Lifecycle state of a provisioned resource, derived from its latest task. */
@@ -55,6 +59,8 @@ const PROVISION_TASK_TYPES: string[] = [
   TaskType.PROVISION_POSTGRES,
   TaskType.PROVISION_REDIS,
   TaskType.PROVISION_MONGODB,
+  TaskType.PROVISION_DEVOPS_CAPSTONE_TRAINING,
+  TaskType.PROVISION_DEVSECOPS_CAPSTONE_TRAINING,
 ];
 
 const LIFECYCLE_TASK_TYPES: string[] = [
@@ -87,6 +93,10 @@ export function resourceTypeForTask(taskType: string): ResourceType | undefined 
       return ResourceType.REDIS;
     case TaskType.PROVISION_MONGODB:
       return ResourceType.MONGODB;
+    case TaskType.PROVISION_DEVOPS_CAPSTONE_TRAINING:
+      return ResourceType.DEVOPS_CAPSTONE_TRAINING;
+    case TaskType.PROVISION_DEVSECOPS_CAPSTONE_TRAINING:
+      return ResourceType.DEVSECOPS_CAPSTONE_TRAINING;
     default:
       return undefined;
   }
@@ -118,6 +128,13 @@ export interface ProvisioningTask {
   config: Record<string, any>;
   status: TaskStatus;
   catalog_entity_ref?: string;
+  /**
+   * Computed at response time from `localProvisioner.resourceDocsUrls` config (not a DB
+   * column) — a direct link (e.g. `/engineering-docs?source=...&path=index`) to related
+   * documentation (e.g. training materials) for this task's resource type, if configured.
+   * See `util/resourceDocsLinks.ts`.
+   */
+  docs_url?: string;
   error_message?: string;
   logs?: string;
   metadata?: Record<string, any>;
@@ -253,7 +270,7 @@ export interface DatabaseConfig {
  */
 export interface LocalProvisionerConfig {
   enabled: boolean;
-  sseHeartbeatInterval: number;
+  pollTimeoutSeconds: number;
   taskRetentionDays: number;
   supportedResources: string[];
   agent: {

@@ -22,10 +22,10 @@ This document covers the full setup of three integrations into the Backstage IDP
 | Detail | Value |
 |--------|-------|
 | Cluster | Talos homelab (`talos-homelab`) |
-| Control plane | `192.168.2.198` |
-| Worker | `192.168.2.199` |
+| Control plane | `<control-plane-ip>` |
+| Worker | `<worker-node-ip>` |
 | Backstage namespace | `backstage` |
-| Backstage image registry | `192.168.2.101:5000` |
+| Backstage image registry | `<your-registry>` |
 | Backstage Dockerfile | `Dockerfile.with-migrations` |
 | ArgoCD location | Embedded in Devtron — `devtroncd` namespace |
 | CNPG cluster | `postgres-cluster` in `default` namespace |
@@ -100,7 +100,7 @@ kubernetes:
       clusters:
         - name: talos-homelab
           # In-cluster URL — works because Backstage runs inside the same cluster.
-          # If running Backstage externally, use: https://192.168.2.198:6443
+          # If running Backstage externally, use: https://<control-plane-ip>:6443
           url: https://kubernetes.default.svc
           authProvider: serviceAccount
           serviceAccountToken: ${K8S_SA_TOKEN}
@@ -263,7 +263,7 @@ The `isArgocdAvailable` guard hides the ArgoCD card when this annotation is abse
 
 #### backstage-portal (2026-03-22 fix)
 
-The `argocd/app-name: backstage` annotation was initially added to `stratpoint/components/backstage-portal.yaml` but had to be removed. Backstage itself is deployed via Helm, not ArgoCD — no `Application` CRD named `backstage` exists. The annotation caused the ArgoCD card to error on every page load. After removing the annotation, rebuilding the image, and redeploying, the card was hidden correctly.
+The `argocd/app-name: backstage` annotation was initially added to `example-org/components/backstage-portal.yaml` but had to be removed. Backstage itself is deployed via Helm, not ArgoCD — no `Application` CRD named `backstage` exists. The annotation caused the ArgoCD card to error on every page load. After removing the annotation, rebuilding the image, and redeploying, the card was hidden correctly.
 
 ### Important: No ArgoCD Application CRDs yet
 
@@ -275,7 +275,7 @@ Only then should you add `argocd/app-name` to the corresponding catalog entity.
 
 ## Step 3: CNPG Resources in Catalog
 
-**Created** `stratpoint/systems/platform-databases.yaml` — auto-discovered via `stratpoint/catalog-info.yaml` → `targets: ./systems/*.yaml`.
+**Created** `example-org/systems/platform-databases.yaml` — auto-discovered via `example-org/catalog-info.yaml` → `targets: ./systems/*.yaml`.
 
 | Entity name | Kind | Type | Description |
 |-------------|------|------|-------------|
@@ -311,7 +311,7 @@ templates/three-tier-app/
 
 When a user fills out the form in Backstage Scaffolder, it:
 
-1. **Creates a GitHub repo** in `stratpoint-engineering` org (private)
+1. **Creates a GitHub repo** in `your-github-org` org (private)
 2. **Generates all skeleton files** with values substituted (Nunjucks templating)
 3. **Registers 4 catalog entities:** `System` + `Component` (website) + `Component` (service) + `Resource` (database)
 4. **Generates K8s manifests** ready for ArgoCD to sync from `k8s/` directory
@@ -345,9 +345,9 @@ spec:
 | Decision | Value |
 |----------|-------|
 | Storage class | `longhorn` |
-| DB backup bucket | `cnpg-backups` on MinIO `192.168.2.103:9000` |
+| DB backup bucket | `cnpg-backups` on MinIO `<minio-host>:9000` |
 | DB backup secret | `cnpg-minio-creds` (same as platform CNPG) |
-| Ingress | Traefik, pattern `<app>.<env>.coderstudio.co` |
+| Ingress | Traefik, pattern `<app>.<env>.<your-domain>` |
 | Database URL | CNPG auto-creates secret `<cluster>-app`, key `uri` |
 | ArgoCD sync | `automated.prune: true`, `selfHeal: true`, `CreateNamespace: true` |
 
@@ -359,16 +359,16 @@ spec:
 
 ### How to rebuild and redeploy after any config/catalog change
 
-The config files and `stratpoint/` catalog are **baked into the Docker image**. Any change to these files requires a rebuild.
+The config files and `example-org/` catalog are **baked into the Docker image**. Any change to these files requires a rebuild.
 
 ```bash
 cd /root/Projects/backstage-main
 
 # 1. Build (fast — only last 3 layers re-run, ~5 seconds total)
-docker build -f Dockerfile.with-migrations -t 192.168.2.101:5000/backstage:latest .
+docker build -f Dockerfile.with-migrations -t <your-registry>/backstage:latest .
 
 # 2. Push to local registry
-docker push 192.168.2.101:5000/backstage:latest
+docker push <your-registry>/backstage:latest
 
 # 3. Restart (rolling restart, no downtime)
 kubectl rollout restart deployment/backstage -n backstage
@@ -507,7 +507,7 @@ Devtron manages its own deployments internally. The ArgoCD API returns `items: n
 **Root cause:** The `argocd/app-name` annotation was present on the entity, so `isArgocdAvailable` returned `true` and rendered the card. But the `Application` CRD with that name did not exist, so every API call to ArgoCD failed.
 
 **Fix:**
-1. Remove `argocd/app-name` from the entity's `catalog-info.yaml` (or `stratpoint/` YAML)
+1. Remove `argocd/app-name` from the entity's `catalog-info.yaml` (or `example-org/` YAML)
 2. Rebuild + redeploy the image (config is baked in)
 3. Force a catalog refresh from the entity page
 4. The card is hidden — `isArgocdAvailable` returns `false` when annotation is absent
@@ -536,12 +536,12 @@ ARGOCD_PASS=$(kubectl get secret argocd-initial-admin-secret -n devtroncd \
   --kubeconfig ~/.kube/config-talos -o jsonpath='{.data.password}' | base64 -d)
 
 # 3. Login as admin to get a temporary session token
-ADMIN_TOKEN=$(curl -s -X POST https://argocd.coderstudio.co/api/v1/session \
+ADMIN_TOKEN=$(curl -s -X POST https://argocd.<your-domain>/api/v1/session \
   -H "Content-Type: application/json" \
   -d "{\"username\":\"admin\",\"password\":\"${ARGOCD_PASS}\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
 
 # 4. Generate non-expiring API key for the backstage account
-BACKSTAGE_TOKEN=$(curl -s -X POST https://argocd.coderstudio.co/api/v1/account/backstage/token \
+BACKSTAGE_TOKEN=$(curl -s -X POST https://argocd.<your-domain>/api/v1/account/backstage/token \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" \
   -d '{"name":"backstage-idp"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")

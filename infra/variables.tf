@@ -19,14 +19,28 @@ variable "vpc_cidr" {
 
 # ── Backstage ─────────────────────────────────────────────────────────────────
 variable "backstage_image" {
-  description = "Full ECR image URI for Backstage (e.g. 746540123485.dkr.ecr.ap-southeast-1.amazonaws.com/backstage-idp-prod:latest)"
+  description = "Full ECR image URI for Backstage (e.g. <your-aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/backstage-idp-prod:latest)"
   type        = string
 }
 
 variable "backstage_app_base_url" {
   description = "Public URL of the Backstage portal (via Cloudflare Tunnel)"
   type        = string
-  default     = "https://portal.stratpoint.io"
+}
+
+variable "auth_google_allowed_domains" {
+  description = "Email domain(s) allowed to sign in via Google OAuth"
+  type        = string
+}
+
+variable "session_domain" {
+  description = "Cookie domain for the session (e.g. .your-domain.com)"
+  type        = string
+}
+
+variable "argocd_url" {
+  description = "ArgoCD base URL used by the ArgoCD proxy/plugin"
+  type        = string
 }
 
 variable "cloudflare_tunnel_token" {
@@ -166,15 +180,12 @@ variable "aws_secret_access_key_prod" {
 variable "finops_aws_account_nonprod" {
   description = "AWS account ID for nonprod (FinOps plugin)"
   type        = string
-  default     = "746540123485"
 }
 variable "finops_aws_account_legacy" {
   description = "AWS account ID for legacy (FinOps plugin)"
   type        = string
-  default     = "309903066618"
 }
 variable "finops_aws_account_prod" {
   description = "AWS account ID for prod (FinOps plugin)"
   type        = string
-  default     = "128388385283"
 }

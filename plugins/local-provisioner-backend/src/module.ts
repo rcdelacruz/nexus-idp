@@ -2,17 +2,7 @@ import { coreServices, createBackendModule } from '@backstage/backend-plugin-api
 import { catalogProcessingExtensionPoint } from '@backstage/plugin-catalog-node';
 import { LocalProvisionerEntityProvider } from './provider/LocalProvisionerEntityProvider';
 import { taskStoreReady, setCatalogRefresher } from './sharedStore';
-
-/** Read `localProvisioner.resourceDocsLinks` (resource type -> catalog entity ref) from config. */
-function readResourceDocsLinks(config: import('@backstage/config').Config): Record<string, string> {
-  const links = config.getOptionalConfig('localProvisioner')?.getOptionalConfig('resourceDocsLinks');
-  if (!links) return {};
-  const result: Record<string, string> = {};
-  for (const key of links.keys()) {
-    result[key] = links.getString(key);
-  }
-  return result;
-}
+import { readResourceDocsLinks } from './util/resourceDocsLinks';
 
 /**
  * Catalog module that registers LocalProvisionerEntityProvider so provisioned resources appear

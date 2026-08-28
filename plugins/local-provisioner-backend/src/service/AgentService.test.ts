@@ -44,9 +44,6 @@ describe('AgentService service tokens', () => {
     service = makeService();
   });
 
-  afterEach(() => {
-    service.stopHeartbeat();
-  });
 
   it('round-trips a signed token back to the user email', () => {
     const token = sign(service, 'alice@example.com');
@@ -90,7 +87,6 @@ describe('AgentService service tokens', () => {
   it('rejects a token signed with a different secret', () => {
     const other = makeService('a-completely-different-secret');
     const foreign = sign(other, 'alice@example.com');
-    other.stopHeartbeat();
 
     expect(service.verifyServiceToken(foreign)).toBeNull();
   });
@@ -123,6 +119,157 @@ describe('AgentService service tokens', () => {
     expect(() => sign(unconfigured, 'alice@example.com')).toThrow(
       /BACKEND_SECRET/,
     );
-    unconfigured.stopHeartbeat();
+  });
+});
+
+/**
+ * Tests for the "Stop Agent" shutdown-delivery guarantee.
+ *
+ * Before 2026-07-26, disconnectAgent() only sent an SSE 'disconnect' event and returned false
+ * (as "not connected") if there was no live SSE connection — with nothing else to fall back
+ * on. SSE alone is not reliable through the Cloudflare tunnel (the same reason task delivery
+ * already falls back to the heartbeat response), so a dropped SSE stream meant the stop
+ * signal could silently never reach the agent. These tests pin the fix: a pending shutdown is
+ * always recorded regardless of SSE connection state, and is delivered exactly once via
+ * consumeShutdownPending() (the heartbeat handler's check).
+ */
+describe('AgentService shutdown delivery', () => {
+  let service: AgentService;
+
+  beforeEach(() => {
+    service = makeService();
+  });
+
+
+  it('marks a shutdown pending even when the agent has no live SSE connection', () => {
+    const result = service.disconnectAgent('agent-not-connected');
+    expect(result).toBe(true);
+    expect(service.consumeShutdownPending('agent-not-connected')).toBe(true);
+  });
+
+  it('consumeShutdownPending is one-shot — false on the second call', () => {
+    service.disconnectAgent('agent-x');
+    expect(service.consumeShutdownPending('agent-x')).toBe(true);
+    expect(service.consumeShutdownPending('agent-x')).toBe(false);
+  });
+
+  it('an agent with no pending shutdown returns false, not throwing', () => {
+    expect(service.consumeShutdownPending('never-disconnected')).toBe(false);
+  });
+});
+
+/**
+ * Tests for longPoll()/notifyAgent() — the mechanism that replaced SSE entirely on
+ * 2026-07-26. SSE required one persistent connection held open indefinitely, which
+ * Cloudflare's tunnel does not reliably keep alive (confirmed live: a wedged/dropped SSE
+ * stream could silently never deliver a task or the disconnect signal, even though the server
+ * "sent" it successfully). Long-polling holds many short-lived requests instead, each bounded
+ * by a timeout well under Cloudflare's connection ceiling, so there's no long-lived connection
+ * state to silently lose — a request either gets its answer or times out and is reissued.
+ */
+describe('AgentService long-poll delivery', () => {
+  const AGENT_ID = 'agent-1';
+  const USER_EMAIL = 'alice@example.com';
+
+  function makeServiceWithStore(overrides: {
+    pendingTasks?: any[];
+    pollTimeoutSeconds?: number;
+  } = {}) {
+    const logger = {
+      info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(), child: jest.fn(),
+    } as any;
+    const config = new ConfigReader({ backend: { auth: { keys: [{ secret: SECRET }] } } });
+    const taskStore = {
+      getAgentById: jest.fn().mockResolvedValue({ agent_id: AGENT_ID, user_id: USER_EMAIL }),
+      updateAgentLastSeen: jest.fn().mockResolvedValue(undefined),
+    } as any;
+    const taskQueueService = {
+      getPendingTasksForAgent: jest.fn().mockResolvedValue(overrides.pendingTasks ?? []),
+    } as any;
+    return new AgentService(logger, taskStore, taskQueueService, config, overrides.pollTimeoutSeconds ?? 25);
+  }
+
+  it('rejects an agent that does not belong to the requesting user', async () => {
+    const service = makeServiceWithStore();
+    await expect(service.longPoll(AGENT_ID, 'someone-else@example.com')).rejects.toThrow(
+      /does not belong to user/,
+    );
+  });
+
+  it('rejects a nonexistent agent', async () => {
+    const service = makeServiceWithStore();
+    (service as any).taskStore.getAgentById.mockResolvedValue(null);
+    await expect(service.longPoll('ghost', USER_EMAIL)).rejects.toThrow(/not found/);
+  });
+
+  it('returns immediately when a task is already pending — does not wait for a wake or timeout', async () => {
+    const task = { task_id: 't1', task_type: 'provision-kafka' };
+    const service = makeServiceWithStore({ pendingTasks: [task], pollTimeoutSeconds: 5 });
+
+    const start = Date.now();
+    const result = await service.longPoll(AGENT_ID, USER_EMAIL);
+    expect(Date.now() - start).toBeLessThan(500); // well under the 5s timeout
+    expect(result.tasks).toEqual([task]);
+    expect(result.shouldShutdown).toBe(false);
+  });
+
+  it('returns immediately when a shutdown is already pending', async () => {
+    const service = makeServiceWithStore({ pollTimeoutSeconds: 5 });
+    service.disconnectAgent(AGENT_ID);
+
+    const result = await service.longPoll(AGENT_ID, USER_EMAIL);
+    expect(result.shouldShutdown).toBe(true);
+    expect(result.tasks).toEqual([]);
+  });
+
+  it('every call updates last_seen, whether it returns immediately or waits', async () => {
+    const service = makeServiceWithStore({ pollTimeoutSeconds: 5 });
+    await service.longPoll(AGENT_ID, USER_EMAIL, AbortSignal.timeout(10));
+    expect((service as any).taskStore.updateAgentLastSeen).toHaveBeenCalledWith(AGENT_ID);
+  });
+
+  it('notifyAgent wakes a parked poll immediately instead of waiting for the timeout', async () => {
+    const service = makeServiceWithStore({ pollTimeoutSeconds: 5 }); // long timeout on purpose
+    const pending = service.longPoll(AGENT_ID, USER_EMAIL);
+
+    // Give the poll a tick to actually park itself before disconnecting.
+    await new Promise(r => setTimeout(r, 20));
+    const start = Date.now();
+    service.disconnectAgent(AGENT_ID); // marks pending + calls notifyAgent internally
+
+    const result = await pending;
+    expect(Date.now() - start).toBeLessThan(500); // woken immediately, not after 5s
+    expect(result.shouldShutdown).toBe(true);
+  });
+
+  it('resolves with empty results after the timeout when nothing arrives', async () => {
+    const service = makeServiceWithStore({ pollTimeoutSeconds: 0.1 }); // 100ms
+    const result = await service.longPoll(AGENT_ID, USER_EMAIL);
+    expect(result).toEqual({ tasks: [], shouldShutdown: false });
+  });
+
+  it('an aborted poll resolves promptly instead of waiting out the full timeout', async () => {
+    const service = makeServiceWithStore({ pollTimeoutSeconds: 5 });
+    const controller = new AbortController();
+    const pending = service.longPoll(AGENT_ID, USER_EMAIL, controller.signal);
+
+    await new Promise(r => setTimeout(r, 20));
+    const start = Date.now();
+    controller.abort();
+
+    await pending;
+    expect(Date.now() - start).toBeLessThan(500);
+  });
+
+  it('a woken waiter is removed from the registry (no leak, no double-resolve)', async () => {
+    const service = makeServiceWithStore({ pollTimeoutSeconds: 5 });
+    const pending = service.longPoll(AGENT_ID, USER_EMAIL);
+    await new Promise(r => setTimeout(r, 20));
+
+    service.disconnectAgent(AGENT_ID);
+    await pending;
+
+    // A second notify with nothing parked must be a no-op, not throw.
+    expect(() => service.notifyAgent(AGENT_ID)).not.toThrow();
   });
 });

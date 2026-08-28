@@ -10,10 +10,12 @@ export interface Config {
     enabled?: boolean;
 
     /**
-     * SSE heartbeat interval in seconds
-     * @default 30
+     * Long-poll timeout in seconds — how long the agent's poll request may be held open
+     * waiting for work before responding empty. Kept under Cloudflare's ~100s ceiling on how
+     * long it holds a connection open waiting for an origin response.
+     * @default 25
      */
-    sseHeartbeatInterval?: number;
+    pollTimeoutSeconds?: number;
 
     /**
      * Task retention period in days

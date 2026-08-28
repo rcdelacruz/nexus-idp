@@ -98,7 +98,7 @@ COPY --chown=node:node app-config*.yaml ./
 
 # Copy organization catalog (users, groups, components, systems)
 # CRITICAL: Required for catalog entities to load in production
-COPY --chown=node:node stratpoint ./stratpoint
+COPY --chown=node:node example-org ./example-org
 
 # Copy migration runner script and install its standalone npm dependencies
 COPY --chown=node:node scripts ./scripts

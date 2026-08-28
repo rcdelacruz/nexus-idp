@@ -8,7 +8,7 @@ The FinOps dashboard gives you visibility into AWS cloud spending across all Str
 
 The FinOps dashboard is restricted to **platform admins** and **team leads** (`*-lead` groups).
 
-If you need access and don't have it, ask a platform admin to add you to the appropriate lead group in `stratpoint/org/groups.yaml`.
+If you need access and don't have it, ask a platform admin to add you to the appropriate lead group in `example-org/org/groups.yaml`.
 
 ---
 
@@ -53,7 +53,7 @@ A browsable list of all AWS resources across accounts with cost attribution. Fil
 
 For direct AWS console access, use the Stratpoint AWS Access Portal:
 
-[stratpoint.awsapps.com/start](https://stratpoint.awsapps.com/start)
+[your-org.awsapps.com/start](https://your-org.awsapps.com/start)
 
 Log in with your Stratpoint Google account. Available roles depend on your team assignment.
 

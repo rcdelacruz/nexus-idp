@@ -14,7 +14,7 @@ Documentation lives in the `pages/` directory. Edit `.mdx` files to update conte
 
 ## Viewing in Nexus IDP
 
-This documentation is available in the [Stratpoint IDP](https://portal.stratpoint.io) under the **Docs** sidebar.
+This documentation is available in your Nexus IDP instance under the **Docs** sidebar.
 
 ## Local Preview
 

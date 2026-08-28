@@ -31,7 +31,7 @@ Add the following to your `app-config.yaml`:
 ```yaml
 localProvisioner:
   enabled: true
-  sseHeartbeatInterval: 30  # seconds
+  pollTimeoutSeconds: 25  # seconds — long-poll timeout, kept under Cloudflare's ~100s connection ceiling
   taskRetentionDays: 30
   supportedResources:
     - kafka

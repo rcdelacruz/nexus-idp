@@ -1,5 +1,5 @@
 /**
- * Custom Google auth module: auto-provisions @stratpoint.com users on first sign-in.
+ * Custom Google auth module: auto-provisions users in the configured org domain on first sign-in.
  *
  * Behavior:
  * - If user exists in catalog → standard sign-in with full catalog entity (correct group memberships)
@@ -42,7 +42,7 @@ export const googleAutoProvisionModule = createBackendModule({
               }
 
               // Derive entity name from email local part
-              // e.g., john.doe@stratpoint.com → john.doe
+              // e.g., john.doe@your-domain.com → john.doe
               const localPart = email.split('@')[0];
               const entityRef = `user:default/${localPart}`;
 

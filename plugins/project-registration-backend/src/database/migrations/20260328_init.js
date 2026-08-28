@@ -35,19 +35,19 @@ exports.up = async function up(knex) {
   await knex('project_registration_projects').insert([
     {
       name: 'Internal Tools',
-      client_name: 'Stratpoint',
+      client_name: 'Internal',
       type: 'system',
       aws_tag_project: 'internal-tools',
-      aws_tag_client: 'stratpoint',
+      aws_tag_client: 'internal',
       aws_tag_team: 'internal',
       created_by: 'system',
     },
     {
       name: 'R&D / Experiments',
-      client_name: 'Stratpoint',
+      client_name: 'Internal',
       type: 'system',
       aws_tag_project: 'rnd-experiments',
-      aws_tag_client: 'stratpoint',
+      aws_tag_client: 'internal',
       aws_tag_team: 'rnd',
       created_by: 'system',
     },

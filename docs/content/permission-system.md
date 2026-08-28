@@ -9,7 +9,7 @@ Nexus IDP uses a custom RBAC permission policy implemented in `packages/backend/
 | **Platform Admin** | `backstage-admins` | Full access to all features including FinOps, catalog delete, user management |
 | **Team Lead** | any group ending in `-lead` (e.g. `web-team-lead`) | Create and edit catalog entities; use all scaffolder templates |
 | **Assigned Engineer** | `web-team`, `mobile-team`, `data-team`, `cloud-team`, `ai-team`, `qa-team` | Read catalog, use scaffolder, view K8s/ArgoCD, run local provisioner |
-| **New User** | `general-engineers` only (not yet assigned to a dept team) | Engineering Docs, Tech Radar, read-only catalog browse — redirected to onboarding |
+| **New User** | `general-engineers` only (not yet assigned to a dept team) | Engineering Docs, Tech Radar, Local Provisioner, read-only catalog browse — redirected to onboarding |
 
 ## Permission Matrix
 
@@ -23,7 +23,7 @@ Nexus IDP uses a custom RBAC permission policy implemented in `packages/backend/
 | Scaffolder — manage templates | ✓ | ✓ | ✗ | ✗ |
 | TechDocs / Engineering Docs | ✓ | ✓ | ✓ | ✓ |
 | Kubernetes / ArgoCD | ✓ | ✓ | ✓ | ✗ |
-| Local Provisioner | ✓ | ✓ | ✓ | ✗ |
+| Local Provisioner | ✓ | ✓ | ✓ | ✓ |
 | FinOps Dashboard | ✓ | ✗ | ✗ | ✗ |
 | Search | ✓ | ✓ | ✓ | ✓ |
 
@@ -31,7 +31,7 @@ Nexus IDP uses a custom RBAC permission policy implemented in `packages/backend/
 
 Groups are resolved from the Backstage token's `ownershipEntityRefs` claim. There are two sources:
 
-1. **Catalog entity** (`stratpoint/org/users.yaml`) — only break-glass admin users are defined here. Their group memberships come from `memberOf` in the YAML.
+1. **Catalog entity** (`example-org/org/users.yaml`) — only break-glass admin users are defined here. Their group memberships come from `memberOf` in the YAML.
 
 2. **UserEntityProvider** (user-management plugin) — all other users are managed in the `backstage_plugin_user-management` PostgreSQL database. The `UserEntityProvider` reads this DB every 30 seconds and injects User entities into the catalog with their assigned teams.
 
@@ -41,7 +41,7 @@ When a new user signs in (Google or GitHub), they are auto-provisioned with `gen
 
 Add the user to `backstage-admins` via the User Management UI → Promote to Admin, or directly set `isAdmin: true` in the database.
 
-Only `ronaldo.delacruz` is defined in `stratpoint/org/users.yaml` as a break-glass admin — this user always has admin access even if the database is unavailable.
+Only `admin.user` is defined in `example-org/org/users.yaml` as a break-glass admin — this user always has admin access even if the database is unavailable.
 
 ## Implementation
 

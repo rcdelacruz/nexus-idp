@@ -1,10 +1,9 @@
 /**
- * Service for agent management, SSE connections, and authentication
+ * Service for agent management, task delivery (long-poll), and authentication
  */
 
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { Config } from '@backstage/config';
-import { Response } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { TaskStore } from '../database/TaskStore';
 import { TaskQueueService } from './TaskQueueService';
@@ -12,19 +11,9 @@ import {
   AgentRegistration,
   AgentAuthResponse,
   AgentRegisterRequest,
-  SSETaskEvent,
+  ProvisioningTask,
 } from '../types';
 import { extractEmailFromEntityRef as sharedExtractEmail } from '../util/identity';
-
-/**
- * SSE connection tracking
- */
-interface SSEConnection {
-  agentId: string;
-  userId: string;
-  response: Response;
-  connectedAt: Date;
-}
 
 /**
  * Device code authorization (OAuth 2.0 Device Authorization Grant - RFC 8628)
@@ -48,12 +37,31 @@ interface DeviceCodeAuthorization {
 /**
  * AgentService manages agent lifecycle, authentication, and SSE connections
  */
+/** A parked long-poll request waiting for work to arrive for one agent. */
+interface PollWaiter {
+  wake: () => void;
+}
+
 export class AgentService {
-  private sseConnections: Map<string, SSEConnection> = new Map();
   private deviceCodes: Map<string, DeviceCodeAuthorization> = new Map(); // device_code -> authorization
   private userCodes: Map<string, string> = new Map(); // user_code -> device_code
-  private heartbeatInterval: NodeJS.Timeout | null = null;
-  private readonly HEARTBEAT_INTERVAL_MS: number;
+  // agentIds with a pending "Stop Agent" request, delivered on the agent's next long-poll
+  // response. Consumed one-shot by consumeShutdownPending().
+  private pendingShutdowns: Set<string> = new Set();
+  // agentIds that have actually received a shouldShutdown:true response and haven't polled
+  // since. Overrides the last_seen-freshness check so "offline" is instant instead of waiting
+  // up to 90s for last_seen to go stale. See isExplicitlyDisconnected().
+  private explicitlyDisconnected: Set<string> = new Set();
+  // Parked long-poll requests per agentId, woken by notifyAgent() when a task is queued or a
+  // shutdown is requested — this is what makes long-polling event-driven rather than a fixed
+  // interval: an agent waiting in a poll gets its response the instant work exists, not on its
+  // next tick. Replaces SSE entirely (2026-07-26): SSE required one persistent connection held
+  // open indefinitely, which Cloudflare's tunnel does not reliably keep alive; long-polling
+  // uses many short-lived requests (bounded by POLL_TIMEOUT_MS, well under Cloudflare's ~100s
+  // ceiling on how long it holds a connection open waiting for an origin response), so there is
+  // no long-lived connection state to silently lose.
+  private pollWaiters: Map<string, PollWaiter[]> = new Map();
+  private readonly POLL_TIMEOUT_MS: number;
   private readonly DEVICE_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
   // Single source of truth for the service-token lifetime — the signed `exp` and the `expiresAt`
   // reported to the agent are both derived from this, so they can't drift apart.
@@ -64,10 +72,9 @@ export class AgentService {
     private readonly taskStore: TaskStore,
     private readonly taskQueueService: TaskQueueService,
     private readonly config: Config,
-    heartbeatIntervalSeconds: number = 30,
+    pollTimeoutSeconds: number = 25,
   ) {
-    this.HEARTBEAT_INTERVAL_MS = heartbeatIntervalSeconds * 1000;
-    this.startHeartbeat();
+    this.POLL_TIMEOUT_MS = pollTimeoutSeconds * 1000;
   }
 
   /**
@@ -280,112 +287,80 @@ export class AgentService {
   }
 
   /**
-   * Establish SSE connection for agent
+   * Long-poll for work (tasks + shutdown signal). Holds the request open until either
+   * something becomes available (woken by notifyAgent) or POLL_TIMEOUT_MS elapses. Every call
+   * — whether it returns immediately, after a wake, or after timing out — proves the agent is
+   * alive, so this single call replaces the old separate SSE-connect + heartbeat pair; there is
+   * no other liveness signal.
    */
-  async connectAgent(agentId: string, userId: string, res: Response): Promise<void> {
-    this.logger.info(`Agent ${agentId} connecting via SSE`, { agentId, userId });
-
-    // Verify agent exists and belongs to user
+  async longPoll(
+    agentId: string,
+    userId: string,
+    signal?: AbortSignal,
+  ): Promise<{ tasks: ProvisioningTask[]; shouldShutdown: boolean }> {
     const agent = await this.taskStore.getAgentById(agentId);
     if (!agent) {
       throw new Error(`Agent ${agentId} not found`);
     }
-
     if (agent.user_id !== userId) {
       throw new Error(`Agent ${agentId} does not belong to user ${userId}`);
     }
 
-    // Set up SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-
-    // Store connection
-    this.sseConnections.set(agentId, {
-      agentId,
-      userId,
-      response: res,
-      connectedAt: new Date(),
-    });
-
-    // Update last seen
     await this.taskStore.updateAgentLastSeen(agentId);
+    // Any live poll proves the agent is up right now — clears a stale flag from a previous
+    // shutdown if this is a freshly-restarted agent reusing the same ID.
+    this.explicitlyDisconnected.delete(agentId);
 
-    // Send initial connection event
-    this.sendSSE(res, 'connected', { message: 'SSE connection established' });
+    const collect = async () => {
+      const shouldShutdown = this.consumeShutdownPending(agentId);
+      if (shouldShutdown) {
+        // Delivered — the agent will self-terminate within milliseconds of receiving this.
+        // Mark offline now rather than waiting for last_seen to go stale.
+        this.explicitlyDisconnected.add(agentId);
+      }
+      return {
+        tasks: await this.taskQueueService.getPendingTasksForAgent(agentId),
+        shouldShutdown,
+      };
+    };
 
-    this.logger.info(`Agent ${agentId} connected via SSE`, {
-      agentId,
-      userId,
-      totalConnections: this.sseConnections.size,
+    const immediate = await collect();
+    if (immediate.tasks.length > 0 || immediate.shouldShutdown) {
+      return immediate;
+    }
+
+    await new Promise<void>(resolve => {
+      let done = false;
+      const box: { timer?: ReturnType<typeof setTimeout> } = {};
+      const wake = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(box.timer);
+        signal?.removeEventListener('abort', wake);
+        const list = this.pollWaiters.get(agentId);
+        if (list) {
+          const idx = list.findIndex(w => w.wake === wake);
+          if (idx !== -1) list.splice(idx, 1);
+          if (list.length === 0) this.pollWaiters.delete(agentId);
+        }
+        resolve();
+      };
+      box.timer = setTimeout(wake, this.POLL_TIMEOUT_MS);
+      signal?.addEventListener('abort', wake);
+      const list = this.pollWaiters.get(agentId) ?? [];
+      list.push({ wake });
+      this.pollWaiters.set(agentId, list);
     });
 
-    // Send any pending tasks
-    await this.sendPendingTasks(agentId);
-
-    // Handle connection close
-    res.on('close', () => {
-      this.logger.info(`Agent ${agentId} disconnected`, { agentId });
-      this.sseConnections.delete(agentId);
-    });
+    return collect();
   }
 
-  /**
-   * Send pending tasks to agent via SSE
-   */
-  async sendPendingTasks(agentId: string): Promise<void> {
-    this.logger.info(`[SSE] Checking pending tasks for agent ${agentId}`, { agentId });
-
-    const tasks = await this.taskQueueService.getPendingTasksForAgent(agentId);
-
-    this.logger.info(`[SSE] Query returned ${tasks.length} pending tasks for agent ${agentId}`, {
-      agentId,
-      taskCount: tasks.length,
-      taskIds: tasks.map(t => t.task_id),
-    });
-
-    if (tasks.length === 0) {
-      this.logger.info(`[SSE] No pending tasks to send for agent ${agentId}`, { agentId });
-      return;
-    }
-
-    const connection = this.sseConnections.get(agentId);
-    if (!connection) {
-      this.logger.warn(`[SSE] Agent ${agentId} not connected, cannot send ${tasks.length} tasks`, {
-        agentId,
-        taskCount: tasks.length,
-        taskIds: tasks.map(t => t.task_id),
-      });
-      return;
-    }
-
-    this.logger.info(`[SSE] Sending ${tasks.length} pending tasks to agent ${agentId}`, {
-      agentId,
-      taskCount: tasks.length,
-      taskIds: tasks.map(t => t.task_id),
-    });
-
-    for (const task of tasks) {
-      const event: SSETaskEvent = {
-        taskId: task.task_id,
-        type: task.task_type,
-        config: task.config,
-      };
-
-      this.sendSSE(connection.response, 'task', event);
-
-      this.logger.info(`[SSE] Sent task ${task.task_id} to agent ${agentId} via SSE`, {
-        taskId: task.task_id,
-        taskType: task.task_type,
-        agentId,
-      });
-    }
-
-    this.logger.info(`[SSE] Successfully sent all ${tasks.length} tasks to agent ${agentId}`, {
-      agentId,
-      taskCount: tasks.length,
-    });
+  /** Wake any long-poll(s) currently parked for this agent — called when new work exists. */
+  notifyAgent(agentId: string): void {
+    const waiters = this.pollWaiters.get(agentId);
+    if (!waiters || waiters.length === 0) return;
+    // Copy first: each wake() mutates the underlying array (removes itself).
+    for (const { wake } of [...waiters]) wake();
   }
 
   /**
@@ -408,11 +383,15 @@ export class AgentService {
       throw new Error(`Agent ${agentId} does not belong to user ${userId}`);
     }
 
-    const isConnected = this.sseConnections.has(agentId);
+    // "Connected" now means "actively long-polling" — approximated by recent liveness, since
+    // there's no persistent connection object to check anymore (see longPoll's doc comment).
+    // explicitlyDisconnected overrides this the instant a shutdown is actually delivered,
+    // rather than waiting for last_seen to go stale (see isExplicitlyDisconnected()).
+    const ageSec = (Date.now() - new Date(agent.last_seen).getTime()) / 1000;
 
     return {
       agent,
-      isConnected,
+      isConnected: !this.explicitlyDisconnected.has(agentId) && ageSec <= 90,
     };
   }
 
@@ -421,74 +400,6 @@ export class AgentService {
    */
   async getAgentsForUser(userId: string): Promise<AgentRegistration[]> {
     return this.taskStore.getAgentsByUser(userId);
-  }
-
-  /**
-   * Check if an agent is currently connected via SSE
-   */
-  isAgentConnected(agentId: string): boolean {
-    return this.sseConnections.has(agentId);
-  }
-
-  /**
-   * Get list of currently connected agent IDs (for debugging)
-   */
-  getActiveConnections(): string[] {
-    return Array.from(this.sseConnections.keys());
-  }
-
-  /**
-   * Send heartbeat to all connected agents
-   */
-  private startHeartbeat(): void {
-    this.heartbeatInterval = setInterval(() => {
-      const connectedAgents = Array.from(this.sseConnections.keys());
-
-      if (connectedAgents.length === 0) {
-        return;
-      }
-
-      this.logger.debug(`Sending heartbeat to ${connectedAgents.length} agents`, {
-        agentCount: connectedAgents.length,
-      });
-
-      for (const [agentId, connection] of this.sseConnections.entries()) {
-        try {
-          this.sendSSE(connection.response, 'heartbeat', { timestamp: Date.now() });
-
-          // Update last seen
-          this.taskStore.updateAgentLastSeen(agentId).catch((err: Error) => {
-            this.logger.error(`Failed to update last seen for agent ${agentId}`, err);
-          });
-        } catch (error) {
-          this.logger.error(`Failed to send heartbeat to agent ${agentId}`, {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          this.sseConnections.delete(agentId);
-        }
-      }
-    }, this.HEARTBEAT_INTERVAL_MS);
-
-    this.logger.info(`Heartbeat started (interval: ${this.HEARTBEAT_INTERVAL_MS}ms)`);
-  }
-
-  /**
-   * Stop heartbeat
-   */
-  stopHeartbeat(): void {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-      this.logger.info('Heartbeat stopped');
-    }
-  }
-
-  /**
-   * Send SSE event
-   */
-  private sendSSE(res: Response, event: string, data: any): void {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
   }
 
   /**
@@ -668,12 +579,14 @@ export class AgentService {
   }
 
   /**
-   * Whether an agent is currently online: an active SSE connection, or a heartbeat within the
-   * last 90s. Used to refuse queuing tasks (provision or lifecycle) to a dead agent — which
-   * would otherwise sit "pending" forever.
+   * Whether an agent is currently online: a long-poll (any) within the last 90s. Used to
+   * refuse queuing tasks (provision or lifecycle) to a dead agent — which would otherwise sit
+   * "pending" forever. Single freshness check now that there's no separate SSE-connection
+   * state to fast-path on — every long-poll call updates last_seen, so this is already as
+   * accurate as a live-connection check without the extra state to keep in sync.
    */
   async isAgentOnline(agentId: string): Promise<boolean> {
-    if (this.isAgentConnected(agentId)) return true;
+    if (this.explicitlyDisconnected.has(agentId)) return false;
     const agent = await this.taskStore.getAgentById(agentId);
     if (!agent?.last_seen) return false;
     const ageMs = Date.now() - new Date(agent.last_seen).getTime();
@@ -681,45 +594,42 @@ export class AgentService {
   }
 
   /**
-   * Return pending tasks for an agent, verifying it belongs to the user (same ownership check as
-   * the SSE connect). Backs the agent's polling fallback — reliable task delivery through proxies
-   * (e.g. a Cloudflare tunnel) that buffer SSE streams.
+   * True once a shutdown has actually been delivered to the agent (i.e. it received
+   * shouldShutdown:true in a poll response) and it hasn't polled again since. `last_seen`
+   * alone can't answer this: it's only updated at the *start* of a poll, so it stays "fresh"
+   * for up to 90s after an agent has genuinely exited, which is exactly the "still shows
+   * online right after I stopped it" gap. This gives instant, authoritative offline status
+   * instead of waiting on last_seen staleness. Cleared the moment the agent (or a
+   * newly-started one with the same ID) polls again.
    */
-  async getPendingTasksForOwnedAgent(agentId: string, userId: string) {
-    const agent = await this.taskStore.getAgentById(agentId);
-    if (!agent) {
-      throw new Error(`Agent ${agentId} not found`);
-    }
-    if (agent.user_id !== userId) {
-      throw new Error(`Agent ${agentId} does not belong to user ${userId}`);
-    }
-    return this.taskQueueService.getPendingTasksForAgent(agentId);
+  isExplicitlyDisconnected(agentId: string): boolean {
+    return this.explicitlyDisconnected.has(agentId);
   }
 
   /**
-   * Disconnect agent (send disconnect signal via SSE)
-   * Returns true if agent was connected and signal sent, false otherwise
+   * Request that the agent shut itself down. Delivered via the long-poll response's
+   * `shouldShutdown` flag — near-instant in practice, since notifyAgent() wakes a parked
+   * poll immediately, but see isExplicitlyDisconnected() for why last_seen alone can't
+   * reflect that instantly on its own.
    */
   disconnectAgent(agentId: string): boolean {
-    const connection = this.sseConnections.get(agentId);
-
-    if (!connection) {
-      this.logger.warn(`Cannot disconnect agent ${agentId}: not connected`);
-      return false;
-    }
-
-    // Send disconnect event
-    this.sendSSE(connection.response, 'disconnect', {
-      message: 'Disconnect requested by user',
-      timestamp: new Date().toISOString(),
-    });
-
-    // Close connection
-    connection.response.end();
-    this.sseConnections.delete(agentId);
+    // Mark pending — consumed and delivered by the agent's next long-poll response, at most
+    // POLL_TIMEOUT_MS away. notifyAgent() below wakes it immediately if one happens to be
+    // parked right now, but the pending flag is the actual source of truth: it's what
+    // guarantees delivery even if nothing is parked at this exact instant.
+    this.pendingShutdowns.add(agentId);
+    this.notifyAgent(agentId);
 
     this.logger.info(`Agent ${agentId} disconnected by request`);
     return true;
+  }
+
+  /**
+   * One-shot check-and-clear for a pending shutdown request. Called from longPoll() so
+   * "Stop Agent" is delivered on the agent's next poll response.
+   */
+  consumeShutdownPending(agentId: string): boolean {
+    return this.pendingShutdowns.delete(agentId);
   }
 
   /**
@@ -731,20 +641,17 @@ export class AgentService {
   }
 
   /**
-   * Cleanup on shutdown
+   * Cleanup on shutdown. No persistent connections to close anymore — waking any parked
+   * long-polls just lets them return promptly instead of sitting until POLL_TIMEOUT_MS during
+   * a redeploy; agents treat the resulting connection reset the same as any other network
+   * blip and simply reconnect, no special "shutdown" signal required.
    */
   async shutdown(): Promise<void> {
     this.logger.info('Shutting down AgentService');
 
-    this.stopHeartbeat();
-
-    // Close all SSE connections
-    for (const [_agentId, connection] of this.sseConnections.entries()) {
-      this.sendSSE(connection.response, 'shutdown', { message: 'Server shutting down' });
-      connection.response.end();
+    for (const agentId of this.pollWaiters.keys()) {
+      this.notifyAgent(agentId);
     }
-
-    this.sseConnections.clear();
 
     this.logger.info('AgentService shutdown complete');
   }

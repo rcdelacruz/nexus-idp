@@ -1,5 +1,6 @@
 # Build from the working base image and add migration runner
-FROM 192.168.2.101:5000/backstage:latest
+ARG BASE_IMAGE=backstage:latest
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 
@@ -73,7 +74,12 @@ RUN mkdir -p /tmp/newdeps && \
         @aws-sdk/credential-providers \
         @mdx-js/mdx \
         remark-gfm \
-        @roadiehq/backstage-plugin-argo-cd-backend && \
+        @roadiehq/backstage-plugin-argo-cd-backend \
+        @backstage/plugin-scaffolder-backend-module-gitlab \
+        @backstage/plugin-auth-backend-module-gitlab-provider \
+        @gitbeaker/core \
+        @gitbeaker/rest \
+        @gitbeaker/requester-utils && \
     cp -rn node_modules/. /app/node_modules/ && \
     rm -rf /tmp/newdeps
 
@@ -94,10 +100,10 @@ COPY --chown=node:node app-config.yaml /app/
 COPY --chown=node:node app-config.production.yaml /app/
 COPY --chown=node:node app-config.on-prem.yaml /app/
 
-# Copy stratpoint organization catalog (CRITICAL for user authentication)
+# Copy organization catalog (CRITICAL for user authentication)
 # Clear first so deleted/renamed files from the base image don't persist
 USER root
-RUN rm -rf /app/stratpoint
-COPY --chown=node:node stratpoint /app/stratpoint
+RUN rm -rf /app/example-org
+COPY --chown=node:node example-org /app/example-org
 
 CMD ["node", "packages/backend", "--config", "app-config.yaml", "--config", "app-config.production.yaml"]

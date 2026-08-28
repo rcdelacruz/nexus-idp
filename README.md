@@ -427,7 +427,7 @@ organization:
   domain: <yourdomain.com>          # Used for Google OAuth restriction + GitHub email enforcement
   githubOwner: <github-org>         # GitHub org for repo creation in onboarding
   githubRepo: backstage-main        # This repo name
-  usersFilePath: stratpoint/org/users.yaml  # Break-glass admin users file
+  usersFilePath: example-org/org/users.yaml  # Break-glass admin users file
 ```
 
 #### 7. app-config.production.yaml Key Settings
@@ -468,7 +468,7 @@ auth:
 catalog:
   locations:
     - type: file
-      target: ./stratpoint/catalog-info.yaml   # relative to /app in the container
+      target: ./example-org/catalog-info.yaml   # relative to /app in the container
 ```
 
 #### 8. Verify Deployment
@@ -587,7 +587,7 @@ volumes:
 - **`POSTGRES_DB` must be `backstage_plugin_local-provisioner`** (hyphen) for the init/migrations step — the main app creates other plugin databases automatically
 - **`replicaCount: 1` / single instance** — concurrent starts can cause migration lock races in the `knex_migrations_lock` table
 - **`auth.environment: production`** must be set in production config — the base `app-config.yaml` uses `development`
-- **Catalog file paths** in `app-config.production.yaml` use `./stratpoint/...` (relative to `/app` in the container), not `../../stratpoint/...`
+- **Catalog file paths** in `app-config.production.yaml` use `./example-org/...` (relative to `/app` in the container), not `../../example-org/...`
 
 ---
 
@@ -604,7 +604,7 @@ volumes:
 | `AUTH_GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID |
 | `AUTH_GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret |
 | `GITHUB_TOKEN` | Yes | GitHub PAT for catalog/templates |
-| `APP_BASE_URL` | Yes (prod) | Public URL (e.g., `https://backstage.coderstudio.co`) |
+| `APP_BASE_URL` | Yes (prod) | Public URL (e.g., `https://<your-domain>`) |
 | `NODE_ENV` | Yes (prod) | Set to `production` |
 | `REDIS_URL` | No | Redis URL — defaults to in-memory cache (e.g. `redis://redis.backstage.svc.cluster.local:6379`) |
 | `AWS_ACCESS_KEY_ID_NONPROD` | No | AWS key for nonprod account (FinOps) |
@@ -722,13 +722,13 @@ Users are managed via the **User Management plugin** (DB-driven). New users self
 - Promote / demote admin
 - Remove a user
 
-**Break-glass admin only** — `stratpoint/org/users.yaml` contains only the platform administrator (`ronaldo.delacruz`). Do not add regular users here; they will be managed via the DB and auto-provisioned into the catalog by `UserEntityProvider`.
+**Break-glass admin only** — `example-org/org/users.yaml` contains only the platform administrator (`admin.user`). Do not add regular users here; they will be managed via the DB and auto-provisioned into the catalog by `UserEntityProvider`.
 
 To grant admin access to a user already in the DB, use the promote action in the User Management UI or update `is_admin` directly in the `user_management_users` table.
 
 ### Add a Team
 
-Edit `stratpoint/org/groups.yaml`:
+Edit `example-org/org/groups.yaml`:
 ```yaml
 apiVersion: backstage.io/v1alpha1
 kind: Group
@@ -773,10 +773,10 @@ kubectl logs -n backstage deployment/backstage -c backstage-backend --tail=100 -
 | `database "backstage_plugin_local-provisioner" does not exist` | `create-db` init container failed | Check `create-db` logs; verify `backstage` user has `CREATEDB` |
 | Login redirect fails | `auth.environment` mismatch | Ensure `auth.environment: production` in production config |
 | 401 on health endpoints | Auth policy missing | Verify `httpRouter.addAuthPolicy()` is before `httpRouter.use()` in the plugin |
-| Catalog not loading | Wrong file paths | Use `./stratpoint/...` (not `../../`) in `app-config.production.yaml` |
+| Catalog not loading | Wrong file paths | Use `./example-org/...` (not `../../`) in `app-config.production.yaml` |
 | Two pods stuck running | Rolling update waiting for readiness | Fix the underlying startup error; old pod terminates once new one is Ready |
 | `0/1` pod not Ready | Plugin startup failure | Check backend logs: `kubectl logs ... -c backstage-backend \| grep '"level":"error"'` |
-| New user sees full sidebar / not redirected to `/onboarding` | User has a dept-team entry in `stratpoint/org/users.yaml` | Remove from `users.yaml` — only `ronaldo.delacruz` (break-glass admin) should be in that file |
+| New user sees full sidebar / not redirected to `/onboarding` | User has a dept-team entry in `example-org/org/users.yaml` | Remove from `users.yaml` — only `admin.user` (break-glass admin) should be in that file |
 | User stuck on `/onboarding` after registering | `UserEntityProvider` hasn't synced yet | Wait ~30s for catalog sync; check user-management-backend logs |
 | GitHub connect step shows "already linked" for wrong user | Ghost row in `user_management_users` with `teams=[]` | Admin can reassign or delete the ghost row via User Management UI |
 | `Only @<domain> users may register` error | User entity ref format mismatch | Ensure `organization.domain` in `app-config.yaml` matches the Google OAuth allowed domain |
@@ -794,7 +794,7 @@ kubectl logs -n backstage deployment/backstage -c backstage-backend --tail=100 -
 | [K8s + ArgoCD + CNPG Integration](docs/content/k8s-argocd-cnpg-integration.md) | Kubernetes service account, ArgoCD setup, CloudNativePG catalog, 3-tier app template |
 | [Permission System](docs/content/permission-system.md) | RBAC policy, 4-tier roles, and how to configure access |
 | [User & Group Management](docs/content/user-group-management.md) | DB-managed users, auto-provisioning, team assignment |
-| [Google OAuth Setup](docs/content/google-oauth-setup.md) | Configuring Google OAuth for @stratpoint.com sign-in |
+| [Google OAuth Setup](docs/content/google-oauth-setup.md) | Configuring Google OAuth for @<yourdomain.com> sign-in |
 | [Template Permissions](docs/content/template-permissions.md) | Scaffolder template access control |
 | [TechDocs Guide](docs/content/techdocs-guide.md) | Setting up and using TechDocs |
 
@@ -861,7 +861,7 @@ kubectl logs -n backstage deployment/backstage -c backstage-backend --tail=100 -
 │   │   └── src/database/migrations/ # JS migration files
 │   ├── local-provisioner/           # Frontend plugin
 │   └── project-registration/        # Project wizard (frontend only)
-├── stratpoint/                 # Org catalog
+├── example-org/                 # Org catalog
 │   ├── org/users.yaml          # Break-glass admin users only
 │   ├── org/groups.yaml         # Team and department group definitions
 │   ├── systems/                # System catalog entities (incl. platform-databases.yaml for CNPG)

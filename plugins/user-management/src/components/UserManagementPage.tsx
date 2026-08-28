@@ -3,13 +3,14 @@ import { useApi, identityApiRef } from '@backstage/core-plugin-api';
 import { Page, Header, Content, Table as BackstageTable, TableColumn } from '@backstage/core-components';
 import {
   Box, Checkbox, CircularProgress, Dialog, DialogContent, DialogTitle,
-  FormControlLabel, FormGroup, IconButton, Typography,
+  FormControlLabel, FormGroup, IconButton, Tab, Tabs, Typography,
 } from '@material-ui/core';
 import {
-  AlertCircle, Check, Loader, Shield, UserCheck, UserX, X, Info, ShieldCheck, Trash2,
+  AlertCircle, Activity, Check, Loader, RefreshCw, Shield, UserCheck, Users, UserX, X, Info, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { useColors, semantic, badge } from '@stratpoint/theme-utils';
 import { userManagementApiRef } from '../api/refs';
+import { localProvisionerApiRef, ProvisioningTask, TaskDetailDrawer } from '@internal/plugin-local-provisioner';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -330,6 +331,7 @@ const ConfirmDialog = ({ title, body, confirmLabel, danger, onConfirm, onClose }
 export const UserManagementPage = () => {
   const identityApi = useApi(identityApiRef);
   const api = useApi(userManagementApiRef);
+  const provisionerApi = useApi(localProvisionerApiRef);
   const c = useColors();
 
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -339,6 +341,13 @@ export const UserManagementPage = () => {
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
   const [promoteTarget, setPromoteTarget] = useState<UserRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'users' | 'activity'>('users');
+  const [activityTasks, setActivityTasks] = useState<ProvisioningTask[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState('');
+  const [activityLoaded, setActivityLoaded] = useState(false);
+  const [selectedActivityTask, setSelectedActivityTask] = useState<ProvisioningTask | null>(null);
 
   useEffect(() => {
     identityApi.getBackstageIdentity().then(identity => {
@@ -389,6 +398,24 @@ export const UserManagementPage = () => {
     }).catch(() => setLoading(false));
   }, [api, isAdmin]);
 
+  const loadActivity = () => {
+    setActivityLoading(true);
+    setActivityError('');
+    provisionerApi.getAllTasksAdmin()
+      .then(tasks => {
+        setActivityTasks(tasks);
+        setActivityLoaded(true);
+      })
+      .catch(err => setActivityError(err.message ?? 'Failed to load activity'))
+      .finally(() => setActivityLoading(false));
+  };
+
+  useEffect(() => {
+    if (!isAdmin || activeTab !== 'activity' || activityLoaded) return;
+    loadActivity();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provisionerApi, isAdmin, activeTab, activityLoaded]);
+
   if (isAdmin === false) {
     return (
       <Page themeId="tool">
@@ -431,6 +458,50 @@ export const UserManagementPage = () => {
       <Header title="User Management" subtitle="Manage users, assign teams, and control access" />
       <Content>
 
+        {/* Tabs */}
+        <Box display="flex" alignItems="center" justifyContent="space-between" style={{ borderBottom: `1px solid ${c.border}`, marginBottom: 20 }}>
+          <Tabs
+            value={activeTab}
+            onChange={(_e, value) => setActiveTab(value)}
+            textColor="primary"
+            indicatorColor="primary"
+          >
+            <Tab
+              value="users"
+              label={
+                <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                  <Users size={14} strokeWidth={1.5} aria-hidden="true" />
+                  Users
+                </Box>
+              }
+            />
+            <Tab
+              value="activity"
+              label={
+                <Box display="flex" alignItems="center" style={{ gap: 6 }}>
+                  <Activity size={14} strokeWidth={1.5} aria-hidden="true" />
+                  Activity
+                </Box>
+              }
+            />
+          </Tabs>
+          {activeTab === 'activity' && (
+            <IconButton
+              size="small"
+              title="Refresh"
+              aria-label="Refresh activity"
+              disabled={activityLoading}
+              onClick={loadActivity}
+            >
+              {activityLoading
+                ? <Loader size={16} strokeWidth={1.5} />
+                : <RefreshCw size={16} strokeWidth={1.5} />}
+            </IconButton>
+          )}
+        </Box>
+
+        {activeTab === 'users' && (
+          <>
         {/* Info banner */}
         <Box
           display="flex" alignItems="flex-start"
@@ -650,6 +721,61 @@ export const UserManagementPage = () => {
             onClose={() => setDeleteTarget(null)}
           />
         )}
+          </>
+        )}
+
+        {activeTab === 'activity' && (
+          <BackstageTable<ProvisioningTask>
+            title={`${activityTasks.length} tasks across all users`}
+            data={activityTasks}
+            isLoading={activityLoading}
+            onRowClick={(_event, task) => task && setSelectedActivityTask(task)}
+            emptyContent={
+              <Box display="flex" flexDirection="column" alignItems="center" style={{ padding: 48, gap: 8 }}>
+                <Activity size={32} color={c.textMuted} strokeWidth={1.5} aria-hidden="true" />
+                <Typography style={{ color: c.textSecondary }}>
+                  {activityError || 'No provisioning activity yet.'}
+                </Typography>
+              </Box>
+            }
+            options={{
+              search: true,
+              paging: true,
+              pageSize: 10,
+              pageSizeOptions: [10, 25, 50],
+              padding: 'dense',
+            }}
+            columns={[
+              { title: 'User', field: 'userId' },
+              { title: 'Task', field: 'taskType' },
+              { title: 'Resource', field: 'resourceName' },
+              { title: 'Agent', field: 'agentId' },
+              {
+                title: 'Status',
+                field: 'status',
+                render: (task: ProvisioningTask) => {
+                  const variant =
+                    task.status === 'completed' ? 'green'
+                    : task.status === 'failed' ? 'red'
+                    : task.status === 'in-progress' ? 'blue-subtle'
+                    : 'gray';
+                  return <span style={badge(variant)}>{task.status}</span>;
+                },
+              },
+              {
+                title: 'Created',
+                field: 'createdAt',
+                render: (task: ProvisioningTask) => (
+                  <Typography style={{ fontSize: '0.8125rem', color: c.textSecondary }}>
+                    {new Date(task.createdAt).toLocaleString()}
+                  </Typography>
+                ),
+              },
+            ] as TableColumn<ProvisioningTask>[]}
+          />
+        )}
+
+        <TaskDetailDrawer task={selectedActivityTask} onClose={() => setSelectedActivityTask(null)} />
       </Content>
     </Page>
   );

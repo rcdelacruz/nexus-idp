@@ -2,8 +2,16 @@
 aws_region  = "ap-southeast-1"
 aws_profile = "cost-admin-nonprod"
 
-backstage_image        = "746540123485.dkr.ecr.ap-southeast-1.amazonaws.com/backstage-idp-prod:latest"
-backstage_app_base_url = "https://portal.stratpoint.io"
+backstage_image        = "<your-aws-account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/backstage-idp-prod:latest"
+backstage_app_base_url = "https://<your-domain>"
+
+auth_google_allowed_domains = "<yourdomain.com>"
+session_domain              = ".<yourdomain.com>"
+argocd_url                  = "https://argocd.<your-domain>"
+
+finops_aws_account_nonprod = "<your-aws-account-id-nonprod>"
+finops_aws_account_legacy  = "<your-aws-account-id-legacy>"
+finops_aws_account_prod    = "<your-aws-account-id-prod>"
 
 # Secrets — set via TF_VAR_ env vars in CI/CD instead of this file
 auth_google_client_id      = ""

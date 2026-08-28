@@ -68,7 +68,7 @@ GITHUB_TOKEN=ghp_...
 # Custom:     apps.yourdomain.com           (requires DNS A record → traefik IP)
 # Tailscale:  apps.your-tailnet.ts.net      (requires MagicDNS)
 # Cloudflare: apps.yourdomain.com           (requires tunnel config)
-SCAFFOLDER_INGRESS_DOMAIN=192.168.2.210.nip.io
+SCAFFOLDER_INGRESS_DOMAIN=192.168.1.10.nip.io
 ```
 
 #### 4. Backstage `app-config.yaml`

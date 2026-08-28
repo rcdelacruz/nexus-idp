@@ -43,6 +43,8 @@ export const localProvisionerApiRef = createApiRef<LocalProvisionerApi>({
 export interface LocalProvisionerApi {
   getTasks(): Promise<ProvisioningTask[]>;
   getTasksByAgent(agentId: string): Promise<ProvisioningTask[]>;
+  /** Admin-only: tasks across ALL users, most recent first. Optionally scoped to one user. */
+  getAllTasksAdmin(userId?: string): Promise<ProvisioningTask[]>;
   getTaskById(taskId: string): Promise<ProvisioningTask>;
   createTask(request: CreateTaskRequest): Promise<ProvisioningTask>;
   deleteTask(taskId: string): Promise<void>;
@@ -113,6 +115,34 @@ export class LocalProvisionerClient implements LocalProvisionerApi {
     const data: BackendTaskListResponse = await response.json();
 
     // Transform backend tasks to frontend tasks
+    return transformTasks(data.tasks);
+  }
+
+  /**
+   * Admin-only: get tasks across ALL users, most recent first.
+   *
+   * Backend returns: { tasks: BackendProvisioningTask[], total: number }
+   * This method transforms to: ProvisioningTask[]
+   */
+  async getAllTasksAdmin(userId?: string): Promise<ProvisioningTask[]> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.getAuthHeaders();
+
+    const url = new URL(`${baseUrl}/tasks/admin/all`);
+    if (userId) {
+      url.searchParams.set('userId', userId);
+    }
+
+    const response = await fetch(url.toString(), { headers });
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error('Access denied: admin access required');
+      }
+      throw new Error(`Failed to fetch admin task activity: ${response.statusText}`);
+    }
+
+    const data: BackendTaskListResponse = await response.json();
     return transformTasks(data.tasks);
   }
 

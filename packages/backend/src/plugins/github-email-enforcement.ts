@@ -1,9 +1,9 @@
 /**
- * Custom GitHub auth module: enforces @stratpoint.com email verification.
+ * Custom GitHub auth module: enforces the configured org email domain on sign-in.
  *
  * Behavior:
  * - Uses the GitHub OAuth access token to call /user/emails (includes private emails)
- * - Rejects sign-in if the GitHub account has no verified @stratpoint.com email
+ * - Rejects sign-in if the GitHub account has no verified email in the configured org domain
  * - On success: attempts catalog sign-in by GitHub login name annotation
  *
  * This module REPLACES @backstage/plugin-auth-backend-module-github-provider in index.ts.

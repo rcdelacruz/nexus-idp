@@ -11,7 +11,7 @@ Nexus IDP uses a **multi-skeleton** scaffolder architecture. Templates are compo
 
 All templates and skeletons live in the external `engineering-standards` repo:
 ```
-https://github.com/stratpoint-engineering/engineering-standards
+https://github.com/your-github-org/engineering-standards
 templates/
 ├── projects/              # Template definitions
 │   ├── web/
@@ -274,8 +274,8 @@ Used by the `DeploymentTargetPicker` custom field extension in the frontend. Req
 
 ### Environment split
 
-- **Homelab** (`backstage.coderstudio.co`) — loads `app-config.on-prem.yaml` → shows Talos + all cloud targets
-- **Cloud** (`portal.stratpoint.io`) — does NOT load `app-config.on-prem.yaml` → shows cloud targets only
+- **Homelab** (`<your-domain>`) — loads `app-config.on-prem.yaml` → shows Talos + all cloud targets
+- **Cloud** (`<your-domain>`) — does NOT load `app-config.on-prem.yaml` → shows cloud targets only
 
 ### Adding a new deployment target
 
@@ -319,8 +319,8 @@ Always delete all 4 traces after a test run:
 
 ```bash
 # 1. GitHub repo (list first to get exact name)
-gh repo list strat-main-team --limit 20
-gh repo delete strat-main-team/<name> --yes
+gh repo list your-team-org --limit 20
+gh repo delete your-team-org/<name> --yes
 
 # 2. ArgoCD application (patch finalizers first to unblock deletion)
 kubectl patch application <appName>-<env> -n devtroncd \

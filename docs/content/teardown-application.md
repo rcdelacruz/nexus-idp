@@ -52,7 +52,7 @@ bash scripts/teardown.sh <app-name> --execute --keep-backups --token <BACKSTAGE_
 | `--execute` | off | Actually delete resources. Omit for dry-run. |
 | `--keep-repo` | off | Skip GitHub repository deletion |
 | `--keep-backups` | off | Skip S3 / CNPG backup deletion reminder |
-| `--backstage-url` | `https://backstage.coderstudio.co` | Backstage base URL |
+| `--backstage-url` | `https://<your-domain>` | Backstage base URL |
 | `--token TOKEN` | — | Static script token for catalog API access |
 
 ---
@@ -136,18 +136,18 @@ bash scripts/deploy.sh
 TOKEN=$(kubectl get secret backstage-secrets -n backstage \
   -o jsonpath='{.data.BACKSTAGE_SCRIPT_TOKEN}' | base64 -d)
 
-# Dry-run (on-prem — backstage.coderstudio.co is the default)
+# Dry-run (on-prem — <your-domain> is the default)
 bash scripts/teardown.sh my-app --token "$TOKEN"
 
 # Execute
 bash scripts/teardown.sh my-app --execute --token "$TOKEN"
 ```
 
-For production (`portal.stratpoint.io`), pass the URL explicitly:
+For production (`<your-domain>`), pass the URL explicitly:
 
 ```bash
 bash scripts/teardown.sh my-app --execute \
-  --backstage-url https://portal.stratpoint.io \
+  --backstage-url https://<your-domain> \
   --token "$TOKEN"
 ```
 

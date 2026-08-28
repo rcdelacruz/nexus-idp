@@ -286,90 +286,53 @@ export function createAgentRoutes(
   });
 
   /**
-   * GET /agent/events/:agentId
-   * Server-Sent Events endpoint for task delivery
-   * Accepts service token from agent CLI
-   *
-   * NOTE: This endpoint establishes a long-lived SSE connection
-   * The response is managed by AgentService and doesn't follow standard REST patterns
+   * GET /agent/poll?agentId=...
+   * Long-poll endpoint: the single mechanism for task delivery, the shutdown signal, and
+   * liveness (replaces SSE + the separate heartbeat entirely — see AgentService.longPoll's
+   * doc comment for why). Accepts service token from agent CLI. Holds the request open until
+   * either work exists or POLL_TIMEOUT_MS elapses, then responds; the agent immediately
+   * reissues the request. Each call updates last_seen — no separate heartbeat needed.
    */
-  router.get('/events/:agentId', async (req, res): Promise<void> => {
+  router.get('/poll', async (req, res) => {
     try {
-      const { agentId } = req.params;
-
-      // Validate service token
-      const userEmail = validateServiceToken(req, agentService);
-      if (!userEmail) {
-        if (!res.headersSent) {
-          res.status(401).json(INVALID_TOKEN_RESPONSE);
-        }
-        return;
-      }
-
-      // Establish SSE connection
-      await agentService.connectAgent(agentId, userEmail, res);
-
-      // Connection will remain open until client disconnects
-      // Response is handled by AgentService
-      // This endpoint doesn't return a standard response
-    } catch (error: any) {
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: 'Failed to establish SSE connection',
-          message: error.message,
-        });
-      }
-      // If headers already sent, we can't send error response
-      // Agent will detect connection failure
-    }
-  });
-
-  /**
-   * POST /agent/heartbeat
-   * Agent heartbeat endpoint
-   * Accepts service token from agent CLI
-   */
-  router.post('/heartbeat', async (req, res) => {
-    try {
-      // Validate service token
       const userEmail = validateServiceToken(req, agentService);
       if (!userEmail) {
         return res.status(401).json(INVALID_TOKEN_RESPONSE);
       }
 
-      const { agentId } = req.body;
-
+      const agentId = req.query.agentId as string | undefined;
       if (!agentId) {
-        return res.status(400).json({
-          error: 'Missing agentId in request body',
-        });
+        return res.status(400).json({ error: 'Missing agentId query parameter' });
       }
 
-      // Update agent last_seen timestamp
-      await agentService.updateAgentHeartbeat(agentId, userEmail);
+      // Let the wait end early if the agent's own request times out/drops, instead of holding
+      // a dead response object until POLL_TIMEOUT_MS.
+      const controller = new AbortController();
+      req.on('close', () => controller.abort());
 
-      // Piggyback pending tasks on the heartbeat response so the agent needs no separate poll.
-      // The heartbeat already runs every 30s and is a short request/response that sails through
-      // proxies (unlike SSE) — folding delivery in here removes ~2/3 of agent request volume and
-      // the 100s-timeout / streaming risk entirely.
-      let tasks: any[] = [];
-      try {
-        tasks = await agentService.getPendingTasksForOwnedAgent(agentId, userEmail);
-      } catch (err: any) {
-        // A pending-tasks failure must not break the heartbeat itself.
-        logger.warn(`Heartbeat: failed to fetch pending tasks for ${agentId}: ${err.message}`);
-      }
+      const { tasks, shouldShutdown } = await agentService.longPoll(
+        agentId,
+        userEmail,
+        controller.signal,
+      );
+
+      if (res.writableEnded) return undefined; // client already gone (aborted)
 
       return res.status(200).json({
-        message: 'Heartbeat received',
+        message: 'Poll response',
         tasks,
         total: tasks.length,
+        shouldShutdown,
       });
     } catch (error: any) {
-      return res.status(500).json({
-        error: 'Failed to process heartbeat',
-        message: error.message,
-      });
+      logger.error(`Failed to process poll for agent ${req.query.agentId}: ${error.message}`);
+      if (!res.writableEnded) {
+        return res.status(500).json({
+          error: 'Failed to process poll',
+          message: error.message,
+        });
+      }
+      return undefined;
     }
   });
 
@@ -454,40 +417,6 @@ export function createAgentRoutes(
   });
 
   /**
-   * GET /agent/tasks/pending?agentId=...
-   * Polling fallback for task delivery. The agent polls this (plain request/response, which
-   * survives proxies that buffer SSE) to fetch its pending tasks. Authed via service token.
-   */
-  router.get('/tasks/pending', async (req, res) => {
-    try {
-      const userEmail = validateServiceToken(req, agentService);
-      if (!userEmail) {
-        return res.status(401).json(INVALID_TOKEN_RESPONSE);
-      }
-      const agentId = String(req.query.agentId || '');
-      if (!agentId) {
-        return res.status(400).json({ error: 'Missing agentId query parameter' });
-      }
-      const tasks = await agentService.getPendingTasksForOwnedAgent(agentId, userEmail);
-      return res.status(200).json({ tasks, total: tasks.length });
-    } catch (error: any) {
-      if (error.message?.includes('does not belong')) {
-        return res.status(403).json({ error: 'Forbidden', message: error.message });
-      }
-      return res.status(500).json({ error: 'Failed to fetch pending tasks', message: error.message });
-    }
-  });
-
-  /**
-   * GET /debug/connections
-   * Debug endpoint to see SSE connections
-   */
-  router.get('/debug/connections', async (_req, res) => {
-    const connections = agentService.getActiveConnections();
-    return res.status(200).json({ connections });
-  });
-
-  /**
    * GET /agents
    * Get all agents for current user with connection status
    */
@@ -512,13 +441,25 @@ export function createAgentRoutes(
       // no longer subtracts a server timestamp from the browser's clock.
       const now = Date.now();
       const agentsWithStatus = agentRegistrations.map(agent => {
-        const isConnected = agentService.isAgentConnected(agent.agent_id);
         const lastSeenMs = agent.last_seen ? new Date(agent.last_seen).getTime() : 0;
         const lastSeenAgeSeconds = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
+        // "Connected" = polled within the last 90s AND not explicitly told to shut down.
+        // The explicit check matters because last_seen is only written when a poll *starts* —
+        // it stays "fresh" for up to 90s after an agent has actually exited following a Stop
+        // Agent request, which is exactly the "still shows online" gap. See
+        // AgentService.isExplicitlyDisconnected().
+        const explicitlyDisconnected = agentService.isExplicitlyDisconnected(agent.agent_id);
+        const isConnected =
+          lastSeenAgeSeconds !== null && lastSeenAgeSeconds <= 90 && !explicitlyDisconnected;
         return {
           ...agent,
           is_connected: isConnected,
           last_seen_age_seconds: lastSeenAgeSeconds,
+          // Surfaced separately from is_connected so the frontend can treat it as permanent
+          // (doesn't decay back to "degraded" as last_seen ages past 90s) rather than folding
+          // it into a single boolean that collapses "just stopped" and "silently went stale"
+          // into the same signal (found 2026-07-26 — see connectivity.ts).
+          explicitly_disconnected: explicitlyDisconnected,
         };
       });
 
@@ -570,7 +511,7 @@ export function createAgentRoutes(
         });
       }
 
-      const isConnected = agentService.isAgentConnected(agentId);
+      const isConnected = await agentService.isAgentOnline(agentId);
 
       return res.status(200).json({
         ...agent,
@@ -586,7 +527,10 @@ export function createAgentRoutes(
 
   /**
    * POST /:agentId/disconnect
-   * Send disconnect signal to agent (graceful stop via SSE)
+   * Request a graceful stop ("Stop Agent" in the UI). Delivered via the agent's next long-poll
+   * response — always succeeds from this endpoint's perspective (the request is durably
+   * recorded even if the agent isn't polling at this exact instant); see
+   * AgentService.disconnectAgent.
    */
   router.post('/:agentId/disconnect', async (req, res) => {
     try {
@@ -620,18 +564,10 @@ export function createAgentRoutes(
         });
       }
 
-      // Send disconnect command via SSE
-      const success = agentService.disconnectAgent(agentId);
-
-      if (success) {
-        return res.status(200).json({
-          message: 'Disconnect signal sent to agent',
-          agent_id: agentId,
-        });
-      }
-      return res.status(404).json({
-        error: 'Agent not connected',
-        message: 'Agent is not currently connected via SSE',
+      agentService.disconnectAgent(agentId);
+      return res.status(200).json({
+        message: 'Stop requested — will take effect on the agent\'s next poll',
+        agent_id: agentId,
       });
     } catch (error: any) {
       return res.status(500).json({

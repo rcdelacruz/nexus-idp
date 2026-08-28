@@ -9,9 +9,13 @@ const ARGOCD_API_VERSION = 'argoproj.io/v1alpha1';
 
 /**
  * Known GitHub orgs to fall back to when a repo's slug can't be resolved from
- * the catalog. Same list scripts/teardown.sh hardcodes — keep in sync.
+ * the catalog. Set via TEARDOWN_GITHUB_ORGS (comma-separated). Same list
+ * scripts/teardown.sh reads — keep in sync.
  */
-const KNOWN_GITHUB_ORGS = ['strat-main-team', 'stratpoint-engineering'];
+const KNOWN_GITHUB_ORGS = (process.env.TEARDOWN_GITHUB_ORGS ?? '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
 
 /** AWS Resource spec.types created by the infra-aws-* scaffolder templates. */
 const AWS_RESOURCE_TYPES = ['rds-instance', 'ecs-cluster', 'eks-cluster', 'aws-ec2-instance'];

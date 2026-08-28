@@ -267,7 +267,7 @@ const RegistrationForm = ({ identity, onRegistered }: RegistrationFormProps) => 
       style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
       data-loading={loading}
     >
-      {/* Email confirmation — read-only, proves it's their stratpoint account */}
+      {/* Email confirmation — read-only, proves it's their org account */}
       <Box style={{ padding: '8px 12px', borderRadius: 6, background: c.surfaceSubtle, border: `1px solid ${c.border}` }}>
         <Typography style={{ fontSize: '0.75rem', color: c.textMuted, marginBottom: 2 }}>Registering as</Typography>
         <Typography style={{ fontSize: '0.875rem', color: c.text, fontWeight: 500 }}>{identity.email}</Typography>

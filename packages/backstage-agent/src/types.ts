@@ -64,17 +64,12 @@ export interface ProvisioningTask {
 }
 
 /**
- * SSE event types
+ * A task delivered to the agent via the long-poll response. Field names are camelCase here
+ * (mapped from the poll response's snake_case ProvisioningTask rows at the call site in
+ * Agent.ts) — kept as its own small shape rather than reusing ProvisioningTask so handleTask's
+ * signature stays decoupled from the full task-row shape.
  */
-export enum SSEEventType {
-  TASK = 'task',
-  HEARTBEAT = 'heartbeat',
-}
-
-/**
- * SSE task event payload
- */
-export interface SSETaskEvent {
+export interface AgentTaskEvent {
   taskId: string;
   type: string;
   config: Record<string, any>;

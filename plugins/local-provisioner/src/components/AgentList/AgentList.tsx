@@ -27,6 +27,7 @@ import {
   useTheme,
 } from '@material-ui/core';
 import { AgentRegistration } from '../../api/types';
+import { getConnectivity } from '../../api/connectivity';
 import { CheckCircle, ZapOff, Monitor, Filter, MoreVertical, Square, Trash2, Play, Info } from 'lucide-react';
 
 /**
@@ -155,21 +156,8 @@ export const AgentList = ({
   const [selectedAgentForAction, setSelectedAgentForAction] = useState<AgentRegistration | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Connectivity is based on HEARTBEAT freshness, not the SSE connection. SSE is unreliable
-  // through proxies (e.g. Cloudflare tunnels buffer/drop it) and task delivery now falls back to
-  // polling, so an agent that is heartbeating IS online regardless of SSE state. Using isConnected
-  // (SSE) here made a live, heartbeating agent show as offline/gray.
-  const getConnectivity = (agent: AgentRegistration): 'online' | 'degraded' | 'offline' => {
-    // Prefer the server-computed age (skew-free); fall back to client clock only if absent.
-    const ageSec =
-      agent.lastSeenAgeSeconds != null
-        ? agent.lastSeenAgeSeconds
-        : (Date.now() - new Date(agent.lastSeenAt).getTime()) / 1000;
-    // Heartbeat interval is 30s; tolerate a couple of missed beats (and brief backend restarts).
-    if (ageSec <= 90) return 'online';
-    if (ageSec <= 300) return 'degraded'; // 1.5–5 min: slow/intermittent
-    return 'offline'; // no heartbeat for 5+ min
-  };
+  // Connectivity bucketing lives in api/connectivity.ts — shared with useAgents.ts's
+  // change-detection so a status change is never silently missed by the polling hook.
 
   // Explicit colours (design tokens from theme.ts) applied inline — inline styles beat any CSS
   // class/specificity and don't depend on theme.palette.status resolving. This is deliberately

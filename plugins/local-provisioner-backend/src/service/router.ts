@@ -19,6 +19,7 @@ import { resolveSharedTaskStore } from '../sharedStore';
 import {
   taskCreatePermission,
   taskReadPermission,
+  taskReadAllPermission,
   taskDeletePermission,
 } from '../permissions';
 import { TaskQueueService } from './TaskQueueService';
@@ -29,6 +30,7 @@ import { createTaskRoutes } from '../api/taskRoutes';
 import { createHealthRoutes } from '../api/healthRoutes';
 import { extractEmailFromEntityRef } from '../util/identity';
 import { isPublicAgentPath } from '../util/publicPaths';
+import { readResourceDocsUrls } from '../util/resourceDocsLinks';
 
 /**
  * Router dependencies
@@ -57,6 +59,10 @@ function permissionForRequest(method: string, path: string) {
     case 'DELETE':
       return taskDeletePermission;
     case 'GET':
+      // /tasks/admin/all has no per-user scoping in the handler — it requires the
+      // separate, admin-only taskReadAllPermission rather than the regular
+      // (own-tasks-only) taskReadPermission. Must be checked before the generic case.
+      if (path === '/tasks/admin/all') return taskReadAllPermission;
       return taskReadPermission;
     default:
       return undefined;
@@ -103,11 +109,14 @@ export async function createRouter(
 
   // Get plugin configuration
   const pluginConfig = config.getOptionalConfig('localProvisioner');
-  const sseHeartbeatInterval = pluginConfig?.getOptionalNumber('sseHeartbeatInterval') ?? 30;
+  // Long-poll timeout — comfortably under Cloudflare's ~100s ceiling on how long it holds a
+  // connection open waiting for an origin response (see AgentService.longPoll).
+  const pollTimeoutSeconds = pluginConfig?.getOptionalNumber('pollTimeoutSeconds') ?? 25;
   const taskRetentionDays = pluginConfig?.getOptionalNumber('taskRetentionDays') ?? 30;
+  const resourceDocsUrls = readResourceDocsUrls(config);
 
   logger.info('Plugin configuration loaded', {
-    sseHeartbeatInterval,
+    pollTimeoutSeconds,
     taskRetentionDays,
   });
 
@@ -121,7 +130,7 @@ export async function createRouter(
     taskStore,
     taskQueueService,
     config,
-    sseHeartbeatInterval,
+    pollTimeoutSeconds,
   );
   // CatalogService will be used for future catalog integration
   // const catalogService = new CatalogService(logger, discovery);
@@ -132,7 +141,9 @@ export async function createRouter(
   const router = Router();
 
   // Middleware
-  router.use(express.json());
+  // Default 100kb limit is too small for tasks carrying a base64-encoded source tree
+  // (stratpoint:local-provision's sourceFiles, e.g. devops/devsecops-capstone-training).
+  router.use(express.json({ limit: '10mb' }));
 
   // Log all requests
   router.use((req, _res, next) => {
@@ -212,7 +223,7 @@ export async function createRouter(
   router.use('/health', createHealthRoutes(db));
   // Agent and task endpoints require authentication (enforced by middleware above)
   router.use('/agent', createAgentRoutes(agentService, logger, taskQueueService));
-  router.use('/tasks', createTaskRoutes(taskQueueService, logger, agentService));
+  router.use('/tasks', createTaskRoutes(taskQueueService, logger, agentService, resourceDocsUrls));
 
 
   // Error handling middleware

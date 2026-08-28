@@ -6,7 +6,7 @@ import { Request, Router } from 'express';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { TaskQueueService } from '../service/TaskQueueService';
 import { AgentService } from '../service/AgentService';
-import { CreateTaskRequest, ResourceState, TaskType, isLifecycleTask } from '../types';
+import { CreateTaskRequest, ProvisioningTask, ResourceState, TaskType, isLifecycleTask, resourceTypeForTask } from '../types';
 
 /**
  * Lifecycle transitions that are no-ops or invalid given a resource's current state — e.g.
@@ -46,8 +46,22 @@ export function createTaskRoutes(
   taskQueueService: TaskQueueService,
   logger: LoggerService,
   agentService?: AgentService,
+  resourceDocsUrls: Record<string, string> = {},
 ): Router {
   const router = Router();
+
+  /**
+   * Attach `docs_url` (e.g. training materials) for the task's resource type, if configured via
+   * `localProvisioner.resourceDocsUrls`. Only provision-* task types have a resource type
+   * (`resourceTypeForTask` returns undefined for lifecycle tasks), so lifecycle rows pass through
+   * unchanged — same scoping as `catalog_entity_ref`, which is likewise only meaningful on the
+   * task that provisioned the resource.
+   */
+  const withDocsLink = (task: ProvisioningTask): ProvisioningTask => {
+    const resourceType = resourceTypeForTask(task.task_type);
+    const docsUrl = resourceType ? resourceDocsUrls[resourceType] : undefined;
+    return docsUrl ? { ...task, docs_url: docsUrl } : task;
+  };
 
   /**
    * GET /tasks
@@ -77,7 +91,7 @@ export function createTaskRoutes(
         : tasks;
 
       return res.status(200).json({
-        tasks: filteredTasks,
+        tasks: filteredTasks.map(withDocsLink),
         total: filteredTasks.length,
       });
     } catch (error: any) {
@@ -116,6 +130,38 @@ export function createTaskRoutes(
   });
 
   /**
+   * GET /tasks/admin/all
+   * Admin activity view: tasks across ALL users, most recent first. Gated by
+   * `taskReadAllPermission` in the auth middleware (service/router.ts) — reachable
+   * here only because that check already passed.
+   *
+   * Query parameters:
+   * - userId: scope to one user's tasks (optional)
+   * - limit, offset: pagination (optional, default limit 200)
+   */
+  router.get('/admin/all', async (req, res) => {
+    try {
+      const { userId, limit, offset } = req.query;
+
+      const tasks = await taskQueueService.getAllTasks({
+        userId: typeof userId === 'string' ? userId : undefined,
+        limit: limit ? Number(limit) : undefined,
+        offset: offset ? Number(offset) : undefined,
+      });
+
+      return res.status(200).json({
+        tasks: tasks.map(withDocsLink),
+        total: tasks.length,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        error: 'Failed to fetch tasks',
+        message: error.message,
+      });
+    }
+  });
+
+  /**
    * GET /tasks/:taskId
    * Get specific task by ID
    */
@@ -148,7 +194,7 @@ export function createTaskRoutes(
         });
       }
 
-      return res.status(200).json(task);
+      return res.status(200).json(withDocsLink(task));
     } catch (error: any) {
       return res.status(500).json({
         error: 'Failed to fetch task',
@@ -233,26 +279,19 @@ export function createTaskRoutes(
 
       const task = await taskQueueService.createTask(userId, createRequest);
 
-      logger.info('Task created, notifying agent via SSE', {
+      logger.info('Task created, notifying agent', {
         taskId: task.task_id,
         agentId: createRequest.agent_id,
         userId,
       });
 
-      // Notify agent immediately (fire-and-forget, don't block response)
-      // Add small delay to ensure database transaction is committed
-      if (agentService) {
-        setTimeout(() => {
-          agentService.sendPendingTasks(createRequest.agent_id).catch(err => {
-            logger.warn('Failed to send immediate SSE notification to agent', {
-              agentId: createRequest.agent_id,
-              taskId: task.task_id,
-              error: err.message,
-              note: 'Agent will receive task on next heartbeat/reconnect',
-            });
-          });
-        }, 100); // 100ms delay to ensure DB commit completes
-      }
+      // Wakes the agent's parked long-poll immediately if one is open — purely in-memory (no
+      // DB/network call of its own), so no artificial delay is needed the way the old SSE path
+      // needed one for the write to land first: createTask() above has already resolved, and
+      // the agent's own re-check of pending tasks reads from the same primary. If nothing is
+      // parked (agent between poll cycles), this is a no-op — the agent picks the task up on
+      // its next poll regardless, within POLL_TIMEOUT_MS.
+      agentService?.notifyAgent(createRequest.agent_id);
 
       return res.status(201).json({
         task_id: task.task_id,
@@ -351,7 +390,7 @@ export function createTaskRoutes(
       if (!agentService) {
         return res.status(503).json({ error: 'Agent service unavailable' });
       }
-      if (!agentService.isAgentConnected(task.agent_id)) {
+      if (!(await agentService.isAgentOnline(task.agent_id))) {
         return res.status(409).json({
           error: 'Agent not connected',
           message:
@@ -359,7 +398,7 @@ export function createTaskRoutes(
         });
       }
 
-      await agentService.sendPendingTasks(task.agent_id);
+      agentService.notifyAgent(task.agent_id);
       logger.info(`Re-dispatched task ${taskId} to agent ${task.agent_id}`, { taskId, userId });
 
       return res.status(200).json({ message: 'Task re-dispatched to agent', taskId });

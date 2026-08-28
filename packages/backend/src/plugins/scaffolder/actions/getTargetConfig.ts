@@ -24,7 +24,7 @@ import { DiscoveryService, AuthService } from '@backstage/backend-plugin-api';
  *     action: scaffolder:get-target-config
  *     input:
  *       targetType: aws
- *       targetName: stratpoint-nonprod
+ *       targetName: nonprod
  *       service: ecs
  *       # serviceName optional — auto-selects if only one cluster in catalog
  */

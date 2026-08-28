@@ -108,6 +108,18 @@ export class DockerComposeExecutor {
       fs.mkdirSync(taskDir, { recursive: true });
       fs.writeFileSync(composePath, composeContent, 'utf-8');
       logger.info(`Docker Compose file written to: ${composePath}`);
+      if (!task.config.dockerCompose) {
+        // Only for bundled templates (task.config.dockerCompose absent) — a pre-rendered
+        // compose from the scaffolder/UI has no matching bundled asset directory to copy.
+        this.copyTemplateAssets(task.task_type, taskDir);
+      }
+      if (task.config.sourceFiles) {
+        // Scaffolder-driven templates that build images from source (e.g. devops/devsecops
+        // capstone) send the source tree as part of the task payload, since there's no bundled
+        // asset directory for the agent to copy from and no guarantee git is installed on the
+        // trainee's machine to clone it directly.
+        this.writeSourceFiles(task.config.sourceFiles, taskDir);
+      }
 
       // Image pull — skipped entirely when cached (offline-capable), else progress-reported.
       const pullResult = await this.pullImages(taskDir, onProgress);
@@ -255,7 +267,11 @@ export class DockerComposeExecutor {
         connectionString = primaryPort ? `${host}:${primaryPort}` : undefined;
     }
 
-    const ui = task.config.uiPort ? `http://${host}:${task.config.uiPort}` : undefined;
+    // uiPort (Kafka UI) or frontendPort (devops/devsecops capstone) — whichever browsable
+    // dashboard this resource type has — becomes a proper http:// URL so the drawer can
+    // render it as a real link, not just a raw host:port in the ports list.
+    const uiPort = task.config.uiPort ?? task.config.frontendPort;
+    const ui = uiPort ? `http://${host}:${uiPort}` : undefined;
     return { host, ports, connectionString, ui };
   }
 
@@ -332,8 +348,52 @@ export class DockerComposeExecutor {
       'provision-postgres': 'postgres',
       'provision-redis': 'redis',
       'provision-mongodb': 'mongodb',
+      'provision-devops-capstone-training': 'devops-capstone-training',
+      'provision-devsecops-capstone-training': 'devsecops-capstone-training',
     };
     return map[taskType] || 'kafka';
+  }
+
+  /**
+   * Materialize a flat { relativePath: base64Content } map into the task directory — how
+   * scaffolder-driven "build from source" templates (devops/devsecops capstone) deliver their
+   * app source to the agent, since stratpoint:local-provision only ever sent the rendered
+   * docker-compose.yml text before this, leaving `build: context: ./app/...` with nothing to
+   * build from. Rejects any path that would escape taskDir (defense against a compromised or
+   * buggy scaffolder template writing outside the task's own directory).
+   */
+  private writeSourceFiles(sourceFiles: Record<string, string>, taskDir: string): void {
+    const resolvedTaskDir = path.resolve(taskDir);
+    for (const [relPath, base64Content] of Object.entries(sourceFiles)) {
+      const destPath = path.resolve(taskDir, relPath);
+      if (!destPath.startsWith(resolvedTaskDir + path.sep)) {
+        logger.warn(`Refusing to write source file outside task dir: ${relPath}`);
+        continue;
+      }
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.writeFileSync(destPath, Buffer.from(base64Content, 'base64'));
+    }
+    logger.info(`Materialized ${Object.keys(sourceFiles).length} source file(s) into ${taskDir}`);
+  }
+
+  /**
+   * Copy any bundled asset directories (e.g. `app/` source for templates that build images
+   * from source rather than pulling public ones) from the template dir into the task's working
+   * directory, alongside the rendered docker-compose.yml. No-op for templates that only ship a
+   * docker-compose.yml (kafka/postgres/redis/mongodb — public-image-only, nothing to copy).
+   */
+  private copyTemplateAssets(taskType: string, taskDir: string): void {
+    const templateName = this.getTemplateForTaskType(taskType);
+    const templateDir = path.join(this.templatesDir, templateName);
+    if (!fs.existsSync(templateDir)) return;
+
+    for (const entry of fs.readdirSync(templateDir, { withFileTypes: true })) {
+      if (entry.name === 'docker-compose.yml') continue; // rendered separately, not copied raw
+      const src = path.join(templateDir, entry.name);
+      const dest = path.join(taskDir, entry.name);
+      fs.cpSync(src, dest, { recursive: true });
+      logger.info(`Copied bundled template asset ${entry.name} -> ${dest}`);
+    }
   }
 
   /**
@@ -425,10 +485,13 @@ export class DockerComposeExecutor {
     }
     try {
       logger.info(`Tearing down task ${taskId}`);
+      // Grouped with ps/stop/start under SHORT_TIMEOUT_MS above (down doesn't pull images) —
+      // was previously coded to UP_TIMEOUT_MS (5 min) by mistake, so a wedged teardown made
+      // the agent look hung for far longer than necessary before its own timeout even fired.
       const { output } = await this.runCompose(
         ['down', '-v'],
         taskDir,
-        UP_TIMEOUT_MS,
+        SHORT_TIMEOUT_MS,
       );
       logger.info('Teardown completed');
       return { success: true, logs: output };
@@ -461,10 +524,26 @@ export class DockerComposeExecutor {
     onLine?: (line: string) => void,
   ): Promise<{ code: number; output: string }> {
     return new Promise((resolve, reject) => {
-      const child = spawn(cmd, args, { cwd });
+      // detached: true (POSIX) makes `child` the leader of a new process group, so killing
+      // -child.pid on timeout reaches any subprocesses docker/docker-compose spawns too — a
+      // plain child.kill() only signals the wrapper CLI itself, which can leave a wedged
+      // compose operation (a container not responding to its stop signal, a busy volume)
+      // running and the agent looking permanently hung even after "timing out."
+      const child = spawn(cmd, args, { cwd, detached: process.platform !== 'win32' });
       let output = '';
+      const killTree = (signal: NodeJS.Signals) => {
+        if (process.platform !== 'win32' && child.pid) {
+          try {
+            process.kill(-child.pid, signal);
+            return;
+          } catch {
+            // Fall through to single-process kill (e.g. group already gone).
+          }
+        }
+        child.kill(signal);
+      };
       const timer = setTimeout(() => {
-        child.kill('SIGKILL');
+        killTree('SIGKILL');
         reject(new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s: ${cmd} ${args.join(' ')}`));
       }, timeoutMs);
 

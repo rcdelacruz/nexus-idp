@@ -4,15 +4,14 @@
 
 import { Command } from 'commander';
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import logger from '../utils/logger';
+import { getPidFilePath, safeUnlinkPidFile as safeUnlink } from '../utils/pidFile';
 
 export const stopCommand = new Command('stop')
   .description('Stop the running Backstage Agent')
   .action(async () => {
     try {
-      const pidFile = path.join(os.homedir(), '.backstage-agent', 'agent.pid');
+      const pidFile = getPidFilePath();
 
       if (!fs.existsSync(pidFile)) {
         logger.error('No running agent found (PID file does not exist)');
@@ -26,7 +25,7 @@ export const stopCommand = new Command('stop')
         process.kill(pid, 0); // Signal 0 checks if process exists
       } catch (error) {
         logger.warn('Agent process not found, cleaning up PID file');
-        fs.unlinkSync(pidFile);
+        safeUnlink(pidFile);
         process.exit(0);
       }
 
@@ -45,7 +44,7 @@ export const stopCommand = new Command('stop')
         } catch (error) {
           // Process stopped
           logger.info('✓ Agent stopped successfully');
-          fs.unlinkSync(pidFile);
+          safeUnlink(pidFile);
           process.exit(0);
         }
       }
@@ -53,7 +52,7 @@ export const stopCommand = new Command('stop')
       // If still running after 5 seconds, force kill
       logger.warn('Agent did not stop gracefully, forcing shutdown...');
       process.kill(pid, 'SIGKILL');
-      fs.unlinkSync(pidFile);
+      safeUnlink(pidFile);
       logger.info('✓ Agent stopped (forced)');
       process.exit(0);
 

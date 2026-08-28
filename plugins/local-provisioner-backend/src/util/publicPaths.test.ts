@@ -18,9 +18,7 @@ describe('isPublicAgentPath', () => {
       '/agent/device/code',
       '/agent/device/token',
       '/agent/register',
-      '/agent/events/agent-123',
-      '/agent/events/some.machine.local',
-      '/agent/heartbeat',
+      '/agent/poll',
       '/agent/tasks/abc-123/status',
       '/agent/tasks/00000000-0000-0000-0000-000000000000/status',
     ])('treats %s as public', path => {

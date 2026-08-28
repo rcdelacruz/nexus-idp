@@ -41,7 +41,7 @@ Technologies are grouped into four quadrants:
 
 ## Radar vs. Engineering Hub
 
-The Tech Radar shows **what** to use. The [Engineering Hub](https://portal.stratpoint.io/engineering-docs) (Engineering Docs) shows **how** to use it — with detailed guides, golden paths, and examples.
+The Tech Radar shows **what** to use. The [Engineering Hub](https://<your-domain>/engineering-docs) (Engineering Docs) shows **how** to use it — with detailed guides, golden paths, and examples.
 
 ---
 

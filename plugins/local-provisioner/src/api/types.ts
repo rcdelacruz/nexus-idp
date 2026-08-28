@@ -30,6 +30,7 @@ export interface BackendProvisioningTask {
   config: Record<string, unknown>;
   status: BackendTaskStatus;
   catalog_entity_ref?: string;
+  docs_url?: string;
   error_message?: string;
   logs?: string;
   metadata?: Record<string, unknown>;
@@ -55,6 +56,10 @@ export interface BackendAgentRegistration {
   last_seen_age_seconds?: number | null; // server-computed (skew-free)
   created_at: string;
   is_connected: boolean;
+  // True once a "Stop Agent" shutdown has actually been delivered and the agent hasn't
+  // polled since — distinct from is_connected/age going stale on their own, and permanent
+  // (doesn't self-clear with elapsed time) until the agent actually reconnects.
+  explicitly_disconnected?: boolean;
 }
 
 /**
@@ -159,6 +164,7 @@ export interface ProvisioningTask {
   config: Record<string, unknown>;
   status: TaskStatus;
   catalogEntityRef?: string;
+  docsUrl?: string;
   errorMessage?: string;
   logs?: string;
   metadata?: Record<string, unknown>;
@@ -184,6 +190,10 @@ export interface AgentRegistration {
   lastSeenAgeSeconds?: number | null; // server-computed heartbeat age (skew-free)
   createdAt: string;
   isConnected: boolean;
+  // Permanent (doesn't decay with elapsed time) — true once a Stop Agent shutdown has
+  // actually been delivered. See getConnectivity() in api/connectivity.ts for why this
+  // matters distinctly from isConnected/age.
+  explicitlyDisconnected: boolean;
 }
 
 /**

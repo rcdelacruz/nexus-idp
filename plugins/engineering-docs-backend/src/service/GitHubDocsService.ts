@@ -41,7 +41,14 @@ export class GitHubDocsService {
     this.rawBase = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch}`;
     this.contentBase = contentBase;
     this.branch = branch;
-    this.cachePrefix = `${repoOwner}/${repoName}@${branch}:`;
+    // Must include contentBase: two sources can point at the same repo+branch with different
+    // contentBase (e.g. this repo's own docs/ vs docs-github-actions/ vs local-provisioning/
+    // roots), and without it every such source collides on the same cache keys ("nav",
+    // "doc:index", ...) -- whichever source populates the cache first "wins" for all of them
+    // until the entry expires. Confirmed live: capstone-training-gitlab/-github and
+    // devops-capstone-local-provisioning-training share one repo and were serving each other's
+    // cached nav/content.
+    this.cachePrefix = `${repoOwner}/${repoName}@${branch}:${contentBase}:`;
   }
 
   private async cached<T>(key: string, fn: () => Promise<T>, skipCache = false): Promise<T> {
@@ -126,21 +133,32 @@ export class GitHubDocsService {
   async buildNav(skipCache = false): Promise<NavItem[]> {
     this.logger.info(`[engineering-docs] buildNav called for ${this.apiBase} / ${this.contentBase}`);
     return this.cached('nav', async () => {
-      // Try MkDocs first (mkdocs.yml at repo root)
-
-      try {
-        const src = await this.fetchRawContent('mkdocs.yml');
-        const cleanedSrc = src.replace(/!![a-zA-Z]+\/[a-zA-Z][a-zA-Z0-9:._]*/g, 'null');
-        const config = yaml.load(cleanedSrc) as any;
-        if (config?.nav && Array.isArray(config.nav)) {
-          const items = this.convertMkDocsNav(config.nav);
-          if (items.length > 0) {
-            this.logger.info(`[engineering-docs] Using mkdocs.yml nav: ${items.length} top-level items`);
-            return items;
+      // Try MkDocs nav, preferring one scoped to this source's contentBase over the repo-root
+      // file. A repo-root-only lookup breaks as soon as a second source points at the same
+      // repo with a different contentBase (confirmed live: strat-training/devops-capstone-
+      // local-provisioning has three sources — docs/, docs-github-actions/, local-provisioning/
+      // — sharing one repo; the repo-root mkdocs.yml belonged to local-provisioning/ alone but
+      // was silently applied to the other two as well, replacing their real file listings with
+      // local-provisioning's 4-item nav).
+      const mkdocsCandidates =
+        this.contentBase && this.contentBase !== '.'
+          ? [`${this.contentBase}/mkdocs.yml`, 'mkdocs.yml']
+          : ['mkdocs.yml'];
+      for (const candidate of mkdocsCandidates) {
+        try {
+          const src = await this.fetchRawContent(candidate);
+          const cleanedSrc = src.replace(/!![a-zA-Z]+\/[a-zA-Z][a-zA-Z0-9:._]*/g, 'null');
+          const config = yaml.load(cleanedSrc) as any;
+          if (config?.nav && Array.isArray(config.nav)) {
+            const items = this.convertMkDocsNav(config.nav);
+            if (items.length > 0) {
+              this.logger.info(`[engineering-docs] Using ${candidate} nav: ${items.length} top-level items`);
+              return items;
+            }
           }
+        } catch {
+          // Try the next candidate
         }
-      } catch {
-        // No mkdocs.yml — continue
       }
 
       // Use GitHub Trees API (1 API call) to get the full file tree,

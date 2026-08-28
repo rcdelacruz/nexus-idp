@@ -7,17 +7,40 @@
  */
 
 import { createBackend } from '@backstage/backend-defaults';
+import { rootHttpRouterServiceFactory } from '@backstage/backend-defaults/rootHttpRouter';
+import express from 'express';
 import { fsUrlReaderServiceFactory } from './plugins/fsUrlReaderModule';
+import { createScaffolderTaskGuard, SCAFFOLDER_TASKS_PATH } from './plugins/scaffolderTaskGuard';
 
 const backend = createBackend();
 
 // Register file:// URL reader for local dev skeleton loading
 backend.add(fsUrlReaderServiceFactory);
 
+// Overrides coreServices.rootHttpRouter so scaffolderTaskGuard runs BEFORE any plugin's
+// own router (applyDefaults() is what mounts all plugin routes — anything registered on
+// `app` before calling it is guaranteed, by construction, to run first). This is the real
+// enforcement point for scaffolder.task.create restrictions that permission.ts CANNOT
+// enforce — see the file-level comment in plugins/scaffolderTaskGuard.ts for why.
+backend.add(
+  rootHttpRouterServiceFactory({
+    configure: ({ app, config, logger, applyDefaults }) => {
+      // Scoped to exactly the one path — a global body-parser here would risk breaking any
+      // webhook-style endpoint elsewhere in the app that needs the raw, unparsed body (e.g.
+      // HMAC signature verification). express.json() is a no-op re-parse if a downstream
+      // plugin router also parses JSON (body-parser skips already-parsed bodies).
+      app.use(SCAFFOLDER_TASKS_PATH, express.json());
+      app.use(SCAFFOLDER_TASKS_PATH, createScaffolderTaskGuard({ config, logger }));
+      applyDefaults();
+    },
+  }),
+);
+
 backend.add(import('@backstage/plugin-app-backend'));
 backend.add(import('@backstage/plugin-proxy-backend'));
 backend.add(import('@backstage/plugin-scaffolder-backend'));
 backend.add(import('@backstage/plugin-scaffolder-backend-module-github'));
+backend.add(import('@backstage/plugin-scaffolder-backend-module-gitlab'));
 // Custom scaffolder actions (stratpoint:local-provision)
 backend.add(import('./plugins/scaffolder-actions-module'));
 backend.add(import('@backstage/plugin-techdocs-backend'));
@@ -33,6 +56,10 @@ backend.add(import('@backstage/plugin-auth-backend'));
 backend.add(import('./plugins/google-auto-provision'));
 // Custom GitHub module: enforces a verified allowed-domain email on the GitHub account before sign-in
 backend.add(import('./plugins/github-email-enforcement'));
+// GitLab provider: link-only (signIn disabled) — powers the "Connect GitLab account" button
+// used by trainees on the GitLab CI capstone track. No custom resolver needed since it never
+// creates a Backstage session, unlike github/google above.
+backend.add(import('@backstage/plugin-auth-backend-module-gitlab-provider'));
 
 // catalog plugin
 backend.add(import('@backstage/plugin-catalog-backend'));

@@ -39,6 +39,7 @@ export function transformTask(
     config: backendTask.config,
     status: backendTask.status,
     catalogEntityRef: backendTask.catalog_entity_ref,
+    docsUrl: backendTask.docs_url,
     errorMessage: backendTask.error_message,
     logs: backendTask.logs,
     metadata: backendTask.metadata,
@@ -68,6 +69,7 @@ export function transformAgent(
     lastSeenAgeSeconds: backendAgent.last_seen_age_seconds,
     createdAt: backendAgent.created_at,
     isConnected: backendAgent.is_connected,
+    explicitlyDisconnected: backendAgent.explicitly_disconnected ?? false,
   };
 }
 
@@ -88,6 +90,7 @@ export function transformAgentStatus(
     // CreatedAt not available in status response, use last_seen as fallback
     createdAt: backendStatus.last_seen,
     isConnected: backendStatus.is_connected,
+    explicitlyDisconnected: false,
   };
 }
 

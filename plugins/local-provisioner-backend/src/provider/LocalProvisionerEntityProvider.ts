@@ -9,14 +9,31 @@ import { Resource } from '../types';
 
 const LOCATION_KEY = 'local-provisioner-provider:default';
 
-/** Backstage entity names must be [a-z0-9-._]; sanitize resource names for safety. */
+/**
+ * Backstage entity names must be [a-z0-9-._]; sanitize resource names for safety.
+ *
+ * The leading/trailing-separator strip must run both BEFORE and AFTER the 63-char slice —
+ * running it only before (as this used to) doesn't help when the input is long enough that
+ * truncation itself lands mid-separator, producing a name like "...agent-" that's still
+ * invalid. Confirmed live: a devops-capstone-training resource whose full name sliced to
+ * exactly "...-agent-" (a new trailing hyphen introduced BY the slice) still failed catalog
+ * policy validation despite being exactly 63 chars.
+ */
 function sanitize(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9-._]/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 63) || 'resource';
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9-._]/g, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^[-._]+|[-._]+$/g, '')
+      .slice(0, 63)
+      // Must run again after the slice, AND strip a run of separators (+, not a single
+      // char) — truncation can land after any number of stacked separators
+      // (e.g. "-_", ".-"), and a single-char strip leaves one behind. Fuzz-tested against
+      // the real KubernetesValidatorFunctions.isValidObjectName with 200k random inputs
+      // before trusting this.
+      .replace(/^[-._]+|[-._]+$/g, '') || 'resource'
+  );
 }
 
 function ownerRef(userId: string): string {
@@ -26,7 +43,12 @@ function ownerRef(userId: string): string {
 }
 
 function toEntity(resource: Resource, resourceDocsLinks: Record<string, string>): Entity {
-  const name = `local-${sanitize(resource.resource_name)}-${resource.agent_id.slice(0, 8)}`;
+  // sanitize() truncates to 63 chars, but that must apply to the FINAL assembled name, not
+  // just the resource_name substring — the local- prefix and -agentIdPrefix suffix are added
+  // after, so truncating only resource_name first can still produce a name over the 63-char
+  // catalog limit (confirmed live: a devops-capstone-training resource with a long
+  // username+timestamp produced a 65-char name and failed catalog policy validation).
+  const name = sanitize(`local-${resource.resource_name}-${resource.agent_id.slice(0, 8)}`);
   const conn = resource.connection_details || {};
   const annotations: Record<string, string> = {
     'backstage.io/managed-by-location': LOCATION_KEY,

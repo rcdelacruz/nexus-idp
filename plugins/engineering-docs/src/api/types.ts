@@ -16,6 +16,8 @@ export interface DocSource {
   id: string;
   label: string;
   description?: string;
+  /** Id of another configured source this one nests under in the sidebar. */
+  group?: string;
 }
 
 export interface EngineeringDocsApi {

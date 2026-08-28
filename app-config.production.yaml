@@ -4,7 +4,7 @@ app:
   env: production
 
 organization:
-  name: Stratpoint Technologies
+  name: 'Your Organization' # replace with your org's name
 
 backend:
   logging:
@@ -21,7 +21,7 @@ backend:
   reading:
     allow:
       - host: github.com
-      - host: gitlab.coderstudio.co
+      # - host: gitlab.your-org.com # add your self-hosted GitLab host here if you use one
       - host: gitlab.com
       - host: file
   listen:
@@ -124,15 +124,15 @@ auth:
         clientId: ${AUTH_GOOGLE_CLIENT_ID}
         clientSecret: ${AUTH_GOOGLE_CLIENT_SECRET}
         callbackUrl: ${APP_BASE_URL}/api/auth/google/handler/frame
-        allowedDomains: ['stratpoint.com']
+        allowedDomains: ['<yourdomain.com>'] # replace with your org's email domain
         customHeaders:
           X-Requested-With: XMLHttpRequest
 
 catalog:
   locations:
-    # Stratpoint Organization - Root catalog location
+    # Example organization - Root catalog location (replace with your own org's catalog)
     - type: file
-      target: ./stratpoint/catalog-info.yaml
+      target: ./example-org/catalog-info.yaml
       rules:
         - allow: [Location, Component, System, API, Resource, Group, User]
 
@@ -142,17 +142,11 @@ catalog:
       rules:
         - allow: [Component]
 
-    # Production templates from engineering-standards repository
-    - type: url
-      target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/projects/catalog-info.yaml
-      rules:
-        - allow: [Template, Location, Component, System, Domain, Group]
-
-    # Training Templates - Kafka, databases, etc.
-    - type: url
-      target: https://github.com/stratpoint-engineering/engineering-standards/blob/main/templates/training/catalog-info.yaml
-      rules:
-        - allow: [Template, Location]
+    # Production templates from your own templates repository — replace with your org's:
+    # - type: url
+    #   target: https://github.com/your-org/engineering-standards/blob/main/templates/projects/catalog-info.yaml
+    #   rules:
+    #     - allow: [Template, Location, Component, System, Domain, Group]
 
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:

@@ -8,7 +8,8 @@
  * Lifecycle:
  * - Started by: `backstage-agent start` (spawns this as detached process)
  * - Stopped by: `backstage-agent stop` (sends SIGTERM via PID)
- * - Stopped by: UI disconnect/revoke (sends SIGTERM via SSE or deletes agent)
+ * - Stopped by: UI disconnect/revoke (delivered via the poll loop's `shouldShutdown` flag,
+ *   which self-SIGTERMs; or the agent registration is deleted)
  *
  * Signal Handling:
  * - SIGTERM: Graceful shutdown (from stop command or disconnect)
@@ -56,7 +57,7 @@ async function main() {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
 
     // Without these, an uncaught error anywhere outside the already-guarded
-    // heartbeat/status paths kills this detached process silently — no log entry, no trace,
+    // poll/status paths kills this detached process silently — no log entry, no trace,
     // just "the agent went offline" with nothing to explain why. Log before exiting so the
     // next occurrence is diagnosable.
     process.on('uncaughtException', error => {

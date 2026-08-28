@@ -113,6 +113,28 @@ export class TaskStore {
   }
 
   /**
+   * Get tasks across ALL users (admin activity view), most recent first. Unlike
+   * `getTasksByUser`, this has no per-user WHERE clause unless `userId` is passed to
+   * scope down to one user — callers must gate access to this at the permission layer.
+   */
+  async listAllTasks(options?: {
+    userId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ProvisioningTask[]> {
+    let query = this.db('provisioning_tasks').orderBy('created_at', 'desc');
+
+    if (options?.userId) {
+      query = query.where({ user_id: options.userId });
+    }
+
+    query = query.limit(options?.limit ?? 200).offset(options?.offset ?? 0);
+
+    const tasks = await query;
+    return tasks.map(task => this.mapTaskFromDb(task));
+  }
+
+  /**
    * Get pending tasks for a specific agent
    */
   async getPendingTasksForAgent(agentId: string): Promise<ProvisioningTask[]> {
@@ -264,14 +286,37 @@ export class TaskStore {
     machineName?: string,
     agentVersion?: string,
   ): Promise<{ agent: AgentRegistration; reconnected: boolean }> {
-    // Check if agent already exists
-    const existing = await this.getAgentById(agentId);
+    // Check if agent already exists — by agent_id first, then by (hostname, user_id), the
+    // actual DB uniqueness constraint. agentId is a hash of hostname + primary network MAC
+    // (see packages/backstage-agent/src/utils/machineId.ts) and is meant to be stable per
+    // machine, but interface enumeration order isn't guaranteed stable across process runs
+    // on a machine with multiple interfaces (VPN/Tailscale attaching/detaching, etc.) — a
+    // different MAC gets picked, producing a different agentId for the same physical machine.
+    // Falling through to the INSERT below with a "new" agentId then violates
+    // idx_agent_hostname_user_unique (500 on every device-code poll) since a row for this
+    // hostname+user already exists under the old agentId. Checking (hostname, user_id) too
+    // catches that case and updates the existing row in place instead of colliding.
+    const existing =
+      (await this.getAgentById(agentId)) ??
+      (await this.db('agent_registrations').where({ hostname, user_id: userId }).first().then(
+        row => (row ? this.mapAgentFromDb(row) : null),
+      ));
 
     if (existing) {
-      // Update existing agent
+      // Update existing agent. Also reassign user_id: agent_id is machine-derived, so
+      // re-authorizing the CLI on a laptop previously owned by a different Backstage user
+      // (e.g. account switch, laptop handed off) must transfer ownership to whoever just
+      // authorized it — otherwise getAgentsByUser() for the new owner returns nothing,
+      // which silently breaks the Agent List UI and every heartbeat/SSE call afterward
+      // (found 2026-07-26: a new user's heartbeats 500'd with "Agent not found for user").
+      // Key the update on the row we actually found (existing.agent_id) — it may differ
+      // from the incoming agentId if this row was matched via the (hostname, user_id)
+      // fallback above, in which case agent_id needs renaming to the freshly-computed one.
       await this.db('agent_registrations')
-        .where({ agent_id: agentId })
+        .where({ agent_id: existing.agent_id })
         .update({
+          agent_id: agentId,
+          user_id: userId,
           hostname,
           os_platform: platform,
           platform_version: platformVersion,

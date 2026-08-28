@@ -1647,7 +1647,7 @@ const makeComponents = (isDark: boolean) => {
   };
 };
 
-export const stratpointDarkTheme = createUnifiedTheme({
+export const nexusDarkTheme = createUnifiedTheme({
   ...createBaseThemeOptions({
     palette: {
       ...palettes.dark,
@@ -1684,7 +1684,7 @@ export const stratpointDarkTheme = createUnifiedTheme({
   components: makeComponents(true) as any,
 });
 
-export const stratpointLightTheme = createUnifiedTheme({
+export const nexusLightTheme = createUnifiedTheme({
   ...createBaseThemeOptions({
     palette: {
       ...palettes.light,

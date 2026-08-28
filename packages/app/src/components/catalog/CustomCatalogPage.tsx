@@ -28,7 +28,7 @@ import { usePermission } from '@backstage/plugin-permission-react';
 // browse list. These are only meant to be reached via direct links from the Local
 // Provisioner page, not casual browsing — see catalog-entity-visibility plan.
 // NOTE: intentionally requires BOTH tags, not just `training` alone — the pre-existing,
-// unrelated Kafka Training docs component (stratpoint/components/kafka-training-docs.yaml)
+// unrelated Kafka Training docs component (example-org/components/kafka-training-docs.yaml)
 // is also tagged `training` and must stay visible in the main catalog.
 const HideTrainingFilter = () => {
   const { updateFilters } = useEntityList();

@@ -5,7 +5,7 @@
 | **Last Updated** | 2026-06-27 |
 | **Project** | Stratpoint Internal Developer Portal |
 | **Backstage Version** | 1.52.1 |
-| **Status** | Production-ready, deployed on AWS ECS Fargate (portal.stratpoint.io) + k8s homelab |
+| **Status** | Production-ready, deployed on AWS ECS Fargate (<your-domain>) + k8s homelab |
 | **Node.js** | 22.x (required — isolated-vm@6.x needs Node 22) |
 | **Package Manager** | Yarn 4.12.0 (Berry with PnP) |
 
@@ -61,7 +61,7 @@
 
 ### Repository Philosophy
 - **Portal only**: This repo contains the Backstage application code
-- **Templates separate**: https://github.com/stratpoint-engineering/engineering-standards.git
+- **Templates separate**: https://github.com/your-github-org/engineering-standards.git
 - **No local template paths**: All template references use GitHub URLs
 
 ### Tech Stack
@@ -71,7 +71,7 @@
 | Backend | Node.js, Express (new backend system) |
 | Database | PostgreSQL 13.3 |
 | Cache | Redis 7 |
-| Auth | Google OAuth (@stratpoint.com domain restriction) |
+| Auth | Google OAuth (@<yourdomain.com> domain restriction) |
 
 ---
 
@@ -111,7 +111,7 @@
 │   │       ├── service/              # AgentService, TaskQueueService
 │   │       └── database/             # TaskStore + migrations
 │   └── project-registration/         # Project wizard (frontend only)
-├── stratpoint/                       # Organization catalog
+├── example-org/                       # Organization catalog
 │   ├── org/groups.yaml               # Teams and departments
 │   ├── org/users.yaml                # User definitions
 │   ├── systems/                      # System definitions
@@ -184,7 +184,7 @@ Custom RBAC implementation in `packages/backend/src/plugins/permission.ts`.
 | Admin | `backstage-admins` | Full access, can delete entities |
 | User | Any authenticated | Create, read, use scaffolder |
 
-**Grant admin access:** Add `backstage-admins` to user's `memberOf` array in `stratpoint/org/users.yaml`
+**Grant admin access:** Add `backstage-admins` to user's `memberOf` array in `example-org/org/users.yaml`
 
 ### 4. Type Transformation Layer
 
@@ -246,7 +246,7 @@ POSTGRES_DB=backstage
 # Authentication (Required)
 AUTH_GOOGLE_CLIENT_ID=<client-id>.apps.googleusercontent.com
 AUTH_GOOGLE_CLIENT_SECRET=<secret>
-AUTH_GOOGLE_ALLOWED_DOMAINS=stratpoint.com
+AUTH_GOOGLE_ALLOWED_DOMAINS=<yourdomain.com>
 BACKEND_SECRET=<32-byte-hex>  # Generate: node -p 'require("crypto").randomBytes(32).toString("hex")'
 
 # GitHub Integration
@@ -279,27 +279,27 @@ FINOPS_AWS_ACCOUNT_PROD=<12-digit-account-id>
 | Target | Trigger phrase | Command |
 |--------|---------------|---------|
 | **Talos k8s homelab** | "new changes", "new commits", "i-deploy" | `bash scripts/deploy.sh` |
-| **AWS ECS Fargate** | "portal.stratpoint.io", "AWS", "ECS", "tofu" | build ECR + `tofu apply` (see AWS ECS section below) |
+| **AWS ECS Fargate** | "<your-domain>", "AWS", "ECS", "tofu" | build ECR + `tofu apply` (see AWS ECS section below) |
 
 ### Deploy to k8s (homelab)
 ```bash
 bash scripts/deploy.sh
-# Pulls latest develop, builds Docker image, pushes to 192.168.2.101:5000, kubectl rollout restart
+# Pulls latest develop, builds Docker image, pushes to <your-registry>, kubectl rollout restart
 ```
 
 > **Version bumps only**: `deploy.sh` builds on top of the cached base image — after a `yarn backstage-cli versions:bump`, node_modules in the base are stale. Rebuild the base first:
 > ```bash
-> docker build -t 192.168.2.101:5000/backstage:latest -f packages/backend/Dockerfile .
-> docker push 192.168.2.101:5000/backstage:latest
+> docker build -t <your-registry>/backstage:latest -f packages/backend/Dockerfile .
+> docker push <your-registry>/backstage:latest
 > bash scripts/deploy.sh
 > ```
 
 ### Deploy to AWS ECS Fargate
 ```bash
 cd infra/
-docker build --squash -t 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest -f Dockerfile.with-migrations .
-aws ecr get-login-password --region us-west-2 --profile cost-admin-nonprod | docker login --username AWS --password-stdin 746540123485.dkr.ecr.us-west-2.amazonaws.com
-docker push 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest
+docker build --squash -t <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest -f Dockerfile.with-migrations .
+aws ecr get-login-password --region us-west-2 --profile cost-admin-nonprod | docker login --username AWS --password-stdin <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com
+docker push <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest
 AWS_PROFILE=cost-admin-nonprod tofu apply -auto-approve
 ```
 
@@ -315,7 +315,7 @@ yarn dev                      # Start dev server (frontend :3000, backend :7007)
 ```
 
 ### Adding a User
-Edit `stratpoint/org/users.yaml`:
+Edit `example-org/org/users.yaml`:
 ```yaml
 ---
 apiVersion: backstage.io/v1alpha1
@@ -324,13 +324,13 @@ metadata:
   name: firstname.lastname
 spec:
   profile:
-    email: firstname.lastname@stratpoint.com
+    email: firstname.lastname@<yourdomain.com>
     displayName: Firstname Lastname
   memberOf: [backend-team]  # Add backstage-admins for admin access
 ```
 
 ### Adding a Team
-Edit `stratpoint/org/groups.yaml`:
+Edit `example-org/org/groups.yaml`:
 ```yaml
 ---
 apiVersion: backstage.io/v1alpha1
@@ -359,7 +359,7 @@ spec:
 | Login redirect fails | Permission module misconfigured | Ensure `permission-backend-module.ts` uses `policyExtensionPoint` |
 | 401 on health endpoints | Auth policy missing | Add `httpRouter.addAuthPolicy()` BEFORE `httpRouter.use()` |
 | Catalog not loading | Invalid paths/YAML | Check paths relative to `packages/backend/`, validate YAML |
-| Permission denied | User not in correct group | Check `memberOf` in `stratpoint/org/users.yaml` |
+| Permission denied | User not in correct group | Check `memberOf` in `example-org/org/users.yaml` |
 | Module not found | Missing workspace dependency | Add plugin to `packages/app/package.json`, run `yarn install` |
 | Device code flow fails | Expired codes | Codes expire in 10 min, restart flow |
 | Auth plugin "Migration table locked" | Concurrent migrations from pod restarts | See "Recent Issue: Migration Lock Recovery" section for fix |
@@ -371,7 +371,7 @@ spec:
 | Date | Change |
 |------|--------|
 | 2026-06-27 | Backstage version bump 1.49.1 → 1.52.1. Breaking changes fixed: (1) `plugin-permission-node` 0.11 — `PolicyQueryUser` replaces `BackstageIdentityResponse`, `.identity` → `.info`; (2) `plugin-catalog-node` v2 — `catalogProcessingExtensionPoint` moved from `/alpha` to main export; (3) `isolated-vm@6.0.2` requires Node.js 22 — updated `packages/backend/Dockerfile` from `node:20-bookworm-slim` to `node:22-bookworm-slim`. Version bump requires rebuilding base image (`packages/backend/Dockerfile`) before running `deploy.sh`. |
-| 2026-03-31 | AWS ECS Fargate deployment: OpenTofu-managed infra in `infra/` — VPC, RDS PostgreSQL 13.20, ElastiCache Redis 7.1, ECR, ECS Fargate, Secrets Manager, CloudWatch. Cloudflare Tunnel `backstage-aws-prod` routes `portal.stratpoint.io`. 4-container task: create-db (init) → db-migrations (init) → backstage (main) → cloudflared (sidecar). S3 backend `stratpoint-tofu-state-prod`. ~$90/month. |
+| 2026-03-31 | AWS ECS Fargate deployment: OpenTofu-managed infra in `infra/` — VPC, RDS PostgreSQL 13.20, ElastiCache Redis 7.1, ECR, ECS Fargate, Secrets Manager, CloudWatch. Cloudflare Tunnel `backstage-aws-prod` routes `<your-domain>`. 4-container task: create-db (init) → db-migrations (init) → backstage (main) → cloudflared (sidecar). S3 backend `your-org-tofu-state-prod`. ~$90/month. |
 | 2026-03-31 | Admin onboarding bug documented: admins bypass `POST /register` (step 1 auto-done), so `user_management_users` has no row → `updateOnboardingStep` silently fails for steps 3 & 4. Fix planned as Admin Setup Portal (see `.claude/plans/user-management-onboarding-roadmap.md`). |
 | 2026-03-28 | P1 features: GitHub catalog autodiscovery (plugin-catalog-backend-module-github + orphanStrategy:delete), rate limiting on device endpoints (express-rate-limit, 10/15min for code, 130/10min for token), Project Registration backend plugin (`@stratpoint/plugin-project-registration-backend`) — DB store, REST API, leads+admins RBAC, system project pre-seeding; frontend wired to real API |
 | 2026-03-28 | Security audit round 2: CSP frame-src cleaned (removed redundant APP_BASE_URL), AWS account IDs moved to env vars (FINOPS_AWS_ACCOUNT_NONPROD/LEGACY/PROD) with quoted substitution to preserve string type, DEPT_TEAM_IDS/JWT moved to onboarding/src/constants.ts (clean re-export, no shared-config package — backend cannot consume src/index.ts workspace deps), useUserRole 30s GitHub poll removed (single mount-time check sufficient) |
@@ -453,9 +453,9 @@ This removed duplicate entries and allowed the auth plugin to proceed.
 Infrastructure is fully managed by OpenTofu in `infra/`. **Never configure manually — always use `tofu apply`.**
 
 ### Key facts
-- **URL:** `https://portal.stratpoint.io` via Cloudflare Tunnel `backstage-aws-prod`
-- **AWS account:** 746540123485 (nonprod), profile: `cost-admin-nonprod`, region: `us-west-2`
-- **State backend:** S3 `stratpoint-tofu-state-prod` + DynamoDB lock
+- **URL:** `https://<your-domain>` via Cloudflare Tunnel `backstage-aws-prod`
+- **AWS account:** <your-aws-account-id> (nonprod), profile: `cost-admin-nonprod`, region: `us-west-2`
+- **State backend:** S3 `your-org-tofu-state-prod` + DynamoDB lock
 - **Cost:** ~$90-95/month (ECS Fargate + RDS db.t4g.small + ElastiCache cache.t4g.small)
 
 ### Deploy workflow
@@ -463,9 +463,9 @@ Infrastructure is fully managed by OpenTofu in `infra/`. **Never configure manua
 cd infra/
 
 # 1. Build & push image
-docker build --squash -t 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest -f Dockerfile.with-migrations .
-aws ecr get-login-password --region us-west-2 --profile cost-admin-nonprod | docker login --username AWS --password-stdin 746540123485.dkr.ecr.us-west-2.amazonaws.com
-docker push 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest
+docker build --squash -t <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest -f Dockerfile.with-migrations .
+aws ecr get-login-password --region us-west-2 --profile cost-admin-nonprod | docker login --username AWS --password-stdin <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com
+docker push <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest
 
 # 2. Apply (force_new_deployment=true triggers redeployment automatically)
 AWS_PROFILE=cost-admin-nonprod tofu apply -auto-approve
@@ -490,8 +490,8 @@ AWS_PROFILE=cost-admin-nonprod tofu apply -auto-approve
 ### Cloudflare Tunnels
 | Tunnel | Account | Routes |
 |--------|---------|--------|
-| `backstage-aws-prod` (ID: a6f27602) | stratpoint.io | `portal.stratpoint.io` → `localhost:7007` |
-| `argocd-k8s` | coderstudio.co | `argocd.coderstudio.co` → homelab ArgoCD |
+| `backstage-aws-prod` (ID: a6f27602) | <yourdomain.com> | `<your-domain>` → `localhost:7007` |
+| `argocd-k8s` | <your-domain> | `argocd.<your-domain>` → homelab ArgoCD |
 
 ---
 
@@ -503,7 +503,7 @@ AWS_PROFILE=cost-admin-nonprod tofu apply -auto-approve
 | Medium | Project Registration Phase 2: "Select Project" dropdown in scaffolder templates | `plugins/project-registration-backend/`, `templates/` |
 | Medium | Project Registration Phase 3: Jira integration (create project in Jira on submit) | `plugins/project-registration-backend/src/service/router.ts` |
 | Medium | FinOps route guard uses `catalogLocationDeletePermission` as a proxy (admin-only by coincidence). Should be a proper `finops.read` BasicPermission registered via permissions extension point in `plugins/finops-backend`. | `packages/app/src/App.tsx:130`, `plugins/finops-backend/` |
-| Medium | User provisioning is manual | `stratpoint/org/users.yaml` |
+| Medium | User provisioning is manual | `example-org/org/users.yaml` |
 | Medium | TechDocs uses local storage | `app-config.yaml` |
 | Low | Limited test coverage | All plugins |
 
@@ -527,11 +527,11 @@ AWS_PROFILE=cost-admin-nonprod tofu apply -auto-approve
 | Permissions | `permission.ts`, `permission-backend-module.ts` |
 | K8s + ArgoCD config | `app-config.yaml` (kubernetes/proxy/argocd blocks), `app-config.production.yaml` |
 | K8s RBAC manifest | `k8s-manifests/backstage-k8s-reader.yaml` |
-| CNPG catalog entities | `stratpoint/systems/platform-databases.yaml` |
+| CNPG catalog entities | `example-org/systems/platform-databases.yaml` |
 | 3-tier app template | `templates/three-tier-app/template.yaml` + `skeleton/` |
 | Integration docs | `docs/K8S_ARGOCD_CNPG_INTEGRATION.md` |
 | Themes | `packages/app/src/theme.ts` |
-| Users/Groups | `stratpoint/org/users.yaml`, `stratpoint/org/groups.yaml` |
+| Users/Groups | `example-org/org/users.yaml`, `example-org/org/groups.yaml` |
 | Local Provisioner API | `plugins/local-provisioner-backend/src/api/*.ts` |
 | Agent CLI Entry | `packages/backstage-agent/bin/backstage-agent.js` |
 | Backend Entry | `packages/backend/src/index.ts` |
@@ -570,9 +570,9 @@ AWS_PROFILE=cost-admin-nonprod tofu apply -auto-approve
 ## AI Assistant Reminders
 
 1. **New backend system**: Use `createBackend()`, `policyExtensionPoint`, `httpRouter.addAuthPolicy()`
-2. **Organization location**: `stratpoint/` (not `examples/`)
+2. **Organization location**: `example-org/` (not `examples/`)
 3. **Templates location**: External repo via GitHub URLs
-4. **Auth restriction**: Google OAuth, `@stratpoint.com` domain only
+4. **Auth restriction**: Google OAuth, `@<yourdomain.com>` domain only
 5. **Type safety**: Full TypeScript, snake_case ↔ camelCase transformation layer
 6. **Test auth flow**: Always verify login works after permission/auth changes
 7. **Config hierarchy**: `app-config.yaml` → `app-config.local.yaml` → `app-config.production.yaml`

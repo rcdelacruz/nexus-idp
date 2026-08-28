@@ -32,7 +32,7 @@ import { createDeleteS3BackupsAction } from './scaffolder/actions/deleteS3Backup
 
 export const scaffolderActionsModule = createBackendModule({
   pluginId: 'scaffolder',
-  moduleId: 'stratpoint-actions',
+  moduleId: 'custom-actions',
   register(env) {
     env.registerInit({
       deps: {
@@ -44,7 +44,7 @@ export const scaffolderActionsModule = createBackendModule({
       },
       async init({ scaffolder, config, discovery, auth, notification }) {
         scaffolder.addActions(
-          createLocalProvisionAction({ discovery, auth }),
+          createLocalProvisionAction({ discovery, auth, config }),
           createKubernetesApplyAction(),
           createPullSecretAction(),
           createAppSecretsAction(),

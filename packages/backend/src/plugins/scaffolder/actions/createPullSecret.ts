@@ -44,7 +44,8 @@ export function createPullSecretAction() {
       } catch { /* namespace might already exist */ }
 
       // Create docker-registry secret
-      const auth = Buffer.from(`stratpoint-engineering:${token}`).toString('base64');
+      const ghcrUsername = process.env.GHCR_USERNAME ?? 'github-actions';
+      const auth = Buffer.from(`${ghcrUsername}:${token}`).toString('base64');
       const dockerConfigJson = JSON.stringify({
         auths: { [registry]: { auth } },
       });

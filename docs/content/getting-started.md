@@ -6,9 +6,9 @@ Welcome to Nexus IDP — Stratpoint's Internal Developer Platform. This guide wa
 
 ## Signing In
 
-1. Go to [backstage.coderstudio.co](https://backstage.coderstudio.co) (on-prem) or [portal.stratpoint.io](https://portal.stratpoint.io) (production)
+1. Go to [<your-domain>](https://<your-domain>) (on-prem) or [<your-domain>](https://<your-domain>) (production)
 2. Click **Sign in with Google**
-3. Use your `@stratpoint.com` Google account
+3. Use your `@<yourdomain.com>` Google account
 
 On first login, your account is automatically created and placed in the `general-engineers` group. You'll have access to Engineering Docs, Tech Radar, and the Software Catalog in read-only mode.
 

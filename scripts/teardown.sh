@@ -12,11 +12,14 @@
 #   --execute          Actually delete resources (default: dry-run)
 #   --keep-repo        Skip GitHub repository deletion
 #   --keep-backups     Skip S3 / CNPG backup deletion
-#   --backstage-url    Backstage base URL (default: https://backstage.coderstudio.co)
+#   --backstage-url    Backstage base URL (default: http://localhost:7007)
 #   --token TOKEN      Backstage token — enables catalog lookup + unregistration
-#   --aws-profile      AWS CLI profile for tofu destroy (default: cost-admin-nonprod)
+#   --aws-profile      AWS CLI profile for tofu destroy (default: default)
 #   --aws-region       AWS region (default: us-west-2)
 #   --skip-aws         Skip AWS infrastructure destruction
+#
+# Env vars:
+#   TEARDOWN_GITHUB_ORGS   Comma-separated GitHub orgs to search as a fallback when a repo slug cannot be resolved from the catalog
 #
 # Examples:
 #   bash scripts/teardown.sh demo-for-syl
@@ -60,9 +63,9 @@ shift
 EXECUTE=false
 KEEP_REPO=false
 KEEP_BACKUPS=false
-BACKSTAGE_URL="https://backstage.coderstudio.co"
+BACKSTAGE_URL="http://localhost:7007"
 BACKSTAGE_TOKEN=""
-AWS_PROFILE="${AWS_PROFILE:-cost-admin-nonprod}"
+AWS_PROFILE="${AWS_PROFILE:-default}"
 AWS_REGION="${AWS_REGION:-us-west-2}"
 SKIP_AWS=false
 
@@ -233,7 +236,7 @@ fi
 
 # Fallback: try GitHub search across known orgs
 if [[ -z "$GITHUB_REPO_SLUG" ]]; then
-  for org in strat-main-team stratpoint-engineering; do
+  for org in ${TEARDOWN_GITHUB_ORGS:-}; do
     if gh repo view "${org}/${APP_NAME}" &>/dev/null 2>&1; then
       GITHUB_REPO_SLUG="${org}/${APP_NAME}"
       break
@@ -430,7 +433,7 @@ if ! $SKIP_AWS; then
 
   # Fallback: GitHub topic search if catalog yielded nothing
   if [[ ${#FOUND_AWS_INFRA_REPOS[@]} -eq 0 ]]; then
-    for org in strat-main-team stratpoint-engineering; do
+    for org in ${TEARDOWN_GITHUB_ORGS:-}; do
       while IFS= read -r repo_name; do
         [[ -z "$repo_name" ]] && continue
         # Must contain the app name somewhere in the repo name
@@ -677,7 +680,7 @@ else
         export TF_VAR_vpc_id="${AWS_VPC_ID:-}"
         export TF_VAR_vpc_cidr="${AWS_VPC_CIDR:-}"
         export TF_VAR_private_subnet_ids="${SUBNET_LIST}"
-        export TF_VAR_tofu_state_bucket="${TOFU_STATE_BUCKET:-stratpoint-tofu-state-prod}"
+        export TF_VAR_tofu_state_bucket="${TOFU_STATE_BUCKET:-your-org-tofu-state-prod}"
         export TF_VAR_tofu_state_region="${AWS_REGION}"
         export TF_VAR_tofu_lock_table="${TOFU_LOCK_TABLE:-terraform-locks}"
 

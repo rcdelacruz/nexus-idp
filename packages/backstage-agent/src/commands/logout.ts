@@ -5,9 +5,8 @@
 import { Command } from 'commander';
 import { TokenManager } from '../auth/TokenManager';
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import logger from '../utils/logger';
+import { getPidFilePath, safeUnlinkPidFile } from '../utils/pidFile';
 
 export const logoutCommand = new Command('logout')
   .description('Logout and clear authentication tokens')
@@ -15,7 +14,7 @@ export const logoutCommand = new Command('logout')
   .action(async (options) => {
     try {
       const tokenManager = new TokenManager();
-      const pidFile = path.join(os.homedir(), '.backstage-agent', 'agent.pid');
+      const pidFile = getPidFilePath();
 
       // Check if agent is running
       const isRunning = fs.existsSync(pidFile);
@@ -40,11 +39,11 @@ export const logoutCommand = new Command('logout')
             // Already stopped
           }
 
-          fs.unlinkSync(pidFile);
+          safeUnlinkPidFile(pidFile);
           logger.info('✓ Agent stopped');
         } catch {
           // Process not running, just clean up
-          fs.unlinkSync(pidFile);
+          safeUnlinkPidFile(pidFile);
         }
       }
 

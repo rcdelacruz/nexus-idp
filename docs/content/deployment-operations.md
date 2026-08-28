@@ -11,8 +11,8 @@ Operational guide for deploying and maintaining the Nexus IDP k8s on-prem instan
 
 | Target | URL | Trigger |
 |--------|-----|---------|
-| **k8s on-prem (Talos)** | `https://backstage.coderstudio.co` | `bash scripts/deploy.sh` |
-| **AWS ECS Fargate** | `https://portal.stratpoint.io` | ECR push + `tofu apply` |
+| **k8s on-prem (Talos)** | `https://<your-domain>` | `bash scripts/deploy.sh` |
+| **AWS ECS Fargate** | `https://<your-domain>` | ECR push + `tofu apply` |
 
 ---
 
@@ -25,8 +25,8 @@ bash scripts/deploy.sh
 The script:
 1. `git pull origin develop`
 2. `yarn workspace app build && yarn build:backend`
-3. `docker build . -f Dockerfile.with-migrations --squash --tag 192.168.2.101:5000/backstage:latest`
-4. `docker push 192.168.2.101:5000/backstage:latest`
+3. `docker build . -f Dockerfile.with-migrations --squash --tag <your-registry>/backstage:latest`
+4. `docker push <your-registry>/backstage:latest`
 5. `kubectl apply -f k8s-manifests/backstage-deployment.yaml`
 6. `kubectl rollout restart deployment/backstage -n backstage`
 7. Health check via `curl`
@@ -43,12 +43,12 @@ The authoritative deployment spec is `k8s-manifests/backstage-deployment.yaml`. 
 
 ## Dockerfile.with-migrations Rules
 
-`Dockerfile.with-migrations` extends `FROM 192.168.2.101:5000/backstage:latest` (itself). This causes layer accumulation — every build adds layers on top of the previous image.
+`Dockerfile.with-migrations` extends `FROM <your-registry>/backstage:latest` (itself). This causes layer accumulation — every build adds layers on top of the previous image.
 
 ### Mandatory: always build with `--squash`
 
 ```bash
-docker build . -f Dockerfile.with-migrations --squash --tag 192.168.2.101:5000/backstage:latest
+docker build . -f Dockerfile.with-migrations --squash --tag <your-registry>/backstage:latest
 ```
 
 Without `--squash`, the image accumulates layers across every deploy. At ~452 layers the overlay2 filesystem hits the mount options length limit (~4096 bytes) and pods crash with:
@@ -102,7 +102,7 @@ COPY --chown=node:node packages/backend/config.d.ts /app/packages/backend/config
 |----------|-------|-----|
 | `NODE_OPTIONS` | `--no-node-snapshot` | Required for scaffolder nunjucks engine on Node.js 20+ |
 | `APP_CONFIG_backend_listen_port` | `7007` | Backend listen port |
-| `APP_BASE_URL` | `https://backstage.coderstudio.co` | Frontend base URL |
+| `APP_BASE_URL` | `https://<your-domain>` | Frontend base URL |
 
 ---
 
@@ -112,7 +112,7 @@ COPY --chown=node:node packages/backend/config.d.ts /app/packages/backend/config
 
 Image has too many layers (>~450). Rebuild with `--squash`:
 ```bash
-docker build . -f Dockerfile.with-migrations --squash --tag 192.168.2.101:5000/backstage:latest
+docker build . -f Dockerfile.with-migrations --squash --tag <your-registry>/backstage:latest
 ```
 
 ### `Cannot find module '/packages/backend'`

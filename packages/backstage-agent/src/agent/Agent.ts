@@ -7,12 +7,11 @@ import fetch from 'node-fetch';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { SSEClient } from './SSEClient';
 import { DockerComposeExecutor } from '../executor/DockerComposeExecutor';
 import { LocalResourceRegistry } from '../registry/LocalResourceRegistry';
 import { OutboxQueue } from '../registry/OutboxQueue';
 import {
-  SSETaskEvent,
+  AgentTaskEvent,
   TaskStatus,
   TaskType,
   ProvisioningTask,
@@ -21,19 +20,29 @@ import {
 } from '../types';
 import logger from '../utils/logger';
 
+// Bounded well under Cloudflare's ~100s ceiling on how long it holds a connection open
+// waiting for an origin response — must match (or stay under) the backend's own
+// localProvisioner.pollTimeoutSeconds; the server times out and responds empty at its own
+// limit regardless, but keeping this the same avoids a client-side abort racing a real
+// response.
+const POLL_TIMEOUT_MS = 25_000;
+// After a poll fails (network error, non-2xx, timeout not from our own AbortSignal), wait
+// this long before retrying — avoids hammering a genuinely-down server in a tight loop.
+const POLL_RETRY_DELAY_MS = 5_000;
+
 export class Agent {
-  private sseClient: SSEClient | null = null;
   private executor: DockerComposeExecutor;
   private registry: LocalResourceRegistry;
   private outbox: OutboxQueue;
   private backstageUrl: string;
   private agentId: string;
   private serviceToken: string;
-  private heartbeatInterval: NodeJS.Timeout | null = null;
-  // Task IDs currently being processed — dedups delivery via SSE, heartbeat, or the startup
-  // check so a task never runs twice.
+  // Task IDs currently being processed — dedups in case a task somehow shows up in more than
+  // one poll response (shouldn't happen, but cheap to guard).
   private processing = new Set<string>();
   private pidFile: string;
+  private polling = false;
+  private pollAbortController: AbortController | null = null;
 
   constructor(backstageUrl: string, agentId: string, serviceToken: string) {
     this.backstageUrl = backstageUrl.replace(/\/$/, '');
@@ -136,52 +145,92 @@ export class Agent {
     // Agent is already registered during login/device code flow
     // No need to register again here
 
-    // Connect to SSE endpoint
-    this.sseClient = new SSEClient(
-      this.backstageUrl,
-      this.agentId,
-      this.serviceToken
-    );
-
-    this.sseClient.connect(async (task) => {
-      await this.handleTask(task);
-    });
-
-    // Start heartbeat — task delivery is folded into the heartbeat response (see sendHeartbeat),
-    // so there is no separate polling loop. This is the cheapest, most proxy-friendly design:
-    // one short request/response every 30s carries both liveness and pending tasks.
-    this.startHeartbeat();
-
-    // One immediate check on startup so a task queued before this agent connected starts right
-    // away instead of waiting for the first heartbeat tick.
-    this.checkPendingOnce();
+    // Long-polling is the single mechanism for task delivery, the shutdown signal, and
+    // liveness — replaces SSE + the separate heartbeat entirely. SSE required one persistent
+    // connection held open indefinitely, which the Cloudflare tunnel does not reliably keep
+    // alive (a wedged/dropped SSE stream could silently never deliver a task or the disconnect
+    // signal, even though the server "sent" it successfully — found 2026-07-26). Long-polling
+    // uses many short-lived requests instead, each bounded by POLL_TIMEOUT_MS, so there is no
+    // long-lived connection state to silently lose: a request either gets its answer or times
+    // out and is immediately reissued. The first iteration of this loop covers what the old
+    // startup check did (pick up anything already pending) — no separate call needed.
+    this.polling = true;
+    this.pollLoop();
 
     logger.info('Agent started successfully. Waiting for tasks...');
   }
 
-  /** One-shot check for pending tasks (startup only). Steady-state delivery is via heartbeat. */
-  private async checkPendingOnce(): Promise<void> {
-    try {
-      const url = `${this.backstageUrl}/api/local-provisioner/agent/tasks/pending?agentId=${encodeURIComponent(this.agentId)}`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${this.serviceToken}` } });
-      if (!res.ok) return;
-      const body = (await res.json()) as { tasks?: any[] };
-      for (const t of body.tasks || []) {
-        if (this.processing.has(t.task_id)) continue;
-        logger.info(`Picked up task ${t.task_id} on startup`);
-        this.handleTask({ taskId: t.task_id, type: t.task_type, config: t.config || {} }).catch(
-          err => logger.error(`Task ${t.task_id} failed: ${err.message}`),
-        );
+  /**
+   * Continuously long-poll for work. Each call either returns promptly (something was already
+   * pending, or notifyAgent woke it server-side) or after POLL_TIMEOUT_MS with an empty
+   * result — either way, immediately reissue. On failure (network error, non-2xx), back off
+   * POLL_RETRY_DELAY_MS before retrying so a genuinely-down server isn't hammered.
+   */
+  private async pollLoop(): Promise<void> {
+    while (this.polling) {
+      this.pollAbortController = new AbortController();
+      try {
+        const url = `${this.backstageUrl}/api/local-provisioner/agent/poll?agentId=${encodeURIComponent(this.agentId)}`;
+        const timeout = setTimeout(() => this.pollAbortController?.abort(), POLL_TIMEOUT_MS + 5_000);
+        let response;
+        try {
+          response = await fetch(url, {
+            headers: { Authorization: `Bearer ${this.serviceToken}` },
+            signal: this.pollAbortController.signal as any,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            logger.error('Service token invalid or expired — run "backstage-agent login" again');
+            this.polling = false;
+            process.exit(1);
+          }
+          logger.warn(`Poll failed: ${response.status}`);
+          await this.delay(POLL_RETRY_DELAY_MS);
+          continue;
+        }
+
+        // A live connection just proved we're online — drain anything queued while offline.
+        if (this.outbox.size() > 0) {
+          await this.outbox.flush((taskId, body) => this.sendStatus(taskId, body));
+        }
+
+        const body = (await response.json()) as { tasks?: any[]; shouldShutdown?: boolean };
+        for (const t of body.tasks || []) {
+          if (this.processing.has(t.task_id)) continue;
+          logger.info(`Picked up task ${t.task_id} via poll`);
+          this.handleTask({ taskId: t.task_id, type: t.task_type, config: t.config || {} }).catch(
+            err => logger.error(`Task ${t.task_id} failed: ${err.message}`),
+          );
+        }
+
+        if (body.shouldShutdown) {
+          logger.info('Server requested shutdown (Stop Agent). Stopping...');
+          this.polling = false;
+          process.kill(process.pid, 'SIGTERM');
+        }
+      } catch (error: any) {
+        if (error.name === 'AbortError' && !this.polling) {
+          // Our own stop() aborted the in-flight poll — not a failure, just exit the loop.
+          break;
+        }
+        logger.warn(`Poll error (offline?): ${error.message}`);
+        await this.delay(POLL_RETRY_DELAY_MS);
       }
-    } catch (error: any) {
-      logger.debug(`Startup task check failed (offline?): ${error.message}`);
     }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
    * Handle incoming task
    */
-  private async handleTask(taskEvent: SSETaskEvent): Promise<void> {
+  private async handleTask(taskEvent: AgentTaskEvent): Promise<void> {
     const taskId = taskEvent.taskId;
 
     // Dedup: SSE and polling can both deliver the same task; run it once.
@@ -324,88 +373,15 @@ export class Agent {
   }
 
   /**
-   * Send heartbeat to backend
-   */
-  private async sendHeartbeat(): Promise<void> {
-    let online = false;
-    try {
-      const url = `${this.backstageUrl}/api/local-provisioner/agent/heartbeat`;
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.serviceToken}`,
-        },
-        body: JSON.stringify({ agentId: this.agentId }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          logger.error('Service token invalid or expired — run "backstage-agent login" again');
-        } else {
-          logger.warn(`Heartbeat failed: ${response.status}`);
-        }
-      } else {
-        online = true;
-        logger.debug('Heartbeat sent successfully');
-        // Task delivery is folded into the heartbeat response — no separate poll needed.
-        // This is a short request/response that works through proxies (SSE does not) and adds
-        // zero extra requests.
-        try {
-          const body = (await response.json()) as { tasks?: any[] };
-          for (const t of body.tasks || []) {
-            if (this.processing.has(t.task_id)) continue;
-            logger.info(`Picked up task ${t.task_id} via heartbeat`);
-            this.handleTask({
-              taskId: t.task_id,
-              type: t.task_type,
-              config: t.config || {},
-            }).catch(err => logger.error(`Task ${t.task_id} failed: ${err.message}`));
-          }
-        } catch {
-          // ignore malformed body — heartbeat itself still succeeded
-        }
-      }
-    } catch (error: any) {
-      logger.warn(`Heartbeat error (offline?): ${error.message}`);
-    }
-
-    // When connectivity is confirmed, drain any status updates queued while offline.
-    if (online && this.outbox.size() > 0) {
-      await this.outbox.flush((taskId, body) => this.sendStatus(taskId, body));
-    }
-  }
-
-  /**
-   * Start heartbeat interval (every 30 seconds)
-   */
-  private startHeartbeat(): void {
-    this.heartbeatInterval = setInterval(() => {
-      this.sendHeartbeat();
-    }, 30000);
-
-    // Send initial heartbeat
-    this.sendHeartbeat();
-  }
-
-  /**
    * Stop the agent
    */
   async stop(): Promise<void> {
     logger.info('Stopping agent...');
 
-    // Stop heartbeat
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-
-    // Disconnect SSE
-    if (this.sseClient) {
-      this.sseClient.disconnect();
-      this.sseClient = null;
-    }
+    // Stop the poll loop. Setting the flag first means the AbortError this triggers is
+    // recognized as an intentional stop rather than a real failure (see pollLoop's catch).
+    this.polling = false;
+    this.pollAbortController?.abort();
 
     // Remove PID file
     this.removePidFile();

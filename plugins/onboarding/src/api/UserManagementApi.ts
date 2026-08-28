@@ -37,6 +37,7 @@ export class UserManagementApi {
   async getMe(): Promise<{
     name: string; display_name: string; email: string;
     teams: string[]; is_lead: boolean; is_admin: boolean; github_username: string | null;
+    gitlab_username: string | null;
     onboarding_catalog_tour: boolean; onboarding_engineering_docs: boolean;
   } | null> {
     const res = await this.request('GET', '/me');
@@ -56,6 +57,10 @@ export class UserManagementApi {
 
   autoLinkGithub(): Promise<{ found: boolean; username?: string }> {
     return this.post<{ found: boolean; username?: string }>('/auto-link-github', {});
+  }
+
+  linkGitlab(args: { gitlabUsername: string; oauthToken?: string }) {
+    return this.post('/link-gitlab', args);
   }
 
   assign(args: { userName: string; teams: string[]; isLead?: boolean; displayName?: string }) {

@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "nexus": {
+      "command": "uvx",
+      "args": [
+        "--refresh",
+        "--from",
+        "nexus-dev-toolkit",
+        "nexus-mcp"
+      ]
+    }
+  }
+}

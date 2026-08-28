@@ -6,17 +6,19 @@ export interface SourceInfo {
   id: string;
   label: string;
   description?: string;
+  /** Optional id of another configured source this one nests under in the sidebar/UI. */
+  group?: string;
   service: GitHubDocsService;
 }
 
 // Default source used when no engineeringDocs.sources config is provided
 const DEFAULT_SOURCE: DocSourceConfig & { id: string; label: string } = {
   id: 'engineering-docs',
-  label: 'Engineering Hub',
-  repoOwner: 'stratpoint-engineering',
-  repoName: 'engineering-hub',
+  label: 'Nexus IDP Docs',
+  repoOwner: 'rcdelacruz',
+  repoName: 'nexus-idp',
   branch: 'main',
-  contentBase: 'src/content',
+  contentBase: 'docs/content',
 };
 
 export class SourceRegistry {
@@ -47,6 +49,7 @@ export class SourceRegistry {
           id,
           label: s.getOptionalString('label') ?? id,
           description: s.getOptionalString('description'),
+          group: s.getOptionalString('group'),
           service: new GitHubDocsService(logger, this.token, sourceConfig, cache.withOptions({ defaultTtl: 30 * 60 * 1000 })),
         });
       }
@@ -68,8 +71,8 @@ export class SourceRegistry {
     return this.sources.values().next().value as SourceInfo;
   }
 
-  list(): Array<{ id: string; label: string; description?: string }> {
-    return Array.from(this.sources.values()).map(({ id, label, description }) => ({ id, label, description }));
+  list(): Array<{ id: string; label: string; description?: string; group?: string }> {
+    return Array.from(this.sources.values()).map(({ id, label, description, group }) => ({ id, label, description, group }));
   }
 
   /** Get or create a GitHubDocsService for an ad-hoc (entity-annotated) repo. */

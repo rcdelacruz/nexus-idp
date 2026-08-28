@@ -33,8 +33,8 @@ services:
     # Environment variables (set these in Coolify UI)
     environment:
       # Application URLs
-      - APP_BASE_URL=${APP_BASE_URL:-https://portal.stratpoint.io}
-      - SESSION_DOMAIN=${SESSION_DOMAIN:-stratpoint.io}
+      - APP_BASE_URL=${APP_BASE_URL:-https://<your-domain>}
+      - SESSION_DOMAIN=${SESSION_DOMAIN:-<yourdomain.com>}
 
       # Backend configuration
       - BACKEND_SECRET=${BACKEND_SECRET}
@@ -246,8 +246,8 @@ networks:
 #    - GITHUB_TOKEN
 #
 # 3. Optional Environment Variables:
-#    - APP_BASE_URL (default: https://portal.stratpoint.io)
-#    - SESSION_DOMAIN (default: stratpoint.io)
+#    - APP_BASE_URL (default: https://<your-domain>)
+#    - SESSION_DOMAIN (default: <yourdomain.com>)
 #    - POSTGRES_USER (default: backstage)
 #    - POSTGRES_DB (default: backstage)
 #    - GITLAB_TOKEN
@@ -255,7 +255,7 @@ networks:
 #    - ARGOCD_AUTH_TOKEN
 #
 # 4. Domain Configuration:
-#    - Set domain in Coolify: portal.stratpoint.io (or your domain)
+#    - Set domain in Coolify: <your-domain> (or your domain)
 #    - Coolify will automatically handle SSL/TLS with Let's Encrypt
 #    - Port 7007 will be mapped to 443 (HTTPS)
 #

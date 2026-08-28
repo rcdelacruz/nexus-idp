@@ -74,7 +74,7 @@ RUN mkdir -p /app/backend-deploy && \
 # Copy necessary files to deployment directory
 RUN cp -r /app/node_modules /app/backend-deploy/ && \
     cp /app/app-config*.yaml /app/backend-deploy/ && \
-    cp -r /app/stratpoint /app/backend-deploy/
+    cp -r /app/example-org /app/backend-deploy/
 
 # Remove unnecessary files to reduce image size
 RUN rm -rf \

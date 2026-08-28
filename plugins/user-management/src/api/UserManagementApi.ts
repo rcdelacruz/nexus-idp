@@ -22,6 +22,7 @@ export class UserManagementApi {
   async getMe(): Promise<{
     name: string; display_name: string; email: string;
     teams: string[]; is_lead: boolean; is_admin: boolean; github_username: string | null;
+    gitlab_username: string | null;
   } | null> {
     const res = await this.requestRaw('GET', '/me');
     if (!res.ok) return null;
@@ -60,6 +61,10 @@ export class UserManagementApi {
 
   linkGithub(args: { githubUsername: string; oauthToken?: string }) {
     return this.request('POST', '/link-github', args);
+  }
+
+  linkGitlab(args: { gitlabUsername: string; oauthToken?: string }) {
+    return this.request('POST', '/link-gitlab', args);
   }
 
   assign(args: { userName: string; teams: string[]; isLead?: boolean; displayName?: string }) {

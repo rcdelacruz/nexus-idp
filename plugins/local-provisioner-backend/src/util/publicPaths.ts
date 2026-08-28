@@ -26,9 +26,7 @@ export const PUBLIC_AGENT_PATHS = [
   '/agent/device/code',
   '/agent/device/token',
   '/agent/register',
-  '/agent/events/:agentId',
-  '/agent/heartbeat',
-  '/agent/tasks/pending',
+  '/agent/poll',
   '/agent/tasks/:taskId/status',
 ] as const;
 

@@ -19,7 +19,7 @@ export interface RouterOptions {
 }
 
 // Verifies the OAuth token actually belongs to the stated GitHub account.
-// The user is already authenticated as @stratpoint.com via Backstage — we only
+// The user is already authenticated via Backstage (subject to the configured allowed domain) — we only
 // need to confirm they own this GitHub account, not re-verify their email.
 async function verifyGitHubTokenOwner(
   githubUsername: string,
@@ -38,6 +38,27 @@ async function verifyGitHubTokenOwner(
   if (data.login.toLowerCase() !== githubUsername.toLowerCase()) {
     throw new NotAllowedError(
       `Token belongs to GitHub account '${data.login}', not '${githubUsername}'. Please connect your own GitHub account.`,
+    );
+  }
+}
+
+// Verifies the OAuth token actually belongs to the stated GitLab account.
+// Mirrors verifyGitHubTokenOwner — we only need to confirm account ownership,
+// the user is already authenticated via Backstage (subject to the configured allowed domain).
+async function verifyGitLabTokenOwner(
+  gitlabUsername: string,
+  oauthToken: string,
+): Promise<void> {
+  const res = await fetch('https://gitlab.com/api/v4/user', {
+    headers: { Authorization: `Bearer ${oauthToken}` },
+  });
+  if (!res.ok) {
+    throw new Error('Could not verify GitLab account. Please try again.');
+  }
+  const data = (await res.json()) as { username: string };
+  if (data.username.toLowerCase() !== gitlabUsername.toLowerCase()) {
+    throw new NotAllowedError(
+      `Token belongs to GitLab account '${data.username}', not '${gitlabUsername}'. Please connect your own GitLab account.`,
     );
   }
 }
@@ -138,7 +159,7 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
   }));
 
   // ── POST /register ────────────────────────────────────────────────────────
-  // Any authenticated @stratpoint.com user self-registers.
+  // Any authenticated user in the configured domain self-registers.
   // Body: { displayName: string; team: string }
   router.post('/register', wrap(async (req: Request, res: Response) => {
     const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
@@ -169,7 +190,7 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
   }));
 
   // ── POST /auto-link-github ────────────────────────────────────────────────
-  // Searches GitHub for the authenticated user's @stratpoint.com email and auto-links
+  // Searches GitHub for the authenticated user's org email and auto-links
   // if exactly one account is found. Returns { found: true, username } or { found: false }.
   router.post('/auto-link-github', wrap(async (req: Request, res: Response) => {
     const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
@@ -207,7 +228,7 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
 
     const githubUsername = searchData.items[0].login;
 
-    // Double-check the found account's public email matches @stratpoint.com
+    // Double-check the found account's public email matches the configured org domain
     try {
       await verifyGitHubOrgEmail(githubUsername, githubToken, orgDomain);
     } catch {
@@ -251,6 +272,35 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
     await userStore.updateGithubUsername(name, githubUsername.trim(), orgDomain);
 
     res.json({ ok: true, message: 'GitHub account linked. Your profile will update within a minute.' });
+  }));
+
+  // ── POST /link-gitlab ─────────────────────────────────────────────────────
+  // Any authenticated user links their GitLab username via OAuth (unlike GitHub,
+  // linking is optional — only required if a trainee picks the GitLab CI track).
+  // Body: { gitlabUsername: string, oauthToken?: string }
+  router.post('/link-gitlab', wrap(async (req: Request, res: Response) => {
+    const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
+    const info = await userInfo.getUserInfo(credentials);
+
+    const name = assertOrgUser(info.userEntityRef, orgDomain);
+    const { gitlabUsername, oauthToken } = req.body as {
+      gitlabUsername?: string;
+      oauthToken?: string;
+    };
+
+    if (!gitlabUsername?.trim()) {
+      throw new InputError('gitlabUsername is required');
+    }
+
+    if (oauthToken) {
+      await verifyGitLabTokenOwner(gitlabUsername.trim(), oauthToken);
+    }
+
+    logger.info(`User ${name} linking GitLab username: ${gitlabUsername}`);
+
+    await userStore.updateGitlabUsername(name, gitlabUsername.trim(), orgDomain);
+
+    res.json({ ok: true, message: 'GitLab account linked.' });
   }));
 
   // ── POST /onboarding-step ──────────────────────────────────────────────────

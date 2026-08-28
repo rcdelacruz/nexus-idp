@@ -9,6 +9,7 @@ export interface UserRecord {
   is_lead: boolean;
   is_admin: boolean;
   github_username: string | null;
+  gitlab_username: string | null;
   onboarding_catalog_tour: boolean;
   onboarding_engineering_docs: boolean;
   created_at: Date;
@@ -23,6 +24,7 @@ export interface UserInput {
   isLead?: boolean;
   isAdmin?: boolean;
   githubUsername?: string;
+  gitlabUsername?: string;
 }
 
 const TABLE = 'user_management_users';
@@ -46,6 +48,7 @@ export class UserStore {
         table.boolean('is_lead').notNullable().defaultTo(false);
         table.boolean('is_admin').notNullable().defaultTo(false);
         table.string('github_username').nullable();
+        table.string('gitlab_username').nullable();
         table.boolean('onboarding_catalog_tour').notNullable().defaultTo(false);
         table.boolean('onboarding_engineering_docs').notNullable().defaultTo(false);
         table.timestamp('created_at').notNullable().defaultTo(db.fn.now());
@@ -67,6 +70,13 @@ export class UserStore {
           table.boolean('onboarding_engineering_docs').notNullable().defaultTo(false);
         });
       }
+      // Add gitlab_username column (migration)
+      const hasGitlabUsername = await db.schema.hasColumn(TABLE, 'gitlab_username');
+      if (!hasGitlabUsername) {
+        await db.schema.alterTable(TABLE, (table: any) => {
+          table.string('gitlab_username').nullable();
+        });
+      }
     }
   }
 
@@ -84,6 +94,7 @@ export class UserStore {
           is_lead: input.isLead ?? existing.is_lead,
           is_admin: input.isAdmin ?? existing.is_admin,
           github_username: input.githubUsername ?? existing.github_username,
+          gitlab_username: input.gitlabUsername ?? existing.gitlab_username,
           updated_at: now,
         });
     } else {
@@ -95,6 +106,7 @@ export class UserStore {
         is_lead: input.isLead ?? false,
         is_admin: input.isAdmin ?? false,
         github_username: input.githubUsername ?? null,
+        gitlab_username: input.gitlabUsername ?? null,
         created_at: now,
         updated_at: now,
       });
@@ -118,6 +130,29 @@ export class UserStore {
         is_lead: false,
         is_admin: false,
         github_username: githubUsername,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+  }
+
+  async updateGitlabUsername(name: string, gitlabUsername: string, domain: string): Promise<void> {
+    const now = new Date();
+    const updated = await this.db(TABLE)
+      .where({ name })
+      .update({ gitlab_username: gitlabUsername, updated_at: now });
+
+    // If no row existed yet (user linked GitLab before completing registration),
+    // create a minimal row so the annotation is persisted.
+    if (updated === 0) {
+      await this.db(TABLE).insert({
+        name,
+        display_name: name,
+        email: `${name}@${domain}`,
+        teams: this.db.raw('?::text[]', ['{}' ]),
+        is_lead: false,
+        is_admin: false,
+        gitlab_username: gitlabUsername,
         created_at: now,
         updated_at: now,
       });

@@ -71,7 +71,6 @@ spec:
           title: GitHub Organization
           type: string
           description: GitHub org where the application repo will be created
-          default: strat-main-team
         repoName:
           title: Repository Name
           type: string
@@ -129,7 +128,7 @@ spec:
           description: >
             S3-compatible endpoint for CNPG WAL backups (e.g. https://minio.example.com).
             Only applies when CNPG is selected. Update if your MinIO address changes.
-          default: 'http://192.168.2.103:9000'
+          default: 'http://minio.example.com:9000'
 
   steps:
     - id: discover-ingress
@@ -223,4 +222,4 @@ spec:
         icon: catalog
         entityRef: ${{ steps['register'].output.entityRef }}
       - title: ArgoCD
-        url: https://argocd.coderstudio.co/applications/${{ parameters.appName }}-${{ parameters.environment }}
+        url: https://argocd.<your-domain>/applications/${{ parameters.appName }}-${{ parameters.environment }} # replace <your-domain> with your ArgoCD host

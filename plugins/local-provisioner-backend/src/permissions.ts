@@ -21,6 +21,18 @@ export const taskReadPermission = createPermission({
 });
 
 /**
+ * Permission to read provisioning tasks across ALL users (admin activity view).
+ * Distinct from `taskReadPermission`, which only ever governs a user's own tasks —
+ * the route handler for this permission has no per-user scoping at all, so it must
+ * be gated separately. See `packages/backend/src/plugins/permission.ts` for the
+ * admin-only enforcement.
+ */
+export const taskReadAllPermission = createPermission({
+  name: 'local-provisioner.task.read-all',
+  attributes: { action: 'read' },
+});
+
+/**
  * Permission to update provisioning tasks
  */
 export const taskUpdatePermission = createPermission({
@@ -50,6 +62,7 @@ export const agentRegisterPermission = createPermission({
 export const localProvisionerPermissions = {
   taskCreate: taskCreatePermission,
   taskRead: taskReadPermission,
+  taskReadAll: taskReadAllPermission,
   taskUpdate: taskUpdatePermission,
   taskDelete: taskDeletePermission,
   agentRegister: agentRegisterPermission,

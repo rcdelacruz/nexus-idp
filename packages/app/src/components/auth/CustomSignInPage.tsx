@@ -30,8 +30,9 @@ const FEATURES = [
 export const CustomSignInPage = (props: any) => {
   const googleAuthApi = useApi(googleAuthApiRef);
   const configApi = useApi(configApiRef);
-  const githubOwner = configApi.getOptionalString('organization.githubOwner') ?? 'stratpoint-engineering';
-  const orgDomain = configApi.getOptionalString('organization.domain') ?? 'stratpoint.com';
+  const githubOwner = configApi.getOptionalString('organization.githubOwner') ?? 'your-github-org';
+  const orgDomain = configApi.getOptionalString('organization.domain') ?? 'yourdomain.com';
+  const orgName = configApi.getOptionalString('organization.name') ?? 'Nexus IDP';
   const hiddenRef = React.useRef<HTMLDivElement>(null);
   const [checking, setChecking] = React.useState(true);
   const [ready, setReady] = React.useState(false);
@@ -321,7 +322,7 @@ export const CustomSignInPage = (props: any) => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <span style={{ fontSize: '0.75rem', color: '#454545' }}>
-            &copy; {new Date().getFullYear()} Stratpoint Technologies
+            &copy; {new Date().getFullYear()} {orgName}
           </span>
           <span style={{ fontSize: '0.75rem', color: '#2e2e2e' }}>&middot;</span>
           <span style={{ fontSize: '0.75rem', color: '#454545' }}>

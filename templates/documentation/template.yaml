@@ -46,11 +46,7 @@ spec:
         repoOrg:
           title: GitHub Organization
           type: string
-          enum: [stratpoint-engineering, strat-main-team]
-          enumNames:
-            - 'stratpoint-engineering — org-wide documentation'
-            - 'strat-main-team — project / team documentation'
-          default: strat-main-team
+          description: GitHub org to create the repo under
         repoName:
           title: Repository Name
           type: string

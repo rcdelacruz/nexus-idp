@@ -55,9 +55,9 @@ spec:
         - name: APP_CONFIG_backend_listen_port
           value: "7007"
         - name: APP_BASE_URL
-          value: https://backstage.coderstudio.co
+          value: https://<your-domain> # replace with your deployed portal URL
         - name: SESSION_DOMAIN
-          value: .coderstudio.co
+          value: .<yourdomain.com> # replace with your cookie domain
         - name: PORT
           value: "7007"
         - name: NODE_ENV
@@ -79,15 +79,15 @@ spec:
         - name: NODE_TLS_REJECT_UNAUTHORIZED
           value: "0"
         - name: ARGOCD_FRONTEND_URL
-          value: https://argocd.coderstudio.co
+          value: https://argocd.<your-domain> # replace with your ArgoCD URL
         - name: ENGINEERING_STANDARDS_REPO_URL
-          value: https://github.com/stratpoint-engineering/engineering-standards/blob/main
+          value: https://github.com/your-org/engineering-standards/blob/main
         - name: SCAFFOLDER_INGRESS_DOMAIN
-          value: 192.168.2.210.nip.io
+          value: 192.168.1.10.nip.io # replace with your cluster's ingress IP/domain
         envFrom:
         - secretRef:
             name: backstage-secrets
-        image: 192.168.2.101:5000/backstage:latest
+        image: <your-registry>/backstage:latest
         imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 3
@@ -183,7 +183,7 @@ spec:
             secretKeyRef:
               key: POSTGRES_PASSWORD
               name: backstage-secrets
-        image: 192.168.2.101:5000/backstage:latest
+        image: <your-registry>/backstage:latest
         imagePullPolicy: Always
         name: db-migrations
         resources:

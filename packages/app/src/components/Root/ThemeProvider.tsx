@@ -1,6 +1,6 @@
 import React, { PropsWithChildren } from 'react';
 import { UnifiedThemeProvider } from '@backstage/theme';
-import { stratpointDarkTheme, stratpointLightTheme } from '../../theme';
+import { nexusDarkTheme, nexusLightTheme } from '../../theme';
 import useLocalStorage from 'react-use/lib/useLocalStorage';
 
 // Create a context to share theme state
@@ -14,7 +14,7 @@ export const ThemeContext = React.createContext<{
 
 export const ThemeProvider = ({ children }: PropsWithChildren<{}>) => {
   const [themeId, setThemeId] = useLocalStorage<string>('theme', 'dark');
-  const theme = themeId === 'dark' ? stratpointDarkTheme : stratpointLightTheme;
+  const theme = themeId === 'dark' ? nexusDarkTheme : nexusLightTheme;
 
   React.useEffect(() => {
     const toggle = (e: KeyboardEvent) => {

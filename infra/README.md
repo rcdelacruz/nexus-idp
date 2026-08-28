@@ -1,17 +1,17 @@
 # Backstage IDP — AWS ECS Fargate Infrastructure
 
-OpenTofu-managed infrastructure for `portal.stratpoint.io`.
+OpenTofu-managed infrastructure for `<your-domain>`.
 
 ## Overview
 
 | Resource | Details |
 |----------|---------|
-| **URL** | https://portal.stratpoint.io (via Cloudflare Tunnel) |
-| **AWS Account** | 746540123485 (nonprod), profile: `cost-admin-nonprod` |
+| **URL** | https://<your-domain> (via Cloudflare Tunnel) |
+| **AWS Account** | <your-aws-account-id> (nonprod), profile: `cost-admin-nonprod` |
 | **Region** | `us-west-2` |
-| **State Backend** | S3 `stratpoint-tofu-state-prod` + DynamoDB lock |
+| **State Backend** | S3 `<your-org>-tofu-state-prod` + DynamoDB lock |
 | **Estimated Cost** | ~$90-95/month base |
-| **Credits** | APFP_SANDBOX_03_02_2026 ($4,200, expires 2026-09-30) |
+| **Credits** | <your-credits-code-if-any> |
 
 ## Architecture
 
@@ -24,7 +24,7 @@ db-migrations (init)   backstage image  — runs Knex migrations for local-provi
     ↓ SUCCESS
 backstage (main)       backstage image  — Node.js app on :7007
     ↓ HEALTHY
-cloudflared (sidecar)  cloudflare/cloudflared:2025.4.0  — tunnel to portal.stratpoint.io
+cloudflared (sidecar)  cloudflare/cloudflared:2025.4.0  — tunnel to <your-domain>
 ```
 
 ### Infrastructure Components
@@ -49,8 +49,8 @@ cloudflared (sidecar)  cloudflare/cloudflared:2025.4.0  — tunnel to portal.str
 
 | Tunnel | Account | Routes |
 |--------|---------|--------|
-| `backstage-aws-prod` (ID: a6f27602) | stratpoint.io | `portal.stratpoint.io` → `localhost:7007` |
-| `argocd-k8s` | coderstudio.co | `argocd.coderstudio.co` → homelab ArgoCD |
+| `backstage-aws-prod` (ID: a6f27602) | <yourdomain.com> | `<your-domain>` → `localhost:7007` |
+| `argocd-k8s` | <your-domain> | `argocd.<your-domain>` → homelab ArgoCD |
 
 ## Deploy Workflow
 
@@ -60,14 +60,14 @@ cloudflared (sidecar)  cloudflare/cloudflared:2025.4.0  — tunnel to portal.str
 cd infra/
 
 # 1. Build & push image
-docker build -t 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest \
+docker build -t <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest \
   -f packages/backend/Dockerfile .
 
 aws ecr get-login-password --region us-west-2 --profile cost-admin-nonprod \
   | docker login --username AWS --password-stdin \
-    746540123485.dkr.ecr.us-west-2.amazonaws.com
+    <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com
 
-docker push 746540123485.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest
+docker push <your-aws-account-id>.dkr.ecr.us-west-2.amazonaws.com/backstage-idp-prod:latest
 
 # 2. Apply — force_new_deployment=true triggers redeployment automatically
 AWS_PROFILE=cost-admin-nonprod tofu apply -auto-approve
@@ -116,11 +116,11 @@ All resources are tagged with:
 ```hcl
 Project       = "backstage-idp"
 Environment   = "production"
-Owner         = "stratpoint-platform"
+Owner         = "platform-team"
 ManagedBy     = "opentofu"
-CreditProgram = "APFP_SANDBOX_03_02_2026"
+CreditProgram = "<your-credit-program-if-any>"
 CostCenter    = "platform-engineering"
-Repository    = "stratpoint-engineering/backstage-main"
+Repository    = "your-org/your-repo"
 ```
 
 > **Important:** Scaffolded test services must also include `Project=backstage-idp` so they are tracked by the AWS Budget alert. The budget filter is `Project=backstage-idp` — untagged resources will not be counted.
@@ -133,7 +133,7 @@ Repository    = "stratpoint-engineering/backstage-main"
 | $500/month | Review & destroy unused test resources |
 | $800/month | Hard stop — something is out of control |
 
-Alerts sent to: `ronaldo.delacruz@stratpoint.com`
+Alerts sent to: `platform-team@<yourdomain.com>`
 
 ## Critical Lessons (Do Not Repeat)
 

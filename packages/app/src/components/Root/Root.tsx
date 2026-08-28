@@ -322,6 +322,7 @@ const DocsNavItem = () => {
   const api = useApi(engineeringDocsApiRef);
   const [sources, setSources] = useState<DocSource[]>([]);
   const [expanded, setExpanded] = useState(location.pathname.startsWith('/engineering-docs'));
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     api.getSources().then(setSources).catch(() => {});
@@ -334,6 +335,32 @@ const DocsNavItem = () => {
 
   const isDocsActive = location.pathname.startsWith('/engineering-docs');
   const activeSourceId = new URLSearchParams(location.search).get('source') ?? '';
+
+  // Sources with no `group` (or whose group doesn't match a real source id) render at the top
+  // level; everything else nests under its group's source as a second-level item.
+  const sourceIds = new Set(sources.map(s => s.id));
+  const topLevelSources = sources.filter(s => !s.group || !sourceIds.has(s.group));
+  const childrenByGroup = sources.reduce<Record<string, DocSource[]>>((acc, s) => {
+    if (s.group && sourceIds.has(s.group)) (acc[s.group] ??= []).push(s);
+    return acc;
+  }, {});
+
+  // Auto-expand a group when navigating directly to one of its children.
+  useEffect(() => {
+    const parent = sources.find(s => (childrenByGroup[s.id] ?? []).some(c => c.id === activeSourceId));
+    if (parent) setExpandedGroups(prev => new Set(prev).add(parent.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSourceId, sources]);
+
+  const toggleGroup = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleDocsClick = () => {
     if (sources.length > 0) {
@@ -361,15 +388,43 @@ const DocsNavItem = () => {
           </>
         )}
       </button>
-      {isOpen && expanded && sources.map(source => (
-        <Link
-          key={source.id}
-          to={`/engineering-docs?source=${source.id}`}
-          className={`${classes.docsSubItem} ${activeSourceId === source.id ? classes.docsSubItemActive : ''}`}
-        >
-          {source.label}
-        </Link>
-      ))}
+      {isOpen && expanded && topLevelSources.map(source => {
+        const children = childrenByGroup[source.id] ?? [];
+        const groupOpen = expandedGroups.has(source.id);
+        return (
+          <React.Fragment key={source.id}>
+            <Link
+              to={`/engineering-docs?source=${source.id}`}
+              className={`${classes.docsSubItem} ${activeSourceId === source.id ? classes.docsSubItemActive : ''}`}
+              style={children.length > 0 ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } : undefined}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{source.label}</span>
+              {children.length > 0 && (
+                <span
+                  role="button"
+                  aria-label={groupOpen ? 'Collapse' : 'Expand'}
+                  onClick={e => toggleGroup(source.id, e)}
+                  style={{ display: 'flex', flexShrink: 0, marginLeft: 6 }}
+                >
+                  {groupOpen
+                    ? <ChevronDown size={13} strokeWidth={1.5} style={{ color: 'var(--bui-fg-secondary)' }} />
+                    : <ChevronRight size={13} strokeWidth={1.5} style={{ color: 'var(--bui-fg-secondary)' }} />}
+                </span>
+              )}
+            </Link>
+            {groupOpen && children.map(child => (
+              <Link
+                key={child.id}
+                to={`/engineering-docs?source=${child.id}`}
+                className={`${classes.docsSubItem} ${activeSourceId === child.id ? classes.docsSubItemActive : ''}`}
+                style={{ paddingLeft: 52 }}
+              >
+                {child.label}
+              </Link>
+            ))}
+          </React.Fragment>
+        );
+      })}
     </>
   );
 };
@@ -458,9 +513,9 @@ const AppSidebar = ({ isNewUser, isAdmin, isPM }: { isNewUser?: boolean; isAdmin
         {isNewUser !== false ? (
           <>
             <NavItem icon={ClipboardCheck} label="Onboarding" to="/onboarding" />
-            <NavItem icon={LayoutGrid} label="Catalog" to="/catalog" />
             <DocsNavItem />
             <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
+            <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" />
           </>
         ) : (
           <>
@@ -541,10 +596,18 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
     return () => window.removeEventListener('keydown', toggle);
   }, [appThemeApi, isDark]);
 
-  // New users: Onboarding + Docs + Tech Radar + Settings only — per RBAC plan
+  // New users: Onboarding + Docs + Tech Radar + Local Provisioner + Settings only — per RBAC plan
+  // /device is included even though it has no sidebar (see noSidebarPages below) — it's
+  // where the CLI device-authorization code is entered, and without it in this whitelist
+  // this effect redirects new users away before they can type the code (found 2026-07-26).
+  // /create is included because Local Provisioner's "Provision resource" button deep-links
+  // to /create?...&trainingAccess=1 (the training-template wizard) — without it here, that
+  // button also bounces new users back to onboarding before they reach the wizard. NOTE:
+  // the wizard route being reachable does not by itself mean submission succeeds — see
+  // permission.ts's isUnassigned() allow-list, which does not currently include scaffolder.*.
   useEffect(() => {
     if (isNewUser !== true) return;
-    const allowed = ['/onboarding', '/catalog', '/engineering-docs', '/tech-radar', '/settings', '/search'];
+    const allowed = ['/onboarding', '/engineering-docs', '/tech-radar', '/local-provisioner', '/device', '/create', '/settings', '/search'];
     if (!allowed.some(p => location.pathname.startsWith(p))) {
       navigate('/onboarding', { replace: true });
     }

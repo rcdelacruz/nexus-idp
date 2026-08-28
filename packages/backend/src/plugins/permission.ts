@@ -37,18 +37,25 @@ const DEPT_TEAMS = [
   'group:default/devops-team',
 ];
 
+/**
+ * Role-check helpers. Exported as the single source of truth for group-membership
+ * decisions — also consumed by scaffolderTaskGuard.ts, which enforces scaffolder.task.create
+ * restrictions that this file's PermissionPolicy CANNOT actually enforce (see the comment
+ * on the scaffolder.task.create handling below for why).
+ */
+
 /** Platform admins — full access to everything including FinOps */
-const isAdmin = (groups: string[]) =>
+export const isAdmin = (groups: string[]) =>
   groups.some(
     ref => ref === 'group:default/backstage-admins' || ref === 'group:default/admins',
   );
 
 /** Team leads — any group ending in -lead */
-const isLead = (groups: string[]) =>
+export const isLead = (groups: string[]) =>
   groups.some(ref => ref.startsWith('group:default/') && ref.endsWith('-lead'));
 
 /** DevOps / Platform Engineering — can run infra templates */
-const isDevOps = (groups: string[]) =>
+export const isDevOps = (groups: string[]) =>
   groups.some(ref => ref === 'group:default/devops-team');
 
 /** Project managers */
@@ -64,14 +71,14 @@ const ENGINEERING_TEAMS = DEPT_TEAMS.filter(
  * Assigned engineers — members of at least one engineering team.
  * Excludes pm-team and general-engineers.
  */
-const isAssignedEngineer = (groups: string[]) =>
+export const isAssignedEngineer = (groups: string[]) =>
   groups.some(ref => ENGINEERING_TEAMS.includes(ref));
 
 /**
  * New user / unassigned — in general-engineers but not yet in any department team.
  * Leads and admins also satisfy isAssignedEngineer, so this only catches truly unassigned users.
  */
-const isUnassigned = (groups: string[]) =>
+export const isUnassigned = (groups: string[]) =>
   !isAdmin(groups) && !isLead(groups) && !isAssignedEngineer(groups);
 
 /**
@@ -85,7 +92,8 @@ const isUnassigned = (groups: string[]) =>
  * │ Team Lead       │ *-lead                  │ Create/edit catalog for own team        │
  * │ Engineer        │ web/mobile/data/cloud/  │ Read catalog + use scaffolder           │
  * │                 │ ai/qa-team              │                                         │
- * │ New User        │ general-engineers only  │ Docs, Tech Radar, onboarding only       │
+ * │ New User        │ general-engineers only  │ Docs, Tech Radar, Local Provisioner,    │
+ * │                 │                         │ onboarding only                         │
  * └─────────────────┴─────────────────────────┴─────────────────────────────────────────┘
  */
 export class CatalogPermissionPolicy implements PermissionPolicy {
@@ -136,6 +144,14 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
     // ── Platform Admin: full access ──────────────────────────────────────────
     if (isAdmin(groups)) {
       return { result: AuthorizeResult.ALLOW };
+    }
+
+    // ── Local Provisioner admin activity view: admin only ────────────────────
+    // Must be checked before the generic `local-provisioner.` prefix ALLOWs below
+    // (both the unassigned-user block and the assigned-user block match on prefix
+    // and would otherwise leak every user's task history to any authenticated user).
+    if (permissionName === 'local-provisioner.task.read-all') {
+      return { result: AuthorizeResult.DENY }; // isAdmin already handled above
     }
 
     // ── Catalog entity read: role-based visibility filtering ─────────────────
@@ -228,13 +244,45 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
     }
 
     // ── New User (unassigned): very limited access ───────────────────────────
-    // Only Engineering Docs (custom plugin), Tech Radar read, and search.
-    // No catalog, no scaffolder, no FinOps, no K8s, no ArgoCD.
+    // Engineering Docs (custom plugin), Tech Radar read, search, and Local Provisioner
+    // (self-service dev tooling against the user's own laptop — no shared-infra blast
+    // radius, unlike FinOps/K8s/ArgoCD which stay gated below).
+    // No catalog, no scaffolder, no FinOps, no K8s, no ArgoCD — EXCEPT running the
+    // training templates surfaced via Local Provisioner's "Provision resource" button
+    // (deep-links to /create?...&trainingAccess=1).
+    //
+    // scaffolder.task.create is deliberately left as a plain ALLOW below (falls through
+    // to the generic prefix check, which doesn't match it — DENY — so this comment is the
+    // reason it's NOT special-cased here): POST /api/scaffolder/v2/tasks checks this
+    // permission via @backstage/plugin-scaffolder-backend's checkPermission(), which calls
+    // permissionService.authorize() with NO resourceRef — no template, no entity, nothing.
+    // taskCreatePermission's own resourceType is RESOURCE_TYPE_SCAFFOLDER_TASK, not
+    // RESOURCE_TYPE_CATALOG_ENTITY, so isResourcePermission(request.permission,
+    // RESOURCE_TYPE_CATALOG_ENTITY) is ALWAYS false for this exact call — a
+    // createCatalogConditionalDecision returned here can never actually evaluate against
+    // the requested template, because the framework never gives this policy the template to
+    // evaluate against. (Confirmed by reading node_modules/@backstage/plugin-scaffolder-backend/
+    // dist/service/router.cjs.js — the POST /v2/tasks handler.) Real per-template enforcement
+    // (training-only for unassigned users, devops-owned-template exclusion for engineers) is
+    // done in packages/backend/src/plugins/scaffolderTaskGuard.ts, a root-http-router
+    // middleware that runs BEFORE the scaffolder plugin's own router and DOES have the
+    // template body available to check. See knowledge/patterns/
+    // scaffolder-task-create-is-not-resource-aware.md for the full writeup.
     if (isUnassigned(groups)) {
       if (
+        permissionName === 'scaffolder.task.create' ||
+        // scaffolder.action.execute IS properly resource-aware (checked via
+        // authorizeConditional against RESOURCE_TYPE_SCAFFOLDER_ACTION — unlike
+        // scaffolder.task.create, see the comment above) but by the time any action runs,
+        // scaffolderTaskGuard.ts has already vetted the template itself at task-creation
+        // time; no further per-action restriction is needed for a role already confined to
+        // running only training templates. Matches assigned engineers, who already get this
+        // permission unconditionally via the generic scaffolder ALLOW fallback below.
+        permissionName === 'scaffolder.action.execute' ||
         permissionName.startsWith('techdocs.') ||
         permissionName.startsWith('search.') ||
         permissionName.startsWith('engineering-docs.') ||
+        permissionName.startsWith('local-provisioner.') ||
         permissionName.endsWith('.read') ||
         permissionName.endsWith('.list') ||
         permissionName.endsWith('.get')
@@ -297,45 +345,15 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         return { result: AuthorizeResult.DENY };
       }
 
-      // Infra template execution → admins + devops only
-      // Governance templates (spec.type: governance) → admins + devops + leads
-      // Infra templates are identified by spec.owner: group:default/devops-team
-      if (
-        permissionName === 'scaffolder.task.create' &&
-        isResourcePermission(request.permission, RESOURCE_TYPE_CATALOG_ENTITY)
-      ) {
-        if (isAdmin(groups) || isDevOps(groups)) {
-          return { result: AuthorizeResult.ALLOW };
-        }
-        // Leads: can run non-devops templates + governance templates (promote-app)
-        if (isLead(groups)) {
-          return createCatalogConditionalDecision(request.permission, {
-            anyOf: [
-              {
-                not: catalogConditions.isEntityOwner({
-                  claims: ['group:default/devops-team'],
-                }),
-              },
-              catalogConditions.hasSpec({ key: 'type', value: 'governance' }),
-            ],
-          });
-        }
-        // Engineers: CONDITIONAL — deny templates owned by devops-team, and deny
-        // teardown-app outright (irreversible destructive action — leads/admins only,
-        // see .claude/plans/teardown-application-plan.md RBAC Policy)
-        return createCatalogConditionalDecision(request.permission, {
-          allOf: [
-            {
-              not: catalogConditions.isEntityOwner({
-                claims: ['group:default/devops-team'],
-              }),
-            },
-            {
-              not: catalogConditions.hasMetadata({ key: 'name', value: 'teardown-app' }),
-            },
-          ],
-        });
-      }
+      // Infra template execution (admins + devops only), governance templates
+      // (spec.type: governance, admins + devops + leads), and the teardown-app exclusion
+      // for engineers (irreversible destructive action — leads/admins only) are all enforced
+      // in packages/backend/src/plugins/scaffolderTaskGuard.ts, NOT here. scaffolder.task.create
+      // is checked by the framework with no resourceRef (see the isUnassigned() branch above
+      // for the full explanation of why a conditional decision on this permission is dead
+      // code) — this file cannot see which template is being requested for this permission,
+      // so it cannot enforce any of the above. Falls through to plain ALLOW below; the guard
+      // is the actual enforcement point.
 
       // All other scaffolder operations (use templates, view tasks, etc.) → all assigned engineers
       return { result: AuthorizeResult.ALLOW };
