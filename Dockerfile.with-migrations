@@ -56,32 +56,13 @@ RUN mkdir -p /app/node_modules/@stratpoint /app/node_modules/@internal && \
     ln -sf /app/plugins/dbaas-backend /app/node_modules/@stratpoint/plugin-dbaas-backend && \
     ln -sf /app/plugins/dbaas /app/node_modules/@internal/plugin-dbaas
 
-# Install new plugin dependencies that are not in the base image
-USER root
-RUN mkdir -p /tmp/newdeps && \
-    cd /tmp/newdeps && \
-    npm install --no-package-lock \
-        express-rate-limit \
-        @aws-sdk/client-budgets \
-        @aws-sdk/client-cloudwatch \
-        @aws-sdk/client-cost-explorer \
-        @aws-sdk/client-ec2 \
-        @aws-sdk/client-elastic-load-balancing-v2 \
-        @aws-sdk/client-rds \
-        @aws-sdk/client-cloudfront \
-        @aws-sdk/client-s3 \
-        @aws-sdk/client-sts \
-        @aws-sdk/credential-providers \
-        @mdx-js/mdx \
-        remark-gfm \
-        @roadiehq/backstage-plugin-argo-cd-backend \
-        @backstage/plugin-scaffolder-backend-module-gitlab \
-        @backstage/plugin-auth-backend-module-gitlab-provider \
-        @gitbeaker/core \
-        @gitbeaker/rest \
-        @gitbeaker/requester-utils && \
-    cp -rn node_modules/. /app/node_modules/ && \
-    rm -rf /tmp/newdeps
+# No extra npm installs here: every plugin dependency is a direct or transitive dep locked in
+# yarn.lock, so the
+# base image (packages/backend/Dockerfile, `yarn workspaces focus --all --production`) already
+# installs it at the locked version. A previous unpinned `npm install` + `cp -rn` merge step here
+# pulled npm-latest versions and spliced them into existing package dirs, producing mixed-version
+# packages (@azure/msal-node 3.8.4 + a nested msal-common 16.x) that crashed the backend at
+# startup on the 1.56.2 bump.
 
 # plugin-catalog-node@2.2.2 is now at the top level (installed by yarn in the base image).
 # No nested override needed — base image handles this via yarn.lock.
@@ -99,6 +80,8 @@ COPY --chown=node:node packages/backend/config.d.ts /app/packages/backend/config
 COPY --chown=node:node app-config.yaml /app/
 COPY --chown=node:node app-config.production.yaml /app/
 COPY --chown=node:node app-config.on-prem.yaml /app/
+# app-config.yaml $includes ./backstage.json (Settings -> About) — keep it next to the configs
+COPY --chown=node:node backstage.json /app/
 
 # Copy organization catalog (CRITICAL for user authentication)
 # Clear first so deleted/renamed files from the base image don't persist

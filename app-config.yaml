@@ -5,6 +5,10 @@ app:
     certificate:
       cert: './cert.pem'
       key: './key.pem'
+  # Backstage release version ({ version }) for Settings -> About. backstage.json must sit next
+  # to this file (it does in the repo root and in /app in every image).
+  backstage:
+    $include: ./backstage.json
 
 organization:
   name: 'Your Organization' # displayed in the sidebar/header — replace with your org's name

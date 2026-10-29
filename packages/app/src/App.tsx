@@ -77,6 +77,7 @@ import { LocalProvisionerPage } from '@internal/plugin-local-provisioner';
 import { OnboardingPage } from '@internal/plugin-onboarding';
 import { UserManagementPage } from '@internal/plugin-user-management';
 import { ConnectDatabasesPage } from '@internal/plugin-dbaas';
+import { AboutTab } from './components/settings/AboutTab';
 import { DeviceAuthPage } from './components/DeviceAuthPage';
 import { NotificationsPage } from '@backstage/plugin-notifications';
 import { GlobalStyleOverrides } from './components/GlobalStyleOverrides';
@@ -158,6 +159,9 @@ const routes = (
     <Route path="/settings" element={<UserSettingsPage />}>
       <UserSettingsTab path="/connect-databases" title="Connect Databases">
         <ConnectDatabasesPage />
+      </UserSettingsTab>
+      <UserSettingsTab path="/about" title="About">
+        <AboutTab />
       </UserSettingsTab>
     </Route>
     <Route path="/catalog-graph" element={<CustomCatalogGraphPage />} />
