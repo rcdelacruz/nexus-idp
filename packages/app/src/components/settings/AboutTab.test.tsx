@@ -1,6 +1,6 @@
 import React from 'react';
 import { screen } from '@testing-library/react';
-import { configApiRef } from '@backstage/core-plugin-api';
+import { configApiRef, discoveryApiRef, fetchApiRef } from '@backstage/core-plugin-api';
 import { mockApis, renderInTestApp, TestApiProvider } from '@backstage/test-utils';
 import { AboutTab } from './AboutTab';
 import { readBuildInfo } from './buildInfo';
@@ -21,9 +21,24 @@ const BUILD_INFO = {
   commit: '8cb93181a000c56d2738361b1cdc8e731789eb53',
 };
 
-const renderTab = (config: object) =>
+/** The release-info backend's answer for the build's commit ({} = unknown / GitHub unreachable). */
+const renderTab = (config: object, release: object | Error = {}) =>
   renderInTestApp(
-    <TestApiProvider apis={[[configApiRef, mockApis.config({ data: config })]]}>
+    <TestApiProvider
+      apis={[
+        [configApiRef, mockApis.config({ data: config })],
+        [discoveryApiRef, { getBaseUrl: async () => 'http://backend/api/release-info' }],
+        [
+          fetchApiRef,
+          {
+            fetch: async () => {
+              if (release instanceof Error) throw release;
+              return { ok: true, json: async () => release };
+            },
+          },
+        ],
+      ]}
+    >
       <AboutTab />
     </TestApiProvider>,
   );
@@ -45,5 +60,25 @@ describe('AboutTab', () => {
     await renderTab({});
 
     expect(screen.getAllByText('unknown')).toHaveLength(4);
+  });
+
+  it('shows the release that includes the build, even one tagged after the deploy (2026-10-31)', async () => {
+    mockReadBuildInfo.mockReturnValue({ ...BUILD_INFO, gitVersion: 'v1.5.4-62-g3f0811d' });
+    await renderTab({ app: { backstage: { version: '1.56.2' } } }, { includedIn: 'v1.6.0' });
+    expect(await screen.findByText('v1.6.0')).toHaveAttribute('title', 'The published release that includes this build');
+    expect(screen.queryByText('v1.5.4')).not.toBeInTheDocument();
+  });
+
+  it('a build newer than the latest release shows that release only, nothing about commits past it', async () => {
+    mockReadBuildInfo.mockReturnValue(BUILD_INFO);
+    await renderTab({}, { after: 'v1.6.0' });
+    expect(await screen.findByText('v1.6.0')).toBeInTheDocument();
+    expect(screen.queryByText(/unreleased|ahead/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to the build-time tag when GitHub cannot be asked', async () => {
+    mockReadBuildInfo.mockReturnValue(BUILD_INFO);
+    await renderTab({}, new Error('offline'));
+    expect(await screen.findByText('v1.5.3')).toBeInTheDocument();
   });
 });

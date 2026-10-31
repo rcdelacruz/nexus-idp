@@ -132,6 +132,9 @@ backend.add(import('./plugins/cors-proxy'));
 // scaffolder targets API — exposes app-config targets for DeploymentTargetPicker field
 backend.add(import('./plugins/scaffolderTargetsApi'));
 
+// release info — Settings → About asks which release includes the running build's commit
+backend.add(import('./plugins/releaseInfo'));
+
 // user management
 backend.add(
   import('@stratpoint/plugin-user-management-backend').then(m => ({ default: m.userManagementPlugin }))
