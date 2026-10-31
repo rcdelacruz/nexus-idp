@@ -109,6 +109,12 @@ const useStyles = makeStyles(theme => ({
     fontSize: '0.75rem',
     marginTop: theme.spacing(0.5),
   },
+  version: {
+    color: theme.palette.text.secondary,
+    fontSize: '0.75rem',
+    marginTop: theme.spacing(0.5),
+  },
+  updateHint: { color: '#d97706' },
   taskCount: {
     color: theme.palette.text.secondary,
     fontSize: '0.75rem',
@@ -191,8 +197,12 @@ export const AgentList = ({
   };
 
   const getPlatformDisplay = (agent: AgentRegistration): string => {
+    // e.g. "macOS 25.0 (arm64) · Docker 7.7 GB · 10 CPUs" — what labs are sized against.
+    const c = agent.capabilities;
+    const docker = c?.dockerMemoryBytes ? ` · Docker ${(c.dockerMemoryBytes / 1024 ** 3).toFixed(1)} GB` : '';
+    const cpus = c?.cpus ? ` · ${c.cpus} CPUs` : '';
     if (agent.platformVersion) {
-      return agent.platformVersion;
+      return `${agent.platformVersion}${docker}${cpus}`;
     }
     if (agent.osPlatform) {
       const platformMap: Record<string, string> = {
@@ -373,6 +383,14 @@ export const AgentList = ({
                       <div className={classes.agentInfo}>
                         <Typography className={classes.platformInfo}>
                           {getPlatformDisplay(agent)}
+                        </Typography>
+                        <Typography className={classes.version}>
+                          Agent {agent.agentVersion ? `v${agent.agentVersion}` : 'version unknown'}
+                          {agent.updateAvailable && agent.latestAgentVersion && (
+                            <span className={classes.updateHint}>
+                              {' '}· update available (v{agent.latestAgentVersion}): run <code>backstage-agent update</code>
+                            </span>
+                          )}
                         </Typography>
                         <Typography className={classes.lastSeen}>
                           {formatLastSeen(agent.lastSeenAt)}

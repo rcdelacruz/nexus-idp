@@ -21,6 +21,17 @@ import {
 } from './types';
 
 /**
+ * Display label for a task's type. Generic training labs share the `provision-training` type and
+ * carry their identity in `config.labId`, so show that instead of the same label on every lab.
+ */
+export function taskTypeLabel(task: Pick<ProvisioningTask, 'taskType' | 'config'>): string {
+  const labId = task.config?.labId;
+  return task.taskType === 'provision-training' && typeof labId === 'string' && labId
+    ? `training: ${labId}`
+    : task.taskType;
+}
+
+/**
  * Transform backend task to frontend task
  *
  * Converts:
@@ -65,11 +76,14 @@ export function transformAgent(
     osPlatform: backendAgent.os_platform,
     platformVersion: backendAgent.platform_version,
     agentVersion: backendAgent.agent_version,
+    capabilities: backendAgent.capabilities,
     lastSeenAt: backendAgent.last_seen,
     lastSeenAgeSeconds: backendAgent.last_seen_age_seconds,
     createdAt: backendAgent.created_at,
     isConnected: backendAgent.is_connected,
     explicitlyDisconnected: backendAgent.explicitly_disconnected ?? false,
+    latestAgentVersion: backendAgent.latest_agent_version ?? undefined,
+    updateAvailable: backendAgent.update_available ?? false,
   };
 }
 

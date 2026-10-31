@@ -10,16 +10,28 @@ import {
   LoggerService,
   HttpAuthService,
   PermissionsService,
+  SchedulerService,
 } from '@backstage/backend-plugin-api';
 import { AuthorizeResult } from '@backstage/plugin-permission-common';
 import { Config } from '@backstage/config';
 
 import { TaskStore } from '../database/TaskStore';
 import { resolveSharedTaskStore } from '../sharedStore';
+import { DefaultGithubCredentialsProvider, ScmIntegrations } from '@backstage/integration';
+import { TraineeActivityService } from './traineeActivity/TraineeActivityService';
+import { CapstoneStore } from '../capstones/CapstoneStore';
+import { TaskType } from '../types';
+import { createCapstoneRoutes, LabOps, queueEnrollmentCheck } from '../capstones/capstoneRoutes';
+import { capstoneById } from '../capstones/definitions';
+import { createSeedReportRoute } from '../capstones/seedReportRoute';
 import {
   taskCreatePermission,
   taskReadPermission,
   taskReadAllPermission,
+  traineesReadPermission,
+  traineesManagePermission,
+  capstonesEnrollPermission,
+  capstonesManagePermission,
   taskDeletePermission,
 } from '../permissions';
 import { TaskQueueService } from './TaskQueueService';
@@ -42,6 +54,8 @@ export interface RouterOptions {
   config: Config;
   httpAuth: HttpAuthService;
   permissions: PermissionsService;
+  /** For scheduled capstone checks; optional so tests can build the router without it. */
+  scheduler?: SchedulerService;
 }
 
 /**
@@ -50,8 +64,22 @@ export interface RouterOptions {
  * Paths here are relative to the plugin mount (the middleware runs before `/tasks` prefixing,
  * so `req.path` includes it).
  */
-function permissionForRequest(method: string, path: string) {
+export function permissionForRequest(method: string, path: string) {
+  if (path === '/capstones' || path.startsWith('/capstones/')) {
+    // Self-enrollment (and linking your own repo) is open to signed-in users; every other
+    // capstone route exposes seeds/credentials/answer keys, so it defaults to manage.
+    const p = path.replace(/\/+$/, '');
+    if (method === 'POST' && p === '/capstones/enrollments') return capstonesEnrollPermission;
+    if (method === 'PUT' && /^\/capstones\/enrollments\/[^/]+\/repo$/.test(p)) return capstonesEnrollPermission;
+    return capstonesManagePermission;
+  }
   if (!path.startsWith('/tasks')) return undefined;
+  // Every /tasks/admin/* route is cross-user: writes there must never fall through to the
+  // per-user task permissions below (a POST would otherwise need only task.create).
+  if (method !== 'GET' && path.startsWith('/tasks/admin')) {
+    if (method === 'POST' && path.replace(/\/+$/, '') === '/tasks/admin/trainees/remove') return traineesManagePermission;
+    return taskReadAllPermission;
+  }
   switch (method) {
     case 'POST':
       // Covers create (/tasks) and re-dispatch (/tasks/:id/dispatch).
@@ -62,7 +90,10 @@ function permissionForRequest(method: string, path: string) {
       // /tasks/admin/all has no per-user scoping in the handler — it requires the
       // separate, admin-only taskReadAllPermission rather than the regular
       // (own-tasks-only) taskReadPermission. Must be checked before the generic case.
-      if (path === '/tasks/admin/all') return taskReadAllPermission;
+      // Every /tasks/admin/* route is cross-user, so it defaults to the strict read-all
+      // permission; a trailing slash must not fall through to taskReadPermission.
+      if (path.replace(/\/+$/, '') === '/tasks/admin/trainees') return traineesReadPermission;
+      if (path.startsWith('/tasks/admin')) return taskReadAllPermission;
       return taskReadPermission;
     default:
       return undefined;
@@ -75,8 +106,7 @@ function permissionForRequest(method: string, path: string) {
 export async function createRouter(
   options: RouterOptions,
 ): Promise<Router> {
-  const { logger, database, config, httpAuth, permissions } = options;
-  // discovery reserved for future CatalogService integration
+  const { logger, database, config, httpAuth, permissions, discovery, scheduler } = options;
 
   logger.info('Initializing Local Provisioner plugin router');
 
@@ -132,6 +162,23 @@ export async function createRouter(
     config,
     pollTimeoutSeconds,
   );
+  // Instructor Trainees view: GitHub repo activity read with the configured integration
+  // credentials (integrations.github). Only github.com URLs are ever fetched (see
+  // parseGithubRepoUrl), so the token can't be sent to a host named in task config.
+  const githubCredentials = DefaultGithubCredentialsProvider.fromIntegrations(
+    ScmIntegrations.fromConfig(config),
+  );
+  const getGithubToken = async (url: string) => (await githubCredentials.getCredentials({ url })).token;
+  const capstoneStore = new CapstoneStore(db);
+  const traineeActivity = new TraineeActivityService(
+    taskStore,
+    getGithubToken,
+    logger,
+    undefined,
+    undefined,
+    capstoneStore,
+    config.getOptionalString('organization.githubOwner'),
+  );
   // CatalogService will be used for future catalog integration
   // const catalogService = new CatalogService(logger, discovery);
 
@@ -143,6 +190,9 @@ export async function createRouter(
   // Middleware
   // Default 100kb limit is too small for tasks carrying a base64-encoded source tree
   // (stratpoint:local-provision's sourceFiles, e.g. devops/devsecops-capstone-training).
+  // Public, token-authenticated seed reports: before the 10 MB parser below, with their own small
+  // limit and the token checked before any body is read.
+  router.use('/capstones/seed-report', createSeedReportRoute({ store: capstoneStore, logger, getGithubToken }));
   router.use(express.json({ limit: '10mb' }));
 
   // Log all requests
@@ -223,7 +273,75 @@ export async function createRouter(
   router.use('/health', createHealthRoutes(db));
   // Agent and task endpoints require authentication (enforced by middleware above)
   router.use('/agent', createAgentRoutes(agentService, logger, taskQueueService));
-  router.use('/tasks', createTaskRoutes(taskQueueService, logger, agentService, resourceDocsUrls));
+  router.use('/tasks', createTaskRoutes(taskQueueService, logger, agentService, resourceDocsUrls, traineeActivity));
+  // Instructor lab checks (run-check via the trainee's agent) — shared by the Trainees view's Run
+  // buttons and the scheduled checks below.
+  const labs: LabOps = {
+    findLabTask: repoUrl => taskStore.findProvisionTaskByRepoUrl(repoUrl),
+    resourceState: async (agentId, name) => (await taskStore.getResourceState(agentId, name))?.state,
+    isAgentOnline: agentId => agentService.isAgentOnline(agentId),
+  hasPendingCheck: (agentId, name) => taskStore.hasOpenTask(agentId, name, TaskType.RUN_CHECK),
+  fetchSourceFile: async (sourceRepo, branch, filePath) => {
+    const token = await getGithubToken(`https://github.com/${sourceRepo}`);
+    const res = await fetch(`https://api.github.com/repos/${sourceRepo}/contents/${filePath}?ref=${encodeURIComponent(branch)}`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'nexus-idp-local-provisioner',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) throw new Error(`Could not read ${sourceRepo}/${filePath} (${res.status})`);
+    return String(((await res.json()) as any).content ?? '').replace(/\n/g, '');
+  },
+    agentVersion: async agentId => (await taskStore.getAgentById(agentId))?.agent_version,
+    queueCheck: async ({ userId, agentId, resourceName, config: checkConfig }) => {
+      const task = await taskQueueService.createTask(userId, {
+        agent_id: agentId,
+        task_type: TaskType.RUN_CHECK,
+        resource_name: resourceName,
+        config: checkConfig,
+      } as any);
+      agentService.notifyAgent(agentId);
+      return task;
+    },
+  };
+
+  // Scheduled capstone checks: every `localProvisioner.capstoneChecks.intervalMinutes` (default 60,
+  // 0 disables) run each capstone's checks on every running lab whose agent supports them, so
+  // instructors see a hard fail without clicking. Same guards as the Run button; skips a lab that
+  // still has a check pending, so a slow or offline agent never piles up tasks.
+  const checkInterval = config.getOptionalNumber('localProvisioner.capstoneChecks.intervalMinutes') ?? 60;
+  if (scheduler && checkInterval > 0) {
+    await scheduler.scheduleTask({
+      id: 'local-provisioner-capstone-checks',
+      frequency: { minutes: checkInterval },
+      timeout: { minutes: 5 },
+      initialDelay: { minutes: 5 },
+      fn: async () => {
+        let queued = 0;
+        for (const e of await capstoneStore.list()) {
+          if (e.status !== 'active' || e.awaitingSeedReport) continue;
+          const checks = capstoneById(e.capstone)?.checks ?? {};
+          for (const name of Object.keys(checks).filter(n => checks[n].scheduled !== false)) {
+            const r = await queueEnrollmentCheck(capstoneStore, labs, e.id, name, { skipIfPending: true }).catch(err => ({ status: 500, error: String(err) }));
+            if (r.status === 202) queued++;
+          }
+        }
+        if (queued) logger.info(`Scheduled capstone checks: queued ${queued}`);
+      },
+    });
+  }
+
+  router.use(
+    '/capstones',
+    createCapstoneRoutes({
+      store: capstoneStore,
+      logger,
+      getGithubToken,
+      externalBaseUrl: () => discovery.getExternalBaseUrl('local-provisioner'),
+      labs,
+    }),
+  );
 
 
   // Error handling middleware

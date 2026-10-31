@@ -40,6 +40,7 @@ import {
   EntityCatalogGraphCard,
 } from '@backstage/plugin-catalog-graph';
 import {
+  Entity,
   RELATION_API_CONSUMED_BY,
   RELATION_API_PROVIDED_BY,
   RELATION_CONSUMES_API,
@@ -67,9 +68,17 @@ import {
   isArgocdAvailable,
 } from '@roadiehq/backstage-plugin-argo-cd';
 
+import {
+  EntityGrafanaAlertsCard,
+  EntityGrafanaDashboardsCard,
+  isAlertSelectorAvailable,
+  isDashboardSelectorAvailable,
+} from '@backstage-community/plugin-grafana';
+
 import { EngineeringDocsEntityContent } from '@internal/plugin-engineering-docs';
 
 import { DangerZoneCard } from './DangerZoneCard';
+import { OpsReadinessCard } from './OpsReadinessCard';
 
 // Engineering Hub is the default docs renderer for all entities.
 const docsContent = <EngineeringDocsEntityContent />;
@@ -101,6 +110,31 @@ const cicdContent = (
       />
     </EntitySwitch.Case>
   </EntitySwitch>
+);
+
+// Grafana (homelab kube-prometheus-stack). The tab only exists when the entity carries
+// grafana/dashboard-selector or grafana/alert-label-selector, like the Kubernetes tab.
+// isDashboardSelectorAvailable returns the selector string, hence Boolean().
+const isMonitoringAvailable = (entity: Entity) =>
+  Boolean(isDashboardSelectorAvailable(entity)) || isAlertSelectorAvailable(entity);
+
+const monitoringContent = (
+  <Grid container spacing={3} alignItems="stretch">
+    <EntitySwitch>
+      <EntitySwitch.Case if={e => Boolean(isDashboardSelectorAvailable(e))}>
+        <Grid item md={6} xs={12}>
+          <EntityGrafanaDashboardsCard />
+        </Grid>
+      </EntitySwitch.Case>
+    </EntitySwitch>
+    <EntitySwitch>
+      <EntitySwitch.Case if={isAlertSelectorAvailable}>
+        <Grid item md={6} xs={12}>
+          <EntityGrafanaAlertsCard />
+        </Grid>
+      </EntitySwitch.Case>
+    </EntitySwitch>
+  </Grid>
 );
 
 const entityWarningContent = (
@@ -146,6 +180,21 @@ const overviewContent = (
     <Grid item md={6} xs={12}>
       <EntityLinksCard />
     </Grid>
+    <EntitySwitch>
+      <EntitySwitch.Case if={isAlertSelectorAvailable}>
+        <Grid item md={6} xs={12}>
+          <EntityGrafanaAlertsCard />
+        </Grid>
+      </EntitySwitch.Case>
+    </EntitySwitch>
+    {/* Tech Insights scorecard — checks are configured for services and websites only */}
+    <EntitySwitch>
+      <EntitySwitch.Case if={isComponentType(['service', 'website'])}>
+        <Grid item md={6} xs={12}>
+          <OpsReadinessCard />
+        </Grid>
+      </EntitySwitch.Case>
+    </EntitySwitch>
     <Grid item xs={12}>
       <EntityHasSubcomponentsCard />
     </Grid>
@@ -206,6 +255,14 @@ const serviceEntityPage = (
       if={isKubernetesAvailable}
     >
       <EntityKubernetesContent />
+    </EntityLayout.Route>
+
+    <EntityLayout.Route
+      path="/monitoring"
+      title="Monitoring"
+      if={isMonitoringAvailable}
+    >
+      {monitoringContent}
     </EntityLayout.Route>
 
     <EntityLayout.Route path="/api" title="API">
@@ -281,6 +338,14 @@ const websiteEntityPage = (
       <EntityKubernetesContent />
     </EntityLayout.Route>
 
+    <EntityLayout.Route
+      path="/monitoring"
+      title="Monitoring"
+      if={isMonitoringAvailable}
+    >
+      {monitoringContent}
+    </EntityLayout.Route>
+
     <EntityLayout.Route path="/dependencies" title="Dependencies">
       <Grid container spacing={3}>
         <Grid item xs={12}>
@@ -333,10 +398,28 @@ const resourcePage = (
   </EntityLayout>
 );
 
+// Trainee repos created by the training templates (engineering-standards
+// skeletons/targets/training-workspace) — the overview plus the trainee's CI runs.
+const trainingWorkspacePage = (
+  <EntityLayout>
+    <EntityLayout.Route path="/" title="Overview">
+      {overviewContent}
+    </EntityLayout.Route>
+
+    <EntityLayout.Route path="/ci-cd" title="CI/CD">
+      {cicdContent}
+    </EntityLayout.Route>
+  </EntityLayout>
+);
+
 const componentPage = (
   <EntitySwitch>
     <EntitySwitch.Case if={isComponentType('service')}>
       {serviceEntityPage}
+    </EntitySwitch.Case>
+
+    <EntitySwitch.Case if={isComponentType('training-workspace')}>
+      {trainingWorkspacePage}
     </EntitySwitch.Case>
 
     <EntitySwitch.Case if={isComponentType('website')}>

@@ -43,7 +43,7 @@ import { ProjectPickerField } from './components/scaffolder/ProjectPickerField';
 import { DeploymentTargetPicker } from './components/scaffolder/DeploymentTargetPicker';
 import { DatabasePicker } from './components/scaffolder/DatabasePicker';
 import { ValidatedTextField } from './components/scaffolder/ValidatedTextField';
-import { GitHubUsernameField } from './components/scaffolder/GitHubUsernameField';
+import { GitHubUsernameField, validateGitHubUsername } from './components/scaffolder/GitHubUsernameField';
 import { GitLabUsernameField, validateGitLabUsername } from './components/scaffolder/GitLabUsernameField';
 import { SuggestedResourceNameField } from './components/scaffolder/SuggestedResourceNameField';
 import { TeardownEntityRefField } from './components/scaffolder/TeardownEntityRefField';
@@ -61,7 +61,7 @@ const CustomTemplateWizardPageWithExtensions = (props: TemplateWizardPageProps) 
       { name: 'DeploymentTargetPicker', component: DeploymentTargetPicker as any },
       { name: 'DatabasePicker', component: DatabasePicker as any },
       { name: 'ValidatedTextField', component: ValidatedTextField as any },
-      { name: 'GitHubUsernameField', component: GitHubUsernameField as any },
+      { name: 'GitHubUsernameField', component: GitHubUsernameField as any, validation: validateGitHubUsername as any },
       { name: 'GitLabUsernameField', component: GitLabUsernameField as any, validation: validateGitLabUsername as any },
       { name: 'SuggestedResourceName', component: SuggestedResourceNameField as any },
       { name: 'TeardownEntityRefField', component: TeardownEntityRefField as any },
@@ -73,7 +73,7 @@ import { ProjectRegistrationPage, ProjectListPage } from '@internal/backstage-pl
 import { EngineeringDocsPage } from '@internal/plugin-engineering-docs';
 import { FinOpsPage } from '@internal/plugin-finops';
 import { CustomTechRadarPage } from './components/techRadar/CustomTechRadarPage';
-import { LocalProvisionerPage } from '@internal/plugin-local-provisioner';
+import { LocalProvisionerPage, TraineesPage } from '@internal/plugin-local-provisioner';
 import { OnboardingPage } from '@internal/plugin-onboarding';
 import { UserManagementPage } from '@internal/plugin-user-management';
 import { ConnectDatabasesPage } from '@internal/plugin-dbaas';
@@ -81,6 +81,17 @@ import { AboutTab } from './components/settings/AboutTab';
 import { DeviceAuthPage } from './components/DeviceAuthPage';
 import { NotificationsPage } from '@backstage/plugin-notifications';
 import { GlobalStyleOverrides } from './components/GlobalStyleOverrides';
+
+// Light is the default theme. Backstage's AppThemeSelector reads the 'theme'
+// localStorage key and, when it's unset, follows the OS prefers-color-scheme —
+// seed it so first-time visitors get light. An explicit toggle still persists.
+try {
+  if (!window.localStorage.getItem('theme')) {
+    window.localStorage.setItem('theme', 'light');
+  }
+} catch {
+  // localStorage unavailable (private mode, blocked storage) — fall back to Backstage's default
+}
 
 const app = createApp({
   apis,
@@ -178,6 +189,7 @@ const routes = (
       }
     />
     <Route path="/tech-radar" element={<CustomTechRadarPage />} />
+    <Route path="/local-provisioner/trainees" element={<TraineesPage />} />
     <Route path="/local-provisioner" element={<LocalProvisionerPage />} />
     <Route path="/onboarding" element={<OnboardingPage />} />
     <Route path="/user-management" element={<UserManagementPage />} />

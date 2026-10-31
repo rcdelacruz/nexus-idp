@@ -242,31 +242,58 @@ delivery is long-poll-based (`pollTimeoutSeconds`, above) — see
   Scaling out requires externalizing both, most naturally onto the Redis that is already a
   dependency.
 - **Catalog integration is active** — via `LocalProvisionerEntityProvider`
-  (`src/provider/LocalProvisionerEntityProvider.ts`), a standard Backstage `EntityProvider`. On
-  each `refresh()` it reads all active resources from `TaskStore.getActiveProvisionedResources()`
-  and applies a full mutation to the catalog — resource state (`removed`, etc.) is reflected on
-  the next refresh, no separate teardown-sync step needed. It builds each entity generically from
-  `resource.resource_name`/`resource.resource_type` (auto-tags anything ending in `-training`
-  with `training`/`local-provisioning`), so adding a new resource type needs **no code change
-  here**. `CatalogService.ts` (`src/service/CatalogService.ts`) is a separate, **entirely dead**
-  class from an earlier design — never instantiated anywhere in the codebase (confirmed by
-  exhaustive grep), only referenced as a commented-out import in `router.ts`. Its own
-  `.addLocation()` method was a stub; `LocalProvisionerEntityProvider`'s doc comment explicitly
-  says it "replaces the never-wired `CatalogService.addLocation` stub." Safe to delete; not yet
-  done.
+  (`src/provider/LocalProvisionerEntityProvider.ts`), a standard Backstage `EntityProvider`. On each
+  `refresh()` it reads all active resources from `TaskStore.getActiveProvisionedResources()` and
+  applies a full mutation to the catalog — resource state (`removed`, etc.) is reflected on the next
+  refresh, no separate teardown-sync step needed. It builds each entity generically from
+  `resource.resource_name`/`resource.resource_type` (auto-tags training resources — any
+  `provision-training` lab, or a legacy type ending in `-training` — with
+  `training`/`local-provisioning`), so adding a new resource type needs **no code change here**.
+  `CatalogService.ts` (`src/service/CatalogService.ts`) is a separate, **entirely dead** class from
+  an earlier design — never instantiated anywhere in the codebase (confirmed by exhaustive grep),
+  only referenced as a commented-out import in `router.ts`. Its own `.addLocation()` method was a
+  stub; `LocalProvisionerEntityProvider`'s doc comment explicitly says it "replaces the never-wired
+  `CatalogService.addLocation` stub." Safe to delete; not yet done.
 - **Startup is fail-fast on schema.** A missing table stops the plugin rather than failing
   later at request time.
 
 ## Extending it
 
-**Adding a resource type** — the only reachable path today is a scaffolder template (see
-`kafka-training-local`, `devops-capstone-training-local`, or `devsecops-capstone-training-local`
-in `engineering-standards`). Add `TaskType`/`ResourceType` enum values and a
-`resourceTypeForTask` case in `plugins/local-provisioner-backend/src/types.ts`, then a template
-that renders a `docker-compose.yml` and calls `stratpoint:local-provision` (`dockerComposeFile`,
-and `sourceDir` if it builds from source — see above). This is also where multi-parameter forms,
-conditional steps, and a companion per-user repo (`publish:github`/`publish:gitlab`) get built —
-none of that is available via the dead dialog path.
+**Adding a training lab — no portal code change.** Use the generic task type
+`provision-training` and name the lab in `config.labId`. The only reachable path is a scaffolder
+template in `engineering-standards` that renders a `docker-compose.yml` and calls
+`stratpoint:local-provision`:
+
+```yaml
+- id: queue-task
+  action: stratpoint:local-provision
+  input:
+    taskType: provision-training
+    resourceName: ${{ parameters.resourceName }}
+    dockerComposeFile: ./rendered/docker-compose.yml
+    sourceDir: ./rendered/app        # only if the compose file builds from source (agent ≥0.1.21)
+    config:
+      labId: ministack               # becomes the resource type, catalog spec.type and a tag
+```
+
+`labId` rules (enforced by `POST /tasks` → 400): lowercase letters/digits separated by single
+hyphens, max 40 chars, and **not** a legacy type name (`kafka`, `kafka-training`, `postgres`,
+`redis`, `mongodb`, `devops-capstone-training`, `devsecops-capstone-training` — reserved so a lab
+never inherits another type's docs link). `config.dockerCompose` is also required — without it
+the agent would silently fall back to its bundled template, whose default is Kafka (the action
+always sets it; this guards direct API calls). The only per-lab portal change is optional: a
+`resourceDocsLinks` / `resourceDocsUrls` entry keyed by the `labId` if the lab has
+documentation to link (config-only, then redeploy). Generic labs can't be prewarmed
+(`backstage-agent prewarm` only knows kafka/postgres/redis/mongodb).
+
+The legacy per-lab types (`provision-kafka-training`, `provision-devops-capstone-training`,
+`provision-devsecops-capstone-training`) keep working unchanged for the existing templates. A
+genuinely new *non-training* resource type still needs `TaskType`/`ResourceType` enum values and
+a `resourceTypeForTask` case in `plugins/local-provisioner-backend/src/types.ts`.
+
+> **Rollback hazard:** once any lab has been provisioned as `provision-training`, rolling the
+> backend back to a version without that type makes those resources vanish from the UI and the
+> catalog on the next refresh (their containers keep running on the laptop). Roll forward instead.
 
 `localProvisioner.supportedResources` in `app-config.yaml` and `ProvisionDialog.tsx`'s
 `RESOURCE_TYPES` are **not** part of this path — the config array is declared in the schema but

@@ -6,15 +6,34 @@ import { Router, Request } from 'express';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { AgentService } from '../service/AgentService';
 import { TaskQueueService } from '../service/TaskQueueService';
-import { AgentRegisterRequest, ResourceState } from '../types';
+import { AgentCapabilities, AgentRegisterRequest, ResourceState } from '../types';
 import { extractEmailFromEntityRef } from '../util/identity';
 import rateLimit from 'express-rate-limit';
+import { isOlderVersion, LatestAgentVersion } from '../service/latestAgentVersion';
 
 /**
  * Rate limiter for POST /device/code
  * 10 requests per IP per 15 minutes — one device flow needs 1 request.
  * TODO: swap MemoryStore for rate-limit-redis if replicaCount > 1.
  */
+/** An agent-reported version, accepted only as plain x.y.z (it is stored and compared). */
+export function validAgentVersion(v: unknown): string | undefined {
+  return typeof v === 'string' && /^\d{1,4}\.\d{1,4}\.\d{1,6}$/.test(v) ? v : undefined;
+}
+
+/** Machine capabilities from the poll query (arch, cpus, dockerMem, dockerOs), strictly validated; undefined when absent. */
+export function parseCapabilities(q: Record<string, unknown>): AgentCapabilities | undefined {
+  const caps: AgentCapabilities = {};
+  if (typeof q.arch === 'string' && /^(x64|arm64|arm|ia32|ppc64|s390x|riscv64|loong64)$/.test(q.arch)) caps.arch = q.arch;
+  const int = (v: unknown, max: number) => (typeof v === 'string' && /^\d{1,15}$/.test(v) && Number(v) > 0 && Number(v) <= max ? Number(v) : undefined);
+  const cpus = int(q.cpus, 1024);
+  if (cpus) caps.cpus = cpus;
+  const mem = int(q.dockerMem, 2 ** 46); // ≤ 64 TiB
+  if (mem) caps.dockerMemoryBytes = mem;
+  if (q.dockerOs === 'linux' || q.dockerOs === 'windows') caps.dockerOs = q.dockerOs;
+  return Object.keys(caps).length ? caps : undefined;
+}
+
 const deviceCodeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
@@ -81,6 +100,7 @@ export function createAgentRoutes(
   agentService: AgentService,
   logger: LoggerService,
   taskQueueService?: TaskQueueService,
+  latestAgent: LatestAgentVersion = new LatestAgentVersion(),
 ): Router {
   const router = Router();
 
@@ -100,7 +120,7 @@ export function createAgentRoutes(
   router.post('/device/code', deviceCodeLimiter, async (req, res) => {
     try {
       // Extract machine info from request body (sent by CLI)
-      const { agent_id, hostname, platform, platform_version } = req.body || {};
+      const { agent_id, hostname, platform, platform_version, agent_version } = req.body || {};
 
       // DEBUG: Log what we received
       logger.info('[DEBUG] /device/code request body', { body: req.body });
@@ -111,6 +131,7 @@ export function createAgentRoutes(
         hostname: string;
         platform: string;
         platformVersion: string;
+        agentVersion?: string;
       } | undefined;
 
       if (agent_id && hostname && platform && platform_version) {
@@ -119,6 +140,7 @@ export function createAgentRoutes(
           hostname,
           platform,
           platformVersion: platform_version,
+          agentVersion: validAgentVersion(agent_version),
         };
         logger.info('[DEBUG] Machine info created', { machineInfo });
       } else {
@@ -314,6 +336,8 @@ export function createAgentRoutes(
         agentId,
         userEmail,
         controller.signal,
+        validAgentVersion(req.query.version),
+        parseCapabilities(req.query),
       );
 
       if (res.writableEnded) return undefined; // client already gone (aborted)
@@ -440,6 +464,7 @@ export function createAgentRoutes(
       // clock vs server-written last_seen) makes the UI immune to client clock skew — the chip
       // no longer subtracts a server timestamp from the browser's clock.
       const now = Date.now();
+      const latestAgentVersion = await latestAgent.get();
       const agentsWithStatus = agentRegistrations.map(agent => {
         const lastSeenMs = agent.last_seen ? new Date(agent.last_seen).getTime() : 0;
         const lastSeenAgeSeconds = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
@@ -460,6 +485,9 @@ export function createAgentRoutes(
           // it into a single boolean that collapses "just stopped" and "silently went stale"
           // into the same signal (found 2026-07-26 — see connectivity.ts).
           explicitly_disconnected: explicitlyDisconnected,
+          // "update available" hint on My agents (npm's latest, cached hourly).
+          latest_agent_version: latestAgentVersion ?? null,
+          update_available: isOlderVersion(agent.agent_version, latestAgentVersion),
         };
       });
 

@@ -8,6 +8,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { DockerComposeExecutor } from '../executor/DockerComposeExecutor';
+import { MultipassExecutor } from '../executor/MultipassExecutor';
+import { ConfigManager } from '../config/ConfigManager';
+import { ensureWorkspace, WorkspaceResult } from '../executor/workspaceClone';
+import { capabilitiesQuery, getCapabilities } from '../utils/capabilities';
 import { LocalResourceRegistry } from '../registry/LocalResourceRegistry';
 import { OutboxQueue } from '../registry/OutboxQueue';
 import {
@@ -19,6 +23,12 @@ import {
   isLifecycleTask,
 } from '../types';
 import logger from '../utils/logger';
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import { AGENT_VERSION } from '../utils/version';
+import { recordContact, recordPollError, recordStart, describePollError } from '../utils/connectionState';
+import { clearRunning, INTERRUPTED_MESSAGE, markRunning, takeInterrupted } from '../utils/runningTasks';
+import { throttledReporter } from '../executor/progress';
 
 // Bounded well under Cloudflare's ~100s ceiling on how long it holds a connection open
 // waiting for an origin response — must match (or stay under) the backend's own
@@ -32,6 +42,8 @@ const POLL_RETRY_DELAY_MS = 5_000;
 
 export class Agent {
   private executor: DockerComposeExecutor;
+  /** VM labs (Linux capstone). Lifecycle ops route here when the target task is a VM. */
+  private vm: MultipassExecutor;
   private registry: LocalResourceRegistry;
   private outbox: OutboxQueue;
   private backstageUrl: string;
@@ -49,6 +61,7 @@ export class Agent {
     this.agentId = agentId;
     this.serviceToken = serviceToken;
     this.executor = new DockerComposeExecutor();
+    this.vm = new MultipassExecutor(new ConfigManager());
     this.registry = new LocalResourceRegistry();
     this.outbox = new OutboxQueue();
     this.pidFile = path.join(os.homedir(), '.backstage-agent', 'agent.pid');
@@ -154,6 +167,12 @@ export class Agent {
     // long-lived connection state to silently lose: a request either gets its answer or times
     // out and is immediately reissued. The first iteration of this loop covers what the old
     // startup check did (pick up anything already pending) — no separate call needed.
+    recordStart();
+    // Anything the previous run was in the middle of will never finish: say so in the portal.
+    for (const t of takeInterrupted()) {
+      logger.warn(`Task ${t.taskId} (${t.resourceName ?? 'unknown'}) was interrupted by the last agent stop; reporting it failed`);
+      await this.updateTaskStatus(t.taskId, TaskStatus.FAILED, undefined, INTERRUPTED_MESSAGE).catch(() => undefined);
+    }
     this.polling = true;
     this.pollLoop();
 
@@ -170,7 +189,11 @@ export class Agent {
     while (this.polling) {
       this.pollAbortController = new AbortController();
       try {
-        const url = `${this.backstageUrl}/api/local-provisioner/agent/poll?agentId=${encodeURIComponent(this.agentId)}`;
+        // version: lets the portal know what this agent supports (e.g. run-check needs ≥ 0.1.23)
+        // and picks up a `backstage-agent update` without a re-login.
+        // capabilities: arch + Docker's memory/CPUs, so labs can refuse early with a fix.
+        const caps = capabilitiesQuery(await getCapabilities());
+        const url = `${this.backstageUrl}/api/local-provisioner/agent/poll?agentId=${encodeURIComponent(this.agentId)}&version=${encodeURIComponent(AGENT_VERSION)}&${caps}`;
         const timeout = setTimeout(() => this.pollAbortController?.abort(), POLL_TIMEOUT_MS + 5_000);
         let response;
         try {
@@ -189,10 +212,12 @@ export class Agent {
             process.exit(1);
           }
           logger.warn(`Poll failed: ${response.status}`);
+          recordPollError(`The portal answered ${response.status}`);
           await this.delay(POLL_RETRY_DELAY_MS);
           continue;
         }
 
+        recordContact();
         // A live connection just proved we're online — drain anything queued while offline.
         if (this.outbox.size() > 0) {
           await this.outbox.flush((taskId, body) => this.sendStatus(taskId, body));
@@ -202,7 +227,7 @@ export class Agent {
         for (const t of body.tasks || []) {
           if (this.processing.has(t.task_id)) continue;
           logger.info(`Picked up task ${t.task_id} via poll`);
-          this.handleTask({ taskId: t.task_id, type: t.task_type, config: t.config || {} }).catch(
+          this.handleTask({ taskId: t.task_id, type: t.task_type, resourceName: t.resource_name, config: t.config || {} }).catch(
             err => logger.error(`Task ${t.task_id} failed: ${err.message}`),
           );
         }
@@ -218,6 +243,7 @@ export class Agent {
           break;
         }
         logger.warn(`Poll error (offline?): ${error.message}`);
+        recordPollError(describePollError(error, this.backstageUrl));
         await this.delay(POLL_RETRY_DELAY_MS);
       }
     }
@@ -239,6 +265,7 @@ export class Agent {
       return;
     }
     this.processing.add(taskId);
+    markRunning(taskId, taskEvent.resourceName || taskEvent.config.resourceName || '');
 
     try {
       logger.info(`Processing task ${taskId} (${taskEvent.type})`);
@@ -249,13 +276,28 @@ export class Agent {
         agent_id: this.agentId,
         user_id: '',
         task_type: taskEvent.type,
-        resource_name: taskEvent.config.resourceName || `resource-${taskId}`,
+        // The portal's name for the resource: what the trainee sees, the VM's name, and the key the
+        // offline `resources` commands (and Stop/Remove from the portal) use.
+        resource_name: taskEvent.resourceName || taskEvent.config.resourceName || `resource-${taskId}`,
         config: taskEvent.config,
         status: TaskStatus.IN_PROGRESS,
         created_at: new Date().toISOString(),
       };
 
       const result = await this.dispatch(taskEvent.type, task, taskEvent.config);
+
+      // Auto-clone the trainee's companion repo after a successful provision (never for lifecycle
+      // ops, never fails the task). The portal shows "Your code: <path>" from metadata.workspace.
+      if (result.success && !isLifecycleTask(taskEvent.type)) {
+        const repoUrl = taskEvent.config.githubRepoUrl || taskEvent.config.gitlabRepoUrl;
+        if (repoUrl && taskEvent.config.autoClone !== false) {
+          const workspace: WorkspaceResult = await ensureWorkspace(repoUrl).catch(
+            (e: any): WorkspaceResult => ({ status: 'failed', repoUrl, error: e.message }),
+          );
+          logger.info(`Workspace for ${task.resource_name}: ${workspace.status}${workspace.path ? ` → ${workspace.path}` : ''}`);
+          result.metadata = { ...(result.metadata ?? {}), workspace };
+        }
+      }
 
       if (result.success) {
         logger.info(`Task ${taskId} completed successfully`);
@@ -275,6 +317,7 @@ export class Agent {
       await this.updateTaskStatus(taskId, TaskStatus.FAILED, undefined, error.message);
     } finally {
       this.processing.delete(taskId);
+      clearRunning(taskId);
     }
   }
 
@@ -294,6 +337,22 @@ export class Agent {
       if (!targetTaskId) {
         return { success: false, error: `${taskType} requires config.targetTaskId` };
       }
+      if (this.vm.isVmTask(targetTaskId)) {
+        switch (taskType) {
+          case TaskType.DEPROVISION:
+            return this.vm.cleanupTask(targetTaskId);
+          case TaskType.STOP:
+            return this.vm.stopResource(targetTaskId);
+          case TaskType.START:
+            return this.vm.startResource(targetTaskId);
+          case TaskType.RESTART:
+            return this.vm.restartResource(targetTaskId);
+          case TaskType.RUN_CHECK:
+            return config.job ? this.vm.runJob(targetTaskId, config.job) : { success: false, error: 'VM labs support job checks only' };
+          default:
+            return { success: false, error: `Unknown lifecycle task type: ${taskType}` };
+        }
+      }
       switch (taskType) {
         case TaskType.DEPROVISION:
           return this.executor.cleanupTask(targetTaskId);
@@ -303,17 +362,23 @@ export class Agent {
           return this.executor.startResource(targetTaskId);
         case TaskType.RESTART:
           return this.executor.restartResource(targetTaskId);
+        case TaskType.RUN_CHECK:
+          return config.job
+            ? this.executor.runJob(targetTaskId, config.job)
+            : this.executor.runCheck(targetTaskId, config.service, config.argv, config.timeoutMs);
         default:
           return { success: false, error: `Unknown lifecycle task type: ${taskType}` };
       }
     }
 
-    // Provision: stream interim progress to the portal so slow pulls don't look stuck.
-    return this.executor.executeTask(task, (phase, detail) => {
-      this.updateTaskStatus(task.task_id, TaskStatus.IN_PROGRESS, { phase, ...detail }).catch(
-        () => undefined,
-      );
+    // Every step goes to the portal's activity timeline at once; percent/output updates within a
+    // step at most every 3 s (a seed or build prints thousands of lines).
+    const progress = throttledReporter((phase, detail) => {
+      this.updateTaskStatus(task.task_id, TaskStatus.IN_PROGRESS, { phase, ...detail }).catch(() => undefined);
     });
+    // VM labs (config.executor = multipass): an Ubuntu VM instead of Docker Compose.
+    if (config.executor === 'multipass') return this.vm.executeTask(task, progress);
+    return this.executor.executeTask(task, progress);
   }
 
   /**

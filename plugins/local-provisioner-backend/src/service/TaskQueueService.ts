@@ -109,7 +109,11 @@ export class TaskQueueService {
       hasError: !!errorMessage,
     });
 
-    await this.taskStore.updateTaskStatus(taskId, status, metadata, errorMessage, extra);
+    const { newStep, resourceName } = await this.taskStore.updateTaskStatus(taskId, status, metadata, errorMessage, extra);
+    if (newStep) {
+      // One line per step, so the server log tells the story of every lab (instructors, support).
+      this.logger.info(`Lab ${resourceName ?? taskId}: ${newStep}`, { taskId, step: newStep });
+    }
 
     if (status === TaskStatus.COMPLETED) {
       this.logger.info(`Task ${taskId} completed successfully`, {

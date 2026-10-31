@@ -24,7 +24,7 @@
  */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, useTheme } from '@material-ui/core';
+import { Button } from '@material-ui/core';
 import { InfoCard } from '@backstage/core-components';
 import { useEntity } from '@backstage/plugin-catalog-react';
 import { stringifyEntityRef } from '@backstage/catalog-model';
@@ -52,7 +52,6 @@ function resolveRepoName(entity: any): string | undefined {
 export const DangerZoneCard = () => {
   const { entity } = useEntity();
   const navigate = useNavigate();
-  const theme = useTheme();
   const templateRoute = useRouteRef(scaffolderPlugin.routes.selectedTemplate);
   const repoName = resolveRepoName(entity);
 
@@ -83,10 +82,7 @@ export const DangerZoneCard = () => {
         variant="outlined"
         onClick={handleTeardown}
         startIcon={<Trash2 size={16} strokeWidth={1.5} />}
-        style={{
-          color: theme.palette.error.main,
-          borderColor: theme.palette.error.main,
-        }}
+        data-destructive
       >
         Teardown Application
       </Button>

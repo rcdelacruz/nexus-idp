@@ -24,11 +24,11 @@ export const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.Console({
-      format: combine(
-        colorize(),
-        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        logFormat
-      ),
+      // Colour only on a terminal: the daemon's stdout is ~/.backstage-agent/logs/agent.log, which
+      // must stay plain text for people reading or attaching it.
+      format: process.stdout.isTTY
+        ? combine(colorize(), timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), logFormat)
+        : combine(timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), logFormat),
     }),
   ],
 });

@@ -22,6 +22,9 @@ export const userManagementPlugin = createBackendPlugin({
         logger.info('Initializing User Management backend plugin');
 
         const orgDomain = config.getString('organization.domain');
+        // The organization's own GitHub account (owns every repo the portal creates) — never a
+        // user's linked account: GitHub won't add a repo's owner as its collaborator.
+        const githubOwner = config.getOptionalString('organization.githubOwner');
 
         const knex = await database.getClient();
         const userStore = await UserStore.create(knex);
@@ -39,7 +42,7 @@ export const userManagementPlugin = createBackendPlugin({
           },
         });
 
-        const router = await createRouter({ logger, httpAuth, userInfo, userStore, revocationStore, orgDomain });
+        const router = await createRouter({ logger, httpAuth, userInfo, userStore, revocationStore, orgDomain, githubOwner });
 
         httpRouter.addAuthPolicy({
           path: '/health',

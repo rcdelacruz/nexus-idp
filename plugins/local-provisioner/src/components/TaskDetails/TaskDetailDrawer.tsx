@@ -7,9 +7,12 @@ import {
   Tooltip,
   makeStyles,
 } from '@material-ui/core';
-import { X, Copy, Check, Terminal, Plug, Info, Github, Gitlab, ExternalLink, LayoutGrid, BookOpen } from 'lucide-react';
+import { X, Copy, Check, Terminal, Plug, Info, Github, Gitlab, ExternalLink, LayoutGrid, BookOpen, GitBranch, Activity, Loader, CircleX } from 'lucide-react';
 import { parseEntityRef } from '@backstage/catalog-model';
 import { ProvisioningTask } from '../../api/types';
+import { taskTypeLabel } from '../../api/transformers';
+import { currentStep, formatDuration, timeline } from '../../api/activity';
+import { agentWorkspace, cloneInfo, vscodeOpenFolderHref } from '../../api/cloneInfo';
 
 const useStyles = makeStyles(theme => ({
   drawer: { width: 480, maxWidth: '100vw' },
@@ -60,7 +63,73 @@ const useStyles = makeStyles(theme => ({
     wordBreak: 'break-word',
   },
   error: { color: '#e5484d' },
+  stepRow: {
+    display: 'grid',
+    gridTemplateColumns: '18px 64px 1fr auto',
+    alignItems: 'center',
+    gap: 8,
+    padding: theme.spacing(0.5, 0),
+    fontSize: '0.8125rem',
+  },
+  stepTime: { color: theme.palette.text.secondary, fontFamily: 'monospace', fontSize: '0.75rem' },
+  stepHint: { color: theme.palette.text.secondary, fontSize: '0.75rem', margin: theme.spacing(0.25, 0, 0.75, 4.5) },
+  bar: { height: 4, borderRadius: 2, background: theme.palette.divider, margin: theme.spacing(0.5, 0, 1, 4.5), overflow: 'hidden' },
+  barFill: { height: '100%', background: theme.palette.primary.main },
 }));
+
+/**
+ * Every step the agent reported, with when it started and how long it took; the running one is
+ * marked, with its typical duration and live output, so a long setup never looks stuck.
+ */
+function ActivitySection({ task }: { task: ProvisioningTask }) {
+  const classes = useStyles();
+  const steps = timeline(task);
+  const now = currentStep(task);
+  const output = typeof task.metadata?.output === 'string' ? (task.metadata.output as string) : undefined;
+  if (!steps.length && !now) return null;
+  const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return (
+    <>
+      <div className={classes.sectionLabel}>
+        <Activity size={12} strokeWidth={2} /> Activity
+      </div>
+      {task.status === 'pending' && now && (
+        <div className={classes.stepRow}>
+          <Loader size={14} strokeWidth={2} />
+          <span className={classes.stepTime}>{time(task.createdAt)}</span>
+          <span>{now.label}</span>
+          <span className={classes.stepTime}>{formatDuration(now.sinceMs)}</span>
+        </div>
+      )}
+      {steps.map((st, i) => {
+        let icon = <Check size={14} strokeWidth={2} color="#079669" />;
+        if (st.running) icon = <Loader size={14} strokeWidth={2} />;
+        else if (st.label === 'Failed') icon = <CircleX size={14} strokeWidth={2} color="#e5484d" />;
+        return (
+          <React.Fragment key={`${st.at}-${i}`}>
+            <div className={classes.stepRow}>
+              {icon}
+              <span className={classes.stepTime}>{time(st.at)}</span>
+              <span style={st.running ? { fontWeight: 600 } : undefined}>{st.label}</span>
+              <span className={classes.stepTime}>{st.durationMs ? formatDuration(st.durationMs) : ''}</span>
+            </div>
+            {st.running && now?.hint && <div className={classes.stepHint}>{now.hint}</div>}
+            {st.running && now?.percent !== undefined && (
+              <div className={classes.bar} aria-label={`${now.percent}%`}>
+                <div className={classes.barFill} style={{ width: `${now.percent}%` }} />
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+      {output && (task.status === 'in-progress' || task.status === 'pending') && (
+        <div className={classes.logsBox} style={{ maxHeight: 200, marginTop: 8 }}>
+          {output}
+        </div>
+      )}
+    </>
+  );
+}
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   const classes = useStyles();
@@ -133,7 +202,6 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
   if (!task) return null;
 
   const conn = task.connectionDetails;
-  const phase = (task.metadata as any)?.phase as string | undefined;
   // Set by the scaffolder template that provisioned this resource (see e.g.
   // kafka-training-local's queue-task step, which forwards its publish:github step's
   // remoteUrl) — not every resource has one, only types provisioned via a template that
@@ -141,6 +209,9 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
   // of githubRepoUrl/gitlabRepoUrl actually ran (gated by the trainee's ciTool choice).
   const githubRepoUrl = (task.config as any)?.githubRepoUrl as string | undefined;
   const gitlabRepoUrl = (task.config as any)?.gitlabRepoUrl as string | undefined;
+  const clone = cloneInfo(githubRepoUrl || gitlabRepoUrl);
+  // Set by agents with auto-clone: where the trainee's repo was cloned on their machine.
+  const workspace = agentWorkspace(task.metadata);
 
   const catalogHref = task.catalogEntityRef ? (() => {
     try {
@@ -171,11 +242,11 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
         </div>
         <div className={classes.kv}>
           <span className={classes.kvKey}>Status</span>
-          <span>{task.status}{phase ? ` · ${phase}` : ''}</span>
+          <span>{task.status}</span>
         </div>
         <div className={classes.kv}>
           <span className={classes.kvKey}>Type</span>
-          <span>{task.taskType}</span>
+          <span>{taskTypeLabel(task)}</span>
         </div>
         <div className={classes.kv}>
           <span className={classes.kvKey}>Agent</span>
@@ -191,6 +262,8 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
             <span>{new Date(task.completedAt).toLocaleString()}</span>
           </div>
         )}
+
+        <ActivitySection task={task} />
 
         {conn && (conn.connectionString || conn.ui || (conn.ports && Object.keys(conn.ports).length > 0)) && (
           <>
@@ -226,6 +299,45 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
               <Gitlab size={12} strokeWidth={2} /> GitLab repo
             </div>
             <LinkRow value={gitlabRepoUrl} />
+          </>
+        )}
+
+        {workspace?.path && (workspace.status === 'cloned' || workspace.status === 'existing') && (
+          <>
+            <div className={classes.sectionLabel}>
+              <GitBranch size={12} strokeWidth={2} /> Your code
+            </div>
+            <CopyRow label="" value={workspace.path} />
+            <a
+              href={vscodeOpenFolderHref(workspace.path)}
+              className={classes.connRow}
+              style={{ textDecoration: 'none', color: 'inherit', fontFamily: 'inherit' }}
+            >
+              <span className={classes.connValue}>Open in VS Code</span>
+              <ExternalLink size={14} strokeWidth={1.5} />
+            </a>
+          </>
+        )}
+
+        {clone && !(workspace?.path && (workspace.status === 'cloned' || workspace.status === 'existing')) && (
+          <>
+            <div className={classes.sectionLabel}>
+              <GitBranch size={12} strokeWidth={2} /> Get the code on your laptop
+            </div>
+            {workspace?.status === 'failed' && workspace.hint && (
+              <Typography variant="body2" style={{ color: '#d97706', marginBottom: 8 }}>
+                Automatic clone didn't work: {workspace.hint}
+              </Typography>
+            )}
+            <a
+              href={clone.vscodeHref}
+              className={classes.connRow}
+              style={{ textDecoration: 'none', color: 'inherit', fontFamily: 'inherit' }}
+            >
+              <span className={classes.connValue}>Clone in VS Code</span>
+              <ExternalLink size={14} strokeWidth={1.5} />
+            </a>
+            <CopyRow label="" value={clone.command} />
           </>
         )}
 

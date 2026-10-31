@@ -35,6 +35,8 @@ export enum TaskType {
   STOP = 'stop',
   START = 'start',
   RESTART = 'restart',
+  /** Run an instructor-defined check inside a lab container and report the output (training platform Phase 5). */
+  RUN_CHECK = 'run-check',
 }
 
 const LIFECYCLE_TASK_TYPES: string[] = [
@@ -42,6 +44,9 @@ const LIFECYCLE_TASK_TYPES: string[] = [
   TaskType.STOP,
   TaskType.START,
   TaskType.RESTART,
+  // Acts on an existing resource (config.targetTaskId) like the others, but changes nothing:
+  // the backend keeps it out of the resource-state fold.
+  TaskType.RUN_CHECK,
 ];
 
 /** True for lifecycle task types acting on an existing resource (not a fresh provision). */
@@ -72,6 +77,8 @@ export interface ProvisioningTask {
 export interface AgentTaskEvent {
   taskId: string;
   type: string;
+  /** The portal's resource name (the poll sends it next to the config, not inside it). */
+  resourceName?: string;
   config: Record<string, any>;
 }
 

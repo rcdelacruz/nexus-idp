@@ -22,6 +22,15 @@ The Backstage Agent is a CLI tool that runs on a developer's machine to provisio
   - Offline outbox — status updates queued when the portal is unreachable, flushed on reconnect
 - **Self-update** — `backstage-agent update`, plus an update-available notice on start
 - **Connection details reported** back to the portal ("how to connect")
+- **Auto-clone (0.1.23+)** — after a lab with a companion repo is provisioned, the agent clones it with
+  *your own* git login into `~/stratpoint/<repo>` (override with `BACKSTAGE_AGENT_WORKSPACE`) and the
+  portal shows "Your code: <path>" with **Open in VS Code**. It never overwrites a folder (an existing
+  clone of the same repo is reused; anything else gets `<repo>-2`), never commits or pushes, never
+  deletes your code on Remove, and never fails the provision — if git isn't logged in (or you haven't
+  accepted the repo invitation yet) the portal tells you what to do.
+- **Instructor lab checks (0.1.23+)** — `run-check` tasks run a predefined check inside one of your
+  lab's own containers (`docker compose exec`, no shell on your machine) and report the output, e.g.
+  the Terraform capstone's "seeded prod resources intact". They never change the resource's state.
 - Graceful shutdown, comprehensive logging
 
 ## Prerequisites
@@ -328,6 +337,7 @@ packages/backstage-agent/
 
 The agent supports these environment variables:
 
+- `BACKSTAGE_AGENT_WORKSPACE`: where auto-cloned repos go (default: `~/stratpoint`)
 - `LOG_LEVEL`: Logging level (default: `info`)
   - Options: `error`, `warn`, `info`, `debug`
   - Example: `LOG_LEVEL=debug backstage-agent start`

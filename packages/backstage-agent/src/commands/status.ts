@@ -7,9 +7,21 @@ import { TokenManager } from '../auth/TokenManager';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import fetch from 'node-fetch';
+import chalk from 'chalk';
 import logger from '../utils/logger';
 import { getMachineInfo } from '../utils/machineId';
+import { displayDetails, displayInfo, displaySuccess, displayWarning } from '../utils/logo';
+import { AGENT_VERSION } from '../utils/version';
+import { readConnectionState, isConnected, isConnecting } from '../utils/connectionState';
+
+/** "12s ago", "4m ago", "3h ago", "2d ago". */
+export function timeAgo(iso: string, now: Date = new Date()): string {
+  const s = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
 
 export const statusCommand = new Command('status')
   .description('Show agent status and configuration')
@@ -37,48 +49,31 @@ export const statusCommand = new Command('status')
         }
       }
 
-      // Check backend connection if authenticated
-      let backendStatus: 'connected' | 'disconnected' | 'unknown' = 'unknown';
-      let agentDetails: any = null;
-
-      if (config) {
-        try {
-          const response = await fetch(
-            `${config.backstageUrl}/api/local-provisioner/agent`,
-            {
-              headers: {
-                'Authorization': `Bearer ${config.serviceToken}`,
-              },
-            }
-          );
-
-          if (response.ok) {
-            const agents = await response.json() as any[];
-            agentDetails = agents.find(a => a.agent_id === config.agentId);
-            backendStatus = agentDetails ? 'connected' : 'disconnected';
-          } else {
-            backendStatus = 'disconnected';
-          }
-        } catch {
-          backendStatus = 'disconnected';
-        }
-      }
+      // Connection: the daemon records every successful poll (the portal's agent list needs a
+      // signed-in user, so this command can't ask the portal with the agent token).
+      const connection = readConnectionState();
+      const connected = isRunning && isConnected(connection);
+      const connecting = isRunning && !connected && isConnecting(connection);
+      const backendStatus: 'connected' | 'disconnected' | 'unknown' = !config ? 'unknown' : connected ? 'connected' : 'disconnected';
+      const tokenExpired = config ? tokenManager.areTokensExpired() : true;
 
       const status = {
+        version: AGENT_VERSION,
         authenticated: !!config,
         running: isRunning,
         pid: pid,
         backendConnection: backendStatus,
+        lastContact: connection.lastContactAt ?? null,
+        lastError: connection.lastError ?? null,
         agentId: config?.agentId || machineInfo.agentId,
         backstageUrl: config?.backstageUrl || 'not configured',
-        tokenExpires: config?.expiresAt ? new Date(config.expiresAt).toLocaleString() : 'N/A',
-        tokenExpired: config ? tokenManager.areTokensExpired() : true,
+        tokenExpires: config?.expiresAt ? new Date(config.expiresAt).toISOString() : null,
+        tokenExpired,
         machineInfo: {
           hostname: machineInfo.hostname,
           platform: machineInfo.platform,
           platformVersion: machineInfo.platformVersion,
         },
-        lastSeen: agentDetails?.last_seen ? new Date(agentDetails.last_seen).toLocaleString() : 'N/A',
       };
 
       if (options.json) {
@@ -86,38 +81,30 @@ export const statusCommand = new Command('status')
         return;
       }
 
-      // Human-readable output
-      console.log('\n╔════════════════════════════════════════════════════════════╗');
-      console.log('║               Backstage Agent Status                       ║');
-      console.log('╚════════════════════════════════════════════════════════════╝\n');
-
-      console.log('Authentication:');
-      console.log(`  Status:          ${status.authenticated ? '✓ Authenticated' : '✗ Not authenticated'}`);
-      console.log(`  Agent ID:        ${status.agentId}`);
-      console.log(`  Backstage URL:   ${status.backstageUrl}`);
-      console.log(`  Token Expires:   ${status.tokenExpires}`);
-      console.log(`  Token Expired:   ${status.tokenExpired ? '✗ Yes' : '✓ No'}\n`);
-
-      console.log('Agent Process:');
-      console.log(`  Running:         ${status.running ? `✓ Yes (PID: ${status.pid})` : '✗ No'}`);
-      console.log(`  Backend Status:  ${status.backendConnection === 'connected' ? '✓ Connected' : status.backendConnection === 'disconnected' ? '✗ Disconnected' : '? Unknown'}`);
-      console.log(`  Last Seen:       ${status.lastSeen}\n`);
-
-      console.log('Machine Info:');
-      console.log(`  Hostname:        ${status.machineInfo.hostname}`);
-      console.log(`  Platform:        ${status.machineInfo.platform}`);
-      console.log(`  Version:         ${status.machineInfo.platformVersion}\n`);
-
-      // Recommendations
-      if (!status.authenticated) {
-        console.log('ℹ  Run "backstage-agent login" to authenticate\n');
-      } else if (status.tokenExpired) {
-        console.log('⚠  Token expired. Run "backstage-agent login" to re-authenticate\n');
-      } else if (!status.running) {
-        console.log('ℹ  Run "backstage-agent start" to start the agent\n');
-      } else {
-        console.log('✓ Agent is running and ready to receive tasks\n');
+      const yes = (ok: boolean, good: string, bad: string) => (ok ? chalk.green(`● ${good}`) : chalk.red(`● ${bad}`));
+      const contactText = connection.lastContactAt ? `last contact ${timeAgo(connection.lastContactAt)}` : 'no contact yet';
+      displayDetails([
+        ['Agent', isRunning ? yes(true, `running (PID ${pid})`, '') : yes(false, '', 'not running')],
+        ['Portal', !config ? chalk.dim('not signed in') : connecting ? chalk.yellow('● connecting (the first answer can take up to 25 s)') : `${connected ? yes(true, 'connected', '') : yes(false, '', 'not reaching the portal')} ${chalk.dim(`· ${contactText}`)}`],
+        ['URL', status.backstageUrl],
+        ['Signed in', !config ? chalk.dim('no') : tokenExpired ? chalk.red('session expired') : `until ${new Date(config.expiresAt).toLocaleString()}`],
+        ['Agent ID', status.agentId],
+        ['Machine', `${machineInfo.hostname} · ${machineInfo.platformVersion}`],
+        ['Version', AGENT_VERSION],
+      ]);
+      if (!connected && isRunning && connection.lastError) {
+        console.log('');
+        displayWarning(`Last error: ${connection.lastError} (${timeAgo(connection.lastErrorAt!)})`);
       }
+      console.log('');
+
+      if (!status.authenticated) displayInfo('Next: backstage-agent login');
+      else if (tokenExpired) displayWarning('Your session expired. Next: backstage-agent login');
+      else if (!isRunning) displayInfo('Next: backstage-agent start');
+      else if (connected) displaySuccess('Ready to receive tasks from the portal');
+      else if (connecting) displayInfo('Starting up. Run backstage-agent status again in a moment.');
+      else displayWarning('Running, but not reaching the portal. Check your network or VPN; logs: ~/.backstage-agent/logs/agent.log');
+      console.log('');
 
     } catch (error: any) {
       logger.error('Failed to get agent status');

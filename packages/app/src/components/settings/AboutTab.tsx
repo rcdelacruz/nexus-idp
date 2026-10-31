@@ -29,7 +29,6 @@ const Row = ({
   icon: Icon,
   label,
   value,
-  detail,
   mono,
   title,
   last,
@@ -37,7 +36,6 @@ const Row = ({
   icon: LucideIcon;
   label: string;
   value: string;
-  detail?: string;
   mono?: boolean;
   title?: string;
   last?: boolean;
@@ -69,9 +67,6 @@ const Row = ({
       >
         {value}
       </Typography>
-      {detail && (
-        <Typography style={{ fontSize: '0.8125rem', color: c.textMuted }}>{detail}</Typography>
-      )}
     </Box>
   );
 };
@@ -82,17 +77,14 @@ export function AboutTab() {
 
   const backstageVersion = config.getOptionalString('app.backstage.version') ?? UNKNOWN;
   const build = readBuildInfo();
-  const { tag, commitsAhead } = parseGitVersion(build?.gitVersion);
+  // Nearest tag only; how far the build is past it is deliberately not shown — the Commit row
+  // identifies the exact build.
+  const { tag } = parseGitVersion(build?.gitVersion);
   const commit = build && build.commit !== UNKNOWN ? build.commit : null;
   const builtAt =
     build && Number.isFinite(build.timestamp)
       ? formatBuildDate(build.timestamp)
       : UNKNOWN;
-
-  let releaseDetail: string | undefined;
-  if (tag && commitsAhead > 0) {
-    releaseDetail = `${commitsAhead} commit${commitsAhead === 1 ? '' : 's'} ahead`;
-  }
 
   return (
     <Box style={{ maxWidth: 860, paddingBottom: 48 }}>
@@ -115,7 +107,6 @@ export function AboutTab() {
             icon={Tag}
             label="Release"
             value={tag ?? UNKNOWN}
-            detail={releaseDetail}
             title="Nearest release tag in the build's git history"
           />
           <Row

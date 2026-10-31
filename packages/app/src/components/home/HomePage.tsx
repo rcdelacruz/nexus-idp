@@ -7,6 +7,8 @@ import { CatalogApi } from '@backstage/catalog-client';
 import useAsync from 'react-use/lib/useAsync';
 import { Link, useNavigate } from 'react-router-dom';
 import { DEPT_TEAM_IDS_JWT } from '@internal/plugin-onboarding';
+import { useDeptTeams } from './useDeptTeams';
+import { tilesForTeams } from './rolePaths';
 import {
   LayoutGrid, BookOpen, Code2, Zap, HardDrive, FolderGit2,
   Users, School, Radar, DollarSign, ArrowUpRight,
@@ -28,23 +30,23 @@ const Tile = ({ icon: Icon, title, description, to }: {
   icon: React.ElementType; title: string; description: string; to: string;
 }) => {
   const [hov, setHov] = React.useState(false);
-  return (
-    <Link
-      to={to}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        textDecoration: 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        padding: '20px',
-        background: g.bg100,
-        border: `1px solid ${hov ? g.borderHv : g.border}`,
-        borderRadius: 8,
-        transition: 'border-color 0.15s',
-      }}
-    >
+  const linkProps = {
+    onMouseEnter: () => setHov(true),
+    onMouseLeave: () => setHov(false),
+    style: {
+      textDecoration: 'none',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      justifyContent: 'space-between',
+      padding: '20px',
+      background: g.bg100,
+      border: `1px solid ${hov ? g.borderHv : g.border}`,
+      borderRadius: 8,
+      transition: 'border-color 0.15s',
+    },
+  };
+  const content = (
+    <>
       <div>
         <div style={{ width: 32, height: 32, borderRadius: 7, background: g.gray100, border: `1px solid ${g.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
           <Icon size={14} strokeWidth={1.5} color={g.fg2} />
@@ -59,8 +61,12 @@ const Tile = ({ icon: Icon, title, description, to }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 20, fontSize: '0.8125rem', fontWeight: 500, color: hov ? g.fg1 : g.fg3, transition: 'color 0.15s' }}>
         Open <ArrowUpRight size={12} strokeWidth={2} style={{ transform: hov ? 'translate(1px,-1px)' : 'none', transition: 'transform 0.15s' }} />
       </div>
-    </Link>
+    </>
   );
+  // Absolute URLs (e.g. the nexus-dev toolkit docs) open in a new tab; app routes use the router.
+  return /^https?:\/\//.test(to)
+    ? <a href={to} target="_blank" rel="noopener noreferrer" {...linkProps}>{content}</a>
+    : <Link to={to} {...linkProps}>{content}</Link>;
 };
 
 const SectionLabel = ({ children }: { children: string }) => (
@@ -75,6 +81,8 @@ export const HomePage = () => {
   const catalogApi = useApi(catalogApiRef) as CatalogApi;
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [isPM, setIsPM] = React.useState(false);
+  const { teams: myTeams } = useDeptTeams();
+  const teamTiles = tilesForTeams(myTeams);
 
   // Redirect new users (no dept team, not admin) to onboarding on first visit.
   // Also detect role for conditional homepage sections.
@@ -151,6 +159,18 @@ export const HomePage = () => {
             </div>
           </div>
 
+          {/* For your team — persona tiles from rolePaths.ts; hidden when the user's teams have none */}
+          {teamTiles.length > 0 && (
+            <div>
+              <SectionLabel>For your team</SectionLabel>
+              <div className="hp-grid-3">
+                {teamTiles.map(t => (
+                  <Tile key={t.to} icon={t.icon} title={t.title} description={t.description} to={t.to} />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Platform — 3 equal columns */}
           <div>
             <SectionLabel>Platform</SectionLabel>
@@ -190,7 +210,7 @@ export const HomePage = () => {
               <div className="hp-grid-3">
                 <Tile icon={Users}      title="User Management" description="Assign teams, promote admins, and manage users."               to="/user-management" />
                 <Tile icon={DollarSign} title="FinOps"          description="Cost visibility, rightsizing, and unused resources."            to="/finops" />
-                <Tile icon={School}     title="Training"        description="Provision Kafka, databases, and resources for hands-on learning." to="/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all" />
+                <Tile icon={School}     title="Training"        description="Provision Kafka, databases, and resources for hands-on learning." to="/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all&trainingAccess=1" />
               </div>
             </div>
           )}

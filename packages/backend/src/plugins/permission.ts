@@ -51,6 +51,10 @@ export const isAdmin = (groups: string[]) =>
   );
 
 /** Team leads — any group ending in -lead */
+/** Trainers: see every trainee's environments and repo activity (Local Provisioner Trainees view). */
+export const isInstructor = (groups: string[]) =>
+  groups.some(ref => ref === 'group:default/instructors');
+
 export const isLead = (groups: string[]) =>
   groups.some(ref => ref.startsWith('group:default/') && ref.endsWith('-lead'));
 
@@ -154,6 +158,16 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
       return { result: AuthorizeResult.DENY }; // isAdmin already handled above
     }
 
+    // ── Local Provisioner Trainees view: admins + instructors ────────────────
+    // Same reason as above: must precede the generic `local-provisioner.` ALLOWs.
+    if (
+      permissionName === 'local-provisioner.trainees.read' ||
+      permissionName === 'local-provisioner.trainees.manage' ||
+      permissionName === 'local-provisioner.capstones.manage'
+    ) {
+      return { result: isInstructor(groups) ? AuthorizeResult.ALLOW : AuthorizeResult.DENY };
+    }
+
     // ── Catalog entity read: role-based visibility filtering ─────────────────
     if (isResourcePermission(request.permission, RESOURCE_TYPE_CATALOG_ENTITY) &&
         request.permission.name === catalogEntityReadPermission.name) {
@@ -200,6 +214,8 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
                     },
                     // Governance templates (e.g. promote-app) are visible to leads
                     catalogConditions.hasSpec({ key: 'type', value: 'governance' }),
+                    // Training labs (Local Provisioner) are for every engineer, whoever owns them
+                    catalogConditions.hasSpec({ key: 'type', value: 'training' }),
                   ],
                 },
               ],
@@ -208,7 +224,8 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         });
       }
 
-      // Engineers: same catalog visibility but templates filtered — devops-team-owned templates hidden
+      // Engineers: same catalog visibility but templates filtered — devops-team-owned templates
+      // hidden, except training labs (Local Provisioner), which are for every engineer
       if (isAssignedEngineer(groups)) {
         return createCatalogConditionalDecision(request.permission, {
           anyOf: [
@@ -219,9 +236,14 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
               allOf: [
                 catalogConditions.isEntityKind({ kinds: ['template'] }),
                 {
-                  not: catalogConditions.isEntityOwner({
-                    claims: ['group:default/devops-team'],
-                  }),
+                  anyOf: [
+                    {
+                      not: catalogConditions.isEntityOwner({
+                        claims: ['group:default/devops-team'],
+                      }),
+                    },
+                    catalogConditions.hasSpec({ key: 'type', value: 'training' }),
+                  ],
                 },
               ],
             },
@@ -377,6 +399,13 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
       return { result: AuthorizeResult.ALLOW };
     }
 
+
+    // Tech Insights: running the "Ops readiness" scorecard checks for an entity. Basic permission
+    // (no resourceRef). check.read / fact-retriever.read are already allowed by the `.read` rule
+    // above; .run is the only one that would otherwise fall through to the default DENY.
+    if (permissionName === 'tech-insights.check.run') {
+      return { result: AuthorizeResult.ALLOW };
+    }
 
     // Kubernetes + ArgoCD: assigned engineers and leads can view
     if (

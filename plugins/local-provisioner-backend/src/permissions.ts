@@ -33,6 +33,44 @@ export const taskReadAllPermission = createPermission({
 });
 
 /**
+ * Permission to read the instructor Trainees view (GET /tasks/admin/trainees): every trainee's
+ * training environments plus their GitHub repo activity. Admins + the `instructors` group only —
+ * see `packages/backend/src/plugins/permission.ts`.
+ */
+export const traineesReadPermission = createPermission({
+  name: 'local-provisioner.trainees.read',
+  attributes: { action: 'read' },
+});
+
+/**
+ * Remove a trainee from the Trainees view, optionally deleting their lab repo
+ * (POST /tasks/admin/trainees/remove). Admins + the `instructors` group only — see
+ * `packages/backend/src/plugins/permission.ts`.
+ */
+export const traineesManagePermission = createPermission({
+  name: 'local-provisioner.trainees.manage',
+  attributes: { action: 'delete' },
+});
+
+/**
+ * Enroll yourself in a brownfield capstone (POST /capstones/enrollments) and record your own trainee
+ * repo. Any signed-in user; the handlers scope everything to the caller.
+ */
+export const capstonesEnrollPermission = createPermission({
+  name: 'local-provisioner.capstones.enroll',
+  attributes: { action: 'create' },
+});
+
+/**
+ * Manage capstone enrollments: list, reveal seeded credentials/answer key, Day-4 handout. Admins +
+ * the `instructors` group only — see `packages/backend/src/plugins/permission.ts`.
+ */
+export const capstonesManagePermission = createPermission({
+  name: 'local-provisioner.capstones.manage',
+  attributes: {},
+});
+
+/**
  * Permission to update provisioning tasks
  */
 export const taskUpdatePermission = createPermission({
@@ -63,6 +101,10 @@ export const localProvisionerPermissions = {
   taskCreate: taskCreatePermission,
   taskRead: taskReadPermission,
   taskReadAll: taskReadAllPermission,
+  traineesRead: traineesReadPermission,
+  traineesManage: traineesManagePermission,
+  capstonesEnroll: capstonesEnrollPermission,
+  capstonesManage: capstonesManagePermission,
   taskUpdate: taskUpdatePermission,
   taskDelete: taskDeletePermission,
   agentRegister: agentRegisterPermission,

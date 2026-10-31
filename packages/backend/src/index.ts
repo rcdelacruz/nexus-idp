@@ -97,6 +97,11 @@ backend.add(import('@roadiehq/backstage-plugin-argo-cd-backend'));
 // sonarqube
 backend.add(import('@backstage-community/plugin-sonarqube-backend'));
 
+// tech insights — "Ops readiness" scorecard on services/websites (checks + retrievers in app-config.yaml)
+backend.add(import('@backstage-community/plugin-tech-insights-backend'));
+backend.add(import('@backstage-community/plugin-tech-insights-backend-module-jsonfc'));
+backend.add(import('./plugins/techInsightsOpsFacts'));
+
 // engineering hub
 backend.add(
   import('@stratpoint/plugin-engineering-docs-backend').then(m => ({ default: m.engineeringDocsPlugin }))

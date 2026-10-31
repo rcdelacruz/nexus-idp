@@ -1,0 +1,40 @@
+# Backstage Agent unit tests on every OS trainees use (Linux, macOS Apple Silicon, Windows).
+# The agent runs on trainees' own machines, so path, git and process behaviour must hold on all of them.
+name: agent
+on:
+  push:
+    branches: [develop, main]
+    paths: ['packages/backstage-agent/**', '.github/workflows/agent.yml']
+  pull_request:
+    paths: ['packages/backstage-agent/**', '.github/workflows/agent.yml']
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-24.04 (not -latest): the Ubuntu inside the Linux lab VMs, where the seed runner runs.
+        os: [ubuntu-24.04, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          # The agent is installed with npm in a temp folder below; the repo's Yarn cache is unrelated.
+          package-manager-cache: false
+      # Outside the Yarn monorepo so npm installs only the agent's own dependencies.
+      - name: Install the agent standalone
+        shell: bash
+        run: |
+          cp -R packages/backstage-agent "$RUNNER_TEMP/agent"
+          cd "$RUNNER_TEMP/agent"
+          npm install --no-audit --no-fund --ignore-scripts
+      - name: Unit tests (real git binary)
+        shell: bash
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          cd "$RUNNER_TEMP/agent"
+          npm run test:unit

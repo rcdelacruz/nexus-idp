@@ -16,7 +16,7 @@ import {
 } from '@material-ui/core';
 import { useApi, alertApiRef } from '@backstage/core-plugin-api';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { GraduationCap, Plus, Trash2 } from 'lucide-react';
 import { localProvisionerApiRef } from '../../api/LocalProvisionerClient';
 import { ProvisioningTask, Resource } from '../../api/types';
 import { getConnectivity } from '../../api/connectivity';
@@ -27,6 +27,10 @@ import { TasksList, LifecycleAction, resourceKey } from './TasksList';
 import { AgentList } from '../AgentList';
 import { AgentOnboarding } from '../AgentOnboarding/AgentOnboarding';
 import { TaskDetailDrawer } from '../TaskDetails/TaskDetailDrawer';
+
+/** The training-template wizard (trainingAccess=1 lifts the Create page's training filter). */
+const TRAINING_CATALOG_URL =
+  '/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all&trainingAccess=1';
 
 type Confirm = {
   title: string;
@@ -224,7 +228,10 @@ export const LocalProvisionerPage = () => {
         if (skipped === 0) {
           toast(`Deleted ${deleted} task${deleted === 1 ? '' : 's'}`);
         } else {
-          toast(`Deleted ${deleted}, skipped ${skipped} — still active`, 'info');
+          toast(
+            `Deleted ${deleted}, kept ${skipped}: ${skipped === 1 ? 'its lab still exists' : 'their labs still exist'}. Remove the lab first (⋮ → Stop & remove, or Cancel & remove while it is setting up).`,
+            'info',
+          );
         }
       },
     });
@@ -287,6 +294,14 @@ export const LocalProvisionerPage = () => {
               Start your agent to provision — <code>backstage-agent start</code>
             </Typography>
           )}
+          {/* Capstones such as the Node.js one need no agent, so browsing trainings is never gated on one. */}
+          <Button
+            variant="outlined"
+            startIcon={<GraduationCap size={16} strokeWidth={1.5} />}
+            onClick={() => navigate(TRAINING_CATALOG_URL)}
+          >
+            Browse trainings &amp; capstones
+          </Button>
           <Tooltip
             title={
               hasOnlineAgent
@@ -301,11 +316,7 @@ export const LocalProvisionerPage = () => {
                 variant="contained"
                 disabled={!hasOnlineAgent}
                 startIcon={<Plus size={16} strokeWidth={2} />}
-                onClick={() =>
-                  navigate(
-                    '/create?filters%5Bkind%5D=template&filters%5Btype%5D=training&filters%5Buser%5D=all&trainingAccess=1',
-                  )
-                }
+                onClick={() => navigate(TRAINING_CATALOG_URL)}
               >
                 Provision resource
               </Button>
@@ -338,7 +349,7 @@ export const LocalProvisionerPage = () => {
                   <Button
                     size="small"
                     startIcon={<Trash2 size={14} strokeWidth={1.5} />}
-                    style={{ color: '#e5484d' }}
+                    data-destructive
                     onClick={handleBulkDelete}
                   >
                     Delete {selectedTaskIds.size} selected
@@ -389,7 +400,7 @@ export const LocalProvisionerPage = () => {
           <Button
             onClick={runConfirm}
             disabled={confirm?.dataLoss && !ackChecked}
-            style={{ color: '#e5484d' }}
+            data-destructive
           >
             {confirm?.dataLoss ? 'Delete' : 'Confirm'}
           </Button>

@@ -33,6 +33,8 @@ import {
   Inbox,
 } from 'lucide-react';
 import { ProvisioningTask, Resource, TaskStatus } from '../../api/types';
+import { taskTypeLabel } from '../../api/transformers';
+import { currentStep, formatDuration } from '../../api/activity';
 
 export type LifecycleAction = 'stop' | 'start' | 'restart' | 'deprovision';
 
@@ -65,6 +67,7 @@ const useStyles = makeStyles(theme => ({
     '& .MuiChip-icon': { color: theme.palette.status.pending },
   },
   typeCell: { color: theme.palette.text.secondary, fontSize: '0.8125rem' },
+  stepLine: { color: theme.palette.text.secondary, fontSize: '0.75rem', marginTop: 4, maxWidth: 280 },
   destructive: { color: '#e5484d' },
   rowButton: { padding: 6 },
   emptyState: {
@@ -110,6 +113,19 @@ const STATUS_META: Record<
   failed: { cls: 'error', icon: <XCircle size={13} strokeWidth={2} />, label: 'failed' },
   pending: { cls: 'pending', icon: <Clock size={13} strokeWidth={2} />, label: 'pending' },
 };
+
+/** Under the status chip of a running/pending task: what it is doing and for how long. */
+function StepLine({ task }: { task: ProvisioningTask }) {
+  const classes = useStyles();
+  const step = currentStep(task);
+  if (!step) return null;
+  return (
+    <div className={classes.stepLine}>
+      {step.label}
+      {step.percent !== undefined ? ` · ${step.percent}%` : ''} · {formatDuration(step.sinceMs)}
+    </div>
+  );
+}
 
 export const TasksList = ({
   tasks,
@@ -210,7 +226,7 @@ export const TasksList = ({
                   </TableCell>
                   <TableCell onClick={() => onView(task)}>{task.resourceName}</TableCell>
                   <TableCell className={classes.typeCell} onClick={() => onView(task)}>
-                    {task.taskType}
+                    {taskTypeLabel(task)}
                   </TableCell>
                   <TableCell onClick={() => onView(task)}>
                     <Chip
@@ -219,6 +235,7 @@ export const TasksList = ({
                       label={meta.label}
                       size="small"
                     />
+                    <StepLine task={task} />
                   </TableCell>
                   <TableCell className={classes.typeCell} onClick={() => onView(task)}>
                     {formatDate(task.createdAt)}
@@ -308,6 +325,19 @@ export const TasksList = ({
                 <Trash2 size={16} strokeWidth={1.5} color="#e5484d" />
               </ListItemIcon>
               Stop &amp; remove (deletes data)
+            </MenuItem>
+          ),
+          // A lab stuck in setup (its agent was restarted mid-task, say) can still be removed.
+          state === 'provisioning' && (
+            <MenuItem
+              key="cancel-remove"
+              className={classes.destructive}
+              onClick={() => run(() => onLifecycle(menuTask, 'deprovision'))}
+            >
+              <ListItemIcon style={{ minWidth: 32 }}>
+                <Trash2 size={16} strokeWidth={1.5} color="#e5484d" />
+              </ListItemIcon>
+              Cancel &amp; remove
             </MenuItem>
           ),
           <MenuItem

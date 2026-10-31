@@ -7,6 +7,7 @@ import { coreServices, createBackendModule } from '@backstage/backend-plugin-api
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node';
 import { notificationService } from '@backstage/plugin-notifications-node';
 import { createLocalProvisionAction } from './scaffolder/actions/localProvision';
+import { createCapstoneEnrollAction, createCapstoneLinkRepoAction } from './scaffolder/actions/capstoneEnroll';
 import { createKubernetesApplyAction } from './scaffolder/actions/kubernetesApply';
 import { createPullSecretAction } from './scaffolder/actions/createPullSecret';
 import { createAppSecretsAction } from './scaffolder/actions/createAppSecrets';
@@ -45,6 +46,8 @@ export const scaffolderActionsModule = createBackendModule({
       async init({ scaffolder, config, discovery, auth, notification }) {
         scaffolder.addActions(
           createLocalProvisionAction({ discovery, auth, config }),
+          createCapstoneEnrollAction({ discovery, auth }),
+          createCapstoneLinkRepoAction({ discovery, auth }),
           createKubernetesApplyAction(),
           createPullSecretAction(),
           createAppSecretsAction(),

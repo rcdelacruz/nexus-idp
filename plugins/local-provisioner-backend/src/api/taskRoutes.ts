@@ -6,7 +6,19 @@ import { Request, Router } from 'express';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { TaskQueueService } from '../service/TaskQueueService';
 import { AgentService } from '../service/AgentService';
-import { CreateTaskRequest, ProvisioningTask, ResourceState, TaskType, isLifecycleTask, resourceTypeForTask } from '../types';
+import { TraineeActivityService } from '../service/traineeActivity/TraineeActivityService';
+import { MIN_CHECK_AGENT, supportsChecks } from '../capstones/capstoneRoutes';
+import {
+  CreateTaskRequest,
+  ProvisioningTask,
+  ResourceState,
+  TaskType,
+  isLifecycleTask,
+  lookupByResourceType,
+  resourceTypeForTask,
+  validateTrainingTask,
+  isVmLabTask,
+} from '../types';
 
 /**
  * Lifecycle transitions that are no-ops or invalid given a resource's current state — e.g.
@@ -47,6 +59,7 @@ export function createTaskRoutes(
   logger: LoggerService,
   agentService?: AgentService,
   resourceDocsUrls: Record<string, string> = {},
+  traineeActivity?: TraineeActivityService,
 ): Router {
   const router = Router();
 
@@ -58,8 +71,8 @@ export function createTaskRoutes(
    * task that provisioned the resource.
    */
   const withDocsLink = (task: ProvisioningTask): ProvisioningTask => {
-    const resourceType = resourceTypeForTask(task.task_type);
-    const docsUrl = resourceType ? resourceDocsUrls[resourceType] : undefined;
+    const resourceType = resourceTypeForTask(task.task_type, task.config);
+    const docsUrl = lookupByResourceType(resourceDocsUrls, resourceType);
     return docsUrl ? { ...task, docs_url: docsUrl } : task;
   };
 
@@ -162,6 +175,51 @@ export function createTaskRoutes(
   });
 
   /**
+   * GET /tasks/admin/trainees
+   * Instructor Trainees view: every training environment across all users, with the trainee's
+   * GitHub repo activity. Gated by `traineesReadPermission` in the auth middleware
+   * (service/router.ts) — admins + instructors only. Registered before `/:taskId` so it isn't
+   * shadowed. `?refresh=1` bypasses the 5-minute repo cache.
+   */
+  router.get('/admin/trainees', async (req, res) => {
+    if (!traineeActivity) {
+      return res.status(501).json({ error: 'Trainee activity is not configured' });
+    }
+    try {
+      const trainees = await traineeActivity.listTrainees({ refresh: req.query.refresh === '1' });
+      return res.status(200).json({ trainees, generatedAt: new Date().toISOString() });
+    } catch (error: any) {
+      logger.error('Failed to build trainee activity', error);
+      return res.status(500).json({ error: 'Failed to load trainees', message: error.message });
+    }
+  });
+
+  /**
+   * POST /tasks/admin/trainees/remove  { agentId?, resourceName?, enrollmentId?, deleteRepo }
+   * Instructor "Remove trainee": hides the lab and/or withdraws the capstone enrollment, and can
+   * delete the trainee's repo (only after it is proven to be their lab repo). Gated by
+   * `traineesManagePermission` in the auth middleware — admins + instructors only.
+   */
+  router.post('/admin/trainees/remove', async (req, res) => {
+    if (!traineeActivity) {
+      return res.status(501).json({ error: 'Trainee activity is not configured' });
+    }
+    const b = req.body ?? {};
+    const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+    try {
+      const r = await traineeActivity.removeTrainee(
+        { agentId: str(b.agentId), resourceName: str(b.resourceName), enrollmentId: str(b.enrollmentId), deleteRepo: b.deleteRepo === true },
+        getUserId(req) ?? 'unknown',
+      );
+      if (r.status !== 200) return res.status(r.status).json({ error: r.error });
+      return res.status(200).json({ removed: true, repoDeleted: r.repoDeleted ?? null });
+    } catch (error: any) {
+      logger.error('Failed to remove trainee', error);
+      return res.status(500).json({ error: 'Failed to remove trainee', message: error.message });
+    }
+  });
+
+  /**
    * GET /tasks/:taskId
    * Get specific task by ID
    */
@@ -246,10 +304,41 @@ export function createTaskRoutes(
         });
       }
 
+      // Generic training labs: labId shape + dockerCompose presence. Before the offline-agent
+      // check — a malformed request is a 400 whatever the agent's state.
+      // Instructor checks run inside a trainee's lab: only the instructor endpoint
+      // (POST /capstones/enrollments/:id/checks/:name, capstones.manage) may queue them.
+      if (createRequest.task_type === TaskType.RUN_CHECK) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Checks are queued by instructors from the Trainees view',
+        });
+      }
+
+      const trainingError = validateTrainingTask(createRequest);
+      if (trainingError) {
+        return res.status(400).json({
+          error: 'Invalid training task',
+          message: trainingError,
+        });
+      }
+
       // Single chokepoint guard: refuse to queue ANY task (provision or lifecycle stop/start/
       // restart/deprovision) to an offline agent — it would sit "pending" forever. Every path
       // (scaffolder, direct API, UI lifecycle buttons) creates tasks here, so this one check
       // covers them all.
+      // An agent older than 0.1.23 doesn't know VM labs and would provision its bundled Docker
+      // template instead, so VM labs only go to agents that support them.
+      if (isVmLabTask(createRequest) && agentService) {
+        const agent = await agentService.getAgentById(createRequest.agent_id);
+        if (!supportsChecks(agent?.agent_version)) {
+          return res.status(409).json({
+            error: 'Agent too old',
+            message: `This lab runs a VM and needs backstage-agent ${MIN_CHECK_AGENT}+ (yours: ${agent?.agent_version ?? 'unknown'}). Run \`backstage-agent update\`, then retry.`,
+          });
+        }
+      }
+
       if (agentService && !(await agentService.isAgentOnline(createRequest.agent_id))) {
         return res.status(409).json({
           error: 'Agent offline',

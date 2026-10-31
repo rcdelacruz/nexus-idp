@@ -31,3 +31,26 @@ kubernetes:
           # The Backstage pod must run with serviceAccountName: backstage-k8s-reader
           skipTLSVerify: false
           skipMetricsLookup: false
+
+# ── Grafana (entity Monitoring tab) ───────────────────────────────────────────
+# Homelab kube-prometheus-stack (namespace: monitoring). Homelab-only: environments without a
+# grafana block never build the Grafana API — the Monitoring tab and alerts card only render for
+# entities with grafana/* annotations (verified: config:check passes with no grafana block).
+#   GRAFANA_URL          in-cluster API target (backend proxy → Grafana)
+#   GRAFANA_TOKEN        Grafana service-account token, Viewer role
+#   GRAFANA_FRONTEND_URL browser-reachable Grafana URL (dashboard/alert links point here)
+proxy:
+  endpoints:
+    '/grafana/api':
+      # Fallback keeps the backend booting if GRAFANA_URL is missing from backstage-secrets: an unset
+      # target makes the proxy plugin throw at startup ("Proxy target ... must be a string"). With the
+      # fallback, the Grafana cards just show a connection error until the secret is added.
+      target: ${GRAFANA_URL:-http://grafana-not-configured.invalid}
+      changeOrigin: true
+      headers:
+        Authorization: Bearer ${GRAFANA_TOKEN}
+
+grafana:
+  domain: ${GRAFANA_FRONTEND_URL}
+  # kube-prometheus-stack uses unified alerting; the plugin defaults to legacy (returns nothing)
+  unifiedAlerting: true

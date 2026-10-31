@@ -5,7 +5,7 @@
 import { Command } from 'commander';
 import { TokenManager } from '../auth/TokenManager';
 import * as fs from 'fs';
-import logger from '../utils/logger';
+import { displaySuccess, displayInfo, displayError } from '../utils/logo';
 import { getPidFilePath, safeUnlinkPidFile } from '../utils/pidFile';
 
 export const logoutCommand = new Command('logout')
@@ -25,7 +25,6 @@ export const logoutCommand = new Command('logout')
 
         try {
           process.kill(pid, 0);
-          logger.info('Stopping agent...');
           process.kill(pid, 'SIGTERM');
 
           // Wait briefly for graceful shutdown
@@ -33,14 +32,13 @@ export const logoutCommand = new Command('logout')
 
           try {
             process.kill(pid, 0);
-            logger.warn('Force killing agent...');
             process.kill(pid, 'SIGKILL');
           } catch {
             // Already stopped
           }
 
           safeUnlinkPidFile(pidFile);
-          logger.info('✓ Agent stopped');
+          displaySuccess('Agent stopped');
         } catch {
           // Process not running, just clean up
           safeUnlinkPidFile(pidFile);
@@ -50,16 +48,12 @@ export const logoutCommand = new Command('logout')
       // Clear authentication tokens
       tokenManager.clearTokens();
 
-      console.log('\n╔══════════════════════════╗');
-      console.log('║  Logged Out Successfully  ║');
-      console.log('╚══════════════════════════╝\n');
-
-      logger.info('✓ Authentication cleared');
-      logger.info('ℹ Run "backstage-agent login" to authenticate again\n');
+      displaySuccess('Signed out. This machine no longer receives tasks from the portal.');
+      displayInfo('Sign in again with: backstage-agent login');
+      console.log('');
 
     } catch (error: any) {
-      logger.error('Failed to logout');
-      logger.error(error.message);
+      displayError(`Sign-out failed: ${error.message}`);
       process.exit(1);
     }
   });

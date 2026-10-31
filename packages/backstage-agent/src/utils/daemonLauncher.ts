@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { TokenManager } from '../auth/TokenManager';
-import { displaySuccess, displayInfo, displayError } from './logo';
+import { displaySuccess, displayInfo, displayError, displayDetails, displayCommands } from './logo';
 
 export interface LaunchResult {
   ok: boolean;
@@ -32,8 +32,8 @@ export async function launchDaemon(): Promise<LaunchResult> {
     const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
     try {
       process.kill(pid, 0); // exists?
-      displayInfo(`Agent is already running (PID ${pid}).`);
-      displayInfo('Use "backstage-agent status" to check it.');
+      displayInfo(`The agent is already running (PID ${pid}). Check it with: backstage-agent status`);
+      console.log('');
       return { ok: true, pid, reason: 'already-running' };
     } catch {
       fs.unlinkSync(pidFile); // stale pid file
@@ -44,11 +44,13 @@ export async function launchDaemon(): Promise<LaunchResult> {
   const tokenManager = new TokenManager();
   const config = tokenManager.loadTokens();
   if (!config) {
-    displayError('No authentication found. Run "backstage-agent login" first.');
+    displayError('Not signed in. Run: backstage-agent login');
+    console.log('');
     return { ok: false, reason: 'no-auth' };
   }
   if (tokenManager.areTokensExpired()) {
-    displayError('Session expired. Run "backstage-agent login" again.');
+    displayError('Your session expired. Run: backstage-agent login');
+    console.log('');
     return { ok: false, reason: 'expired' };
   }
 
@@ -72,16 +74,30 @@ export async function launchDaemon(): Promise<LaunchResult> {
   // Give it a moment and confirm it wrote its PID file
   await new Promise(resolve => setTimeout(resolve, 1200));
   if (!fs.existsSync(pidFile)) {
-    displayError('Failed to start agent daemon.');
-    displayInfo(`Check logs: ${logFile} , ${errorLogFile}`);
+    displayError('The agent did not start. Details are in the logs:');
+    displayDetails([
+      ['Log', logFile],
+      ['Errors', errorLogFile],
+    ]);
+    console.log('');
     return { ok: false, reason: 'failed' };
   }
 
   const daemonPid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
-  displaySuccess('Agent started in the background.');
-  displayInfo(`Agent ID: ${config.agentId}`);
-  displayInfo(`PID: ${daemonPid}`);
-  displayInfo('It keeps running after you close this terminal.');
-  displayInfo('  backstage-agent status  - check it    backstage-agent stop  - stop it');
+  displaySuccess('Agent is running in the background. It keeps running after you close this terminal.');
+  console.log('');
+  displayDetails([
+    ['Portal', config.backstageUrl],
+    ['Agent ID', config.agentId],
+    ['Process', String(daemonPid)],
+    ['Logs', logFile],
+  ]);
+  console.log('');
+  displayCommands('Commands', [
+    ['backstage-agent status', 'check the agent and its connection'],
+    ['backstage-agent stop', 'stop the agent'],
+    ['backstage-agent logout', 'sign out and stop the agent'],
+  ]);
+  console.log('');
   return { ok: true, pid: daemonPid };
 }

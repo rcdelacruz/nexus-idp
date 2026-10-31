@@ -9,51 +9,62 @@ import { Command } from 'commander';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { checkForUpdate, PACKAGE_NAME } from '../utils/versionCheck';
+import { globalPrefixOf, installedVersion, PACKAGE_ROOT } from '../utils/installLocation';
 import logger from '../utils/logger';
 
 const execAsync = promisify(exec);
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const currentVersion: string = require('../../package.json').version;
+import { AGENT_VERSION as currentVersion } from '../utils/version';
+import { displayError, displayInfo, displaySuccess, displayWarning } from '../utils/logo';
 
 export const updateCommand = new Command('update')
   .description('Update the agent to the latest version')
   .option('--check', 'Only check for a newer version; do not install')
   .action(async (options: { check?: boolean }) => {
-    logger.info(`Current version: ${currentVersion}`);
     const info = await checkForUpdate(currentVersion);
 
     if (!info) {
-      logger.warn('Could not reach the npm registry (offline?). Try again when connected.');
+      displayWarning(`Could not reach the npm registry (offline?). You are on ${currentVersion}; try again when connected.`);
       process.exit(1);
     }
 
     if (!info.updateAvailable) {
-      logger.info(`You are on the latest version (${info.latest}).`);
+      displaySuccess(`You are on the latest version (${info.latest}).`);
       return;
     }
-
-    logger.info(`A newer version is available: ${info.current} -> ${info.latest}`);
 
     if (options.check) {
-      logger.info(`Run \`backstage-agent update\` to install it.`);
+      displayInfo(`Update available: ${info.current} → ${info.latest}. Install it with: backstage-agent update`);
       return;
     }
 
-    logger.info('Updating...');
+    if (!/^\d+\.\d+\.\d+$/.test(info.latest)) {
+      displayError(`Unexpected version from the npm registry: ${info.latest}`);
+      process.exit(1);
+    }
+    // Install the exact version into the folder THIS agent runs from (not wherever the shell's npm
+    // points), then check the files on disk really changed before saying so.
+    const prefix = globalPrefixOf(PACKAGE_ROOT);
+    const install = `npm install -g ${prefix ? `--prefix "${prefix}" ` : ''}${PACKAGE_NAME}@${info.latest}`;
+    displayInfo(`Updating ${info.current} → ${info.latest}...`);
     try {
-      const { stdout, stderr } = await execAsync(
-        `npm install -g ${PACKAGE_NAME}@latest`,
-        { timeout: 5 * 60 * 1000 },
-      );
+      const { stdout, stderr } = await execAsync(install, { timeout: 5 * 60 * 1000 });
       if (stdout) logger.debug(stdout);
       if (stderr) logger.debug(stderr);
-      logger.info(`Updated to ${info.latest}. Restart the agent: \`backstage-agent stop && backstage-agent start\`.`);
     } catch (error: any) {
-      logger.error(`Update failed: ${error.message}`);
-      logger.error(
-        `You may need elevated permissions. Try: sudo npm install -g ${PACKAGE_NAME}@latest`,
+      displayError(`Update failed: ${String(error.message).split('\n')[0]}`);
+      displayInfo(
+        process.platform === 'win32'
+          ? `Try again from a terminal opened with "Run as administrator": ${install}`
+          : `The npm folder may need admin rights. Try: sudo ${install}`,
       );
       process.exit(1);
     }
+    const now = installedVersion();
+    if (now !== info.latest) {
+      displayError(`npm finished, but the agent at ${PACKAGE_ROOT} is still ${now ?? 'unknown'}.`);
+      displayInfo(`Install it there yourself: ${install}`);
+      process.exit(1);
+    }
+    displaySuccess(`Updated to ${info.latest}. Restart the agent to use it: backstage-agent stop && backstage-agent start`);
   });

@@ -16,6 +16,8 @@ export interface RouterOptions {
   userStore: UserStore;
   revocationStore: RevocationStore;
   orgDomain: string;
+  /** organization.githubOwner — refused as a user's linked account. */
+  githubOwner?: string;
 }
 
 // Verifies the OAuth token actually belongs to the stated GitHub account.
@@ -120,7 +122,12 @@ function assertOrgUser(userEntityRef: string, orgDomain: string): string {
 }
 
 export async function createRouter(options: RouterOptions): Promise<Router> {
-  const { logger, httpAuth, userInfo, userStore, revocationStore, orgDomain } = options;
+  const { logger, httpAuth, userInfo, userStore, revocationStore, orgDomain, githubOwner } = options;
+  /** The organization's own account owns every portal-created repo; GitHub refuses it as a collaborator. */
+  const isOrgAccount = (username: string) => !!githubOwner && username.trim().toLowerCase() === githubOwner.toLowerCase();
+  const orgAccountMessage = (username: string) =>
+    `'${username}' is the organization's own GitHub account, not yours: repos the portal creates for you can't be shared with it. ` +
+    `Sign in to github.com with your personal GitHub account (sign out of '${username}' first), then connect again.`;
   // integrations.github is an array — Backstage ConfigReader doesn't support [0] bracket syntax.
   // The config value `${GITHUB_TOKEN}` resolves from the same env var, so read it directly.
   const githubToken = process.env.GITHUB_TOKEN ?? '';
@@ -227,6 +234,10 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
     }
 
     const githubUsername = searchData.items[0].login;
+    if (isOrgAccount(githubUsername)) {
+      res.json({ found: false });
+      return;
+    }
 
     // Double-check the found account's public email matches the configured org domain
     try {
@@ -257,6 +268,9 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
 
     if (!githubUsername?.trim()) {
       throw new InputError('githubUsername is required');
+    }
+    if (isOrgAccount(githubUsername)) {
+      throw new InputError(orgAccountMessage(githubUsername.trim()));
     }
 
     if (oauthToken) {

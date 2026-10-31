@@ -30,7 +30,7 @@ const useUserRole = () => {
   const identityApi = useApi(identityApiRef);
   const catalogApi = useApi(catalogApiRef);
   const githubAuth = useApi(githubAuthApiRef);
-  const [role, setRole] = useState<{ isNewUser?: boolean; isAdmin: boolean; isPM: boolean }>({ isAdmin: false, isPM: false });
+  const [role, setRole] = useState<{ isNewUser?: boolean; isAdmin: boolean; isPM: boolean; isInstructor: boolean }>({ isAdmin: false, isPM: false, isInstructor: false });
 
   useEffect(() => {
     const check = async () => {
@@ -38,7 +38,8 @@ const useUserRole = () => {
         const identity = await identityApi.getBackstageIdentity();
         const isAdmin = identity.ownershipEntityRefs.some(ref => ref === 'group:default/backstage-admins');
         const isPM = identity.ownershipEntityRefs.some(ref => ref === 'group:default/pm-team');
-        if (isAdmin) { setRole({ isNewUser: false, isAdmin: true, isPM }); return; }
+        // Admins see the Trainees view through isAdmin; isInstructor is for the instructors group.
+        if (isAdmin) { setRole({ isNewUser: false, isAdmin: true, isPM, isInstructor: false }); return; }
 
         // Check team: catalog entity (accurate after 60s sync) OR JWT ownershipEntityRefs
         // (accurate after fresh login). Using both ensures we never falsely block a user:
@@ -59,7 +60,10 @@ const useUserRole = () => {
 
         const isPMJwt = identity.ownershipEntityRefs.some(ref => ref === 'group:default/pm-team');
         const isPMCatalog = memberOf.includes('pm-team');
-        setRole({ isNewUser: !hasDeptTeam || !hasGitHub, isAdmin: false, isPM: isPMJwt || isPMCatalog });
+        // Instructors (Local Provisioner Trainees view): JWT after a fresh login, catalog before that.
+        const isInstructor =
+          identity.ownershipEntityRefs.some(ref => ref === 'group:default/instructors') || memberOf.includes('instructors');
+        setRole({ isNewUser: !hasDeptTeam || !hasGitHub, isAdmin: false, isPM: isPMJwt || isPMCatalog, isInstructor });
       } catch {
         // On error keep current state — do not accidentally unlock the portal.
       }
@@ -74,7 +78,7 @@ import { SearchModal, useSearchModal } from '@backstage/plugin-search';
 import {
   Home, LayoutGrid, BookOpen, Code2, Plus, Users,
   HardDrive, DollarSign, Radar, Settings, Sun, Moon, Search, User, LogOut, LucideIcon,
-  ChevronDown, ChevronRight, ClipboardCheck, UserCog, FolderKanban, FilePlus, ListTodo, Bell,
+  ChevronDown, ChevronRight, ClipboardCheck, UserCog, FolderKanban, FilePlus, ListTodo, Bell, GraduationCap,
 } from 'lucide-react';
 import { NexusLogoMark } from './NexusLogo';
 import { engineeringDocsApiRef } from '@internal/plugin-engineering-docs';
@@ -480,16 +484,16 @@ const ProjectsNavItem = () => {
   );
 };
 
-const AppSidebar = ({ isNewUser, isAdmin, isPM }: { isNewUser?: boolean; isAdmin: boolean; isPM: boolean }) => {
+const AppSidebar = ({ isNewUser, isAdmin, isPM, isInstructor }: { isNewUser?: boolean; isAdmin: boolean; isPM: boolean; isInstructor: boolean }) => {
   const classes = useStyles();
   const { isOpen } = useSidebarOpenState();
   const appThemeApi = useApi(appThemeApiRef);
-  const [themeId, setThemeIdState] = useState(() => appThemeApi.getActiveThemeId() ?? 'dark');
+  const [themeId, setThemeIdState] = useState(() => appThemeApi.getActiveThemeId() ?? 'light');
   const isDark = themeId === 'dark';
 
   useEffect(() => {
     const subscription = appThemeApi.activeThemeId$().subscribe(id => {
-      setThemeIdState(id ?? 'dark');
+      setThemeIdState(id ?? 'light');
     });
     return () => subscription.unsubscribe();
   }, [appThemeApi]);
@@ -515,7 +519,8 @@ const AppSidebar = ({ isNewUser, isAdmin, isPM }: { isNewUser?: boolean; isAdmin
             <NavItem icon={ClipboardCheck} label="Onboarding" to="/onboarding" />
             <DocsNavItem />
             <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
-            <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" />
+            <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" exact />
+            {(isAdmin || isInstructor) && <NavItem icon={GraduationCap} label="Trainees" to="/local-provisioner/trainees" />}
           </>
         ) : (
           <>
@@ -530,7 +535,8 @@ const AppSidebar = ({ isNewUser, isAdmin, isPM }: { isNewUser?: boolean; isAdmin
 
             {isOpen && <div className={classes.sectionLabel}>Tools</div>}
             {(isAdmin || isPM) && <ProjectsNavItem />}
-            <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" />
+            <NavItem icon={HardDrive} label="Local Provisioner" to="/local-provisioner" exact />
+            {(isAdmin || isInstructor) && <NavItem icon={GraduationCap} label="Trainees" to="/local-provisioner/trainees" />}
             <NavItem icon={Bell} label="Notifications" to="/notifications" />
             <NavItem icon={Radar} label="Tech Radar" to="/tech-radar" />
             {isAdmin && <NavItem icon={DollarSign} label="FinOps" to="/finops" />}
@@ -569,15 +575,15 @@ const PageTransition = ({ children }: PropsWithChildren<{}>) => {
 
 const RootContent = ({ children }: PropsWithChildren<{}>) => {
   const appThemeApi = useApi(appThemeApiRef);
-  const [themeId, setThemeIdState] = useState(() => appThemeApi.getActiveThemeId() ?? 'dark');
+  const [themeId, setThemeIdState] = useState(() => appThemeApi.getActiveThemeId() ?? 'light');
   const isDark = themeId === 'dark';
   const location = useLocation();
   const navigate = useNavigate();
-  const { isNewUser, isAdmin, isPM } = useUserRole();
+  const { isNewUser, isAdmin, isPM, isInstructor } = useUserRole();
 
   useEffect(() => {
     const subscription = appThemeApi.activeThemeId$().subscribe(id => {
-      setThemeIdState(id ?? 'dark');
+      setThemeIdState(id ?? 'light');
     });
     return () => subscription.unsubscribe();
   }, [appThemeApi]);
@@ -621,7 +627,7 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
   return (
     <SidebarPage>
       <Sidebar>
-        <AppSidebar isNewUser={isNewUser} isAdmin={isAdmin} isPM={isPM} />
+        <AppSidebar isNewUser={isNewUser} isAdmin={isAdmin} isPM={isPM} isInstructor={isInstructor} />
       </Sidebar>
       <PageTransition key={location.pathname}>
         {children}

@@ -5,7 +5,7 @@ import {
 import { Entity } from '@backstage/catalog-model';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { TaskStore } from '../database/TaskStore';
-import { Resource } from '../types';
+import { Resource, lookupByResourceType } from '../types';
 
 const LOCATION_KEY = 'local-provisioner-provider:default';
 
@@ -42,7 +42,7 @@ function ownerRef(userId: string): string {
   return `user:default/${username}`;
 }
 
-function toEntity(resource: Resource, resourceDocsLinks: Record<string, string>): Entity {
+export function toEntity(resource: Resource, resourceDocsLinks: Record<string, string>): Entity {
   // sanitize() truncates to 63 chars, but that must apply to the FINAL assembled name, not
   // just the resource_name substring — the local- prefix and -agentIdPrefix suffix are added
   // after, so truncating only resource_name first can still produce a name over the 63-char
@@ -64,7 +64,7 @@ function toEntity(resource: Resource, resourceDocsLinks: Record<string, string>)
   // provisioned resource back to related documentation (e.g. training materials) in the catalog.
   // No hardcoded ref here: this plugin is synced to the white-label downstream, and the ref only
   // makes sense for this deployment's own catalog content.
-  const docsRef = resource.resource_type ? resourceDocsLinks[resource.resource_type] : undefined;
+  const docsRef = lookupByResourceType(resourceDocsLinks, resource.resource_type);
 
   return {
     apiVersion: 'backstage.io/v1alpha1',
@@ -75,12 +75,15 @@ function toEntity(resource: Resource, resourceDocsLinks: Record<string, string>)
       title: resource.resource_name,
       description: `Locally-provisioned ${resource.resource_type ?? 'resource'} (${resource.state})`,
       annotations,
-      tags: [
+      // Set: a generic lab's id could itself be "local", "training", ... — no duplicate tags.
+      tags: [...new Set([
         'local',
         'development',
         ...(resource.resource_type ? [resource.resource_type] : []),
-        ...(resource.resource_type?.endsWith('-training') ? ['training', 'local-provisioning'] : []),
-      ],
+        ...(resource.is_training || resource.resource_type?.endsWith('-training')
+          ? ['training', 'local-provisioning']
+          : []),
+      ])],
     },
     spec: {
       type: resource.resource_type ?? 'local-resource',

@@ -21,7 +21,7 @@ Nexus IDP uses a 4-tier RBAC system driven by group membership:
 | Role | Group | Access |
 |------|-------|--------|
 | Platform Admin | `backstage-admins` | Full access — catalog CRUD, FinOps, user management |
-| Team Lead | `*-lead` (e.g. `web-team-lead`) | Create/edit catalog entries for their team |
+| Team Lead | `*-lead` (e.g. `web-lead`) | Create/edit catalog entries for their team |
 | Engineer | `web-team`, `mobile-team`, `data-team`, `cloud-team`, `ai-team`, `qa-team` | Read catalog, use scaffolder, K8s, ArgoCD, Local Provisioner |
 | New User | `general-engineers` only | Onboarding flow, Engineering Docs, Tech Radar — limited access until assigned to a team |
 
@@ -33,6 +33,7 @@ New users are auto-provisioned into `general-engineers` on first Google or GitHu
 - [User & Group Management](user-group-management.md) — managing users and teams
 - [Google OAuth Setup](google-oauth-setup.md) — configuring sign-in
 - [K8s + ArgoCD + CNPG Integration](k8s-argocd-cnpg-integration.md) — Kubernetes and GitOps setup
+- [Monitoring & Ops Links](monitoring-ops-links.md) — Grafana Monitoring tab, runbook/dashboard/on-call links, For your team tiles
 
 - [Importing Projects](importing-projects.md) — register existing services, repos, and tools into the catalog
 - [Scaffolder Templates](scaffolder-templates.md) — template architecture, nextjs-fullstack guide, documentation template, custom actions, CI/CD setup, lessons learned

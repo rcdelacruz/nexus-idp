@@ -7,21 +7,89 @@ import { randomUUID } from 'crypto';
 import {
   ProvisioningTask,
   AgentRegistration,
+  AgentCapabilities,
   TaskStatus,
   TaskType,
   CreateTaskRequest,
   Resource,
   ResourceState,
   isProvisionTask,
+  isCheckTask,
+  isTrainingTask,
   resourceTypeForTask,
 } from '../types';
+
+/** Most steps one task keeps in its activity timeline, and the most live output it stores. */
+const MAX_ACTIVITY = 200;
+const MAX_OUTPUT_CHARS = 4000;
+
+export interface ActivityEntry {
+  at: string;
+  step: string;
+}
+
+/**
+ * Merge an agent status update into the task's stored metadata. Agents send only the current step
+ * (`phase`, plus optional `progress`/`output`), so the timeline is kept here: a new step is
+ * appended with its time, a repeated one only refreshes its progress, and completion/failure close
+ * it. Fields from earlier updates (catalogEntityRef, vm, workspace, check) are kept, not replaced.
+ * `incoming.at` (agent clock, ≥ 0.1.26) orders steps that arrive out of order; otherwise `now`.
+ */
+export function mergeTaskMetadata(
+  previous: Record<string, any> | undefined,
+  incoming: Record<string, any> | undefined,
+  status: TaskStatus,
+  now: Date,
+): { metadata: Record<string, any>; newStep?: string } {
+  const prev = previous && typeof previous === 'object' ? previous : {};
+  const { at, ...fields } = incoming && typeof incoming === 'object' ? incoming : ({} as Record<string, any>);
+  const agentAt = typeof at === 'string' ? Date.parse(at) : NaN;
+  const when = new Date(Number.isFinite(agentAt) && Math.abs(agentAt - now.getTime()) < 86_400_000 ? agentAt : now.getTime()).toISOString();
+
+  const activity: ActivityEntry[] = Array.isArray(prev.activity) ? prev.activity.filter((e: any) => e && typeof e.step === 'string') : [];
+  // Updates are sent without waiting for each other, so the last output of one step can arrive
+  // after the next step began. One stamped (agent ≥ 0.1.26) earlier than the latest step is stale.
+  // It never changes the current step, progress or output; a step the timeline doesn't have yet
+  // (step changes reordered on the way) is still slotted in at its time.
+  const latestAt = Date.parse(activity[activity.length - 1]?.at ?? '');
+  if (status === TaskStatus.IN_PROGRESS && Number.isFinite(agentAt) && Number.isFinite(latestAt) && agentAt < latestAt) {
+    const stalePhase = typeof fields.phase === 'string' ? fields.phase.trim().slice(0, 200) : '';
+    if (!stalePhase || activity.some(e => e.step === stalePhase)) return { metadata: prev };
+    const slotted = [...activity, { at: when, step: stalePhase }].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+    return { metadata: { ...prev, activity: slotted.slice(-MAX_ACTIVITY) }, newStep: stalePhase };
+  }
+  const merged: Record<string, any> = { ...prev, ...fields };
+  const last = activity[activity.length - 1]?.step;
+  const phase = typeof fields.phase === 'string' ? fields.phase.trim().slice(0, 200) : '';
+  let newStep: string | undefined;
+  if (status === TaskStatus.IN_PROGRESS && phase && phase !== last) {
+    newStep = phase;
+    // Progress and output belong to a step; a new step starts without the last one's.
+    if (!('progress' in fields)) delete merged.progress;
+    if (!('output' in fields)) delete merged.output;
+  } else if ((status === TaskStatus.COMPLETED || status === TaskStatus.FAILED) && last !== status) {
+    newStep = status;
+    delete merged.progress;
+  }
+  if (newStep) {
+    activity.push({ at: when, step: newStep });
+    activity.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  }
+  merged.activity = activity.slice(-MAX_ACTIVITY);
+  if (typeof merged.output === 'string') merged.output = merged.output.slice(-MAX_OUTPUT_CHARS);
+  return { metadata: merged, newStep: newStep && newStep !== status ? newStep : undefined };
+}
 
 /**
  * Fold a resource's task history (chronological) into its current state. The latest completed
  * task drives state: deprovision → removed, stop → stopped, start/restart/provision → running,
  * a failed latest task → error, an in-flight task → provisioning.
  */
-export function foldTasksToResource(tasks: ProvisioningTask[]): Resource | undefined {
+export function foldTasksToResource(allTasks: ProvisioningTask[]): Resource | undefined {
+  // Instructor checks (run-check) observe a resource; they must never move its state (a check on a
+  // stopped lab would otherwise fold to "running").
+  const tasks = allTasks.filter(t => !isCheckTask(t.task_type));
+  if (tasks.length === 0) return undefined;
   const provision = [...tasks].reverse().find(t => isProvisionTask(t.task_type));
   if (!provision) return undefined; // no provision task → not a resource we own
 
@@ -51,7 +119,8 @@ export function foldTasksToResource(tasks: ProvisioningTask[]): Resource | undef
 
   return {
     resource_name: provision.resource_name,
-    resource_type: resourceTypeForTask(provision.task_type),
+    resource_type: resourceTypeForTask(provision.task_type, provision.config),
+    is_training: isTrainingTask(provision.task_type),
     agent_id: provision.agent_id,
     user_id: provision.user_id,
     state,
@@ -157,7 +226,7 @@ export class TaskStore {
     metadata?: Record<string, any>,
     errorMessage?: string,
     extra?: { logs?: string; connectionDetails?: Record<string, any> },
-  ): Promise<void> {
+  ): Promise<{ newStep?: string; resourceName?: string }> {
     const updateData: any = {
       status,
       updated_at: this.db.fn.now(),
@@ -177,11 +246,8 @@ export class TaskStore {
       updateData.error_message = errorMessage;
     }
 
-    if (metadata) {
-      updateData.metadata = JSON.stringify(metadata);
-      if (metadata.catalogEntityRef) {
-        updateData.catalog_entity_ref = metadata.catalogEntityRef;
-      }
+    if (metadata?.catalogEntityRef) {
+      updateData.catalog_entity_ref = metadata.catalogEntityRef;
     }
 
     if (extra?.logs) {
@@ -192,9 +258,36 @@ export class TaskStore {
       updateData.connection_details = JSON.stringify(extra.connectionDetails);
     }
 
-    await this.db('provisioning_tasks')
-      .where({ task_id: taskId })
-      .update(updateData);
+    // Read-merge-write under a row lock: an agent can send two step updates milliseconds apart.
+    return this.db.transaction(async trx => {
+      const row = await trx('provisioning_tasks')
+        .where({ task_id: taskId })
+        .forUpdate()
+        .first('metadata', 'resource_name', 'status', 'task_type', 'agent_id');
+      // A late progress report (throttled, or delayed on the network) must never reopen a finished task.
+      if (status === TaskStatus.IN_PROGRESS && (row?.status === TaskStatus.COMPLETED || row?.status === TaskStatus.FAILED)) {
+        return { resourceName: row.resource_name };
+      }
+      const previous = typeof row?.metadata === 'string' ? JSON.parse(row.metadata) : row?.metadata;
+      const { metadata: merged, newStep } = mergeTaskMetadata(previous, metadata, status, new Date());
+      updateData.metadata = JSON.stringify(merged);
+      await trx('provisioning_tasks').where({ task_id: taskId }).update(updateData);
+      // A removed lab has nothing left to run: close its tasks still marked pending/running (a
+      // setup whose agent was restarted, say), so they don't show "in progress" forever.
+      if (status === TaskStatus.COMPLETED && row?.task_type === TaskType.DEPROVISION) {
+        await trx('provisioning_tasks')
+          .where({ agent_id: row.agent_id, resource_name: row.resource_name })
+          .whereNot({ task_id: taskId })
+          .whereIn('status', [TaskStatus.PENDING, TaskStatus.IN_PROGRESS])
+          .update({
+            status: TaskStatus.FAILED,
+            error_message: 'Cancelled: the lab was removed',
+            completed_at: this.db.fn.now(),
+            updated_at: this.db.fn.now(),
+          });
+      }
+      return { newStep, resourceName: row?.resource_name };
+    });
   }
 
   /**
@@ -222,6 +315,116 @@ export class TaskStore {
       }
     }
     return resources;
+  }
+
+  /**
+   * Every training resource across all users, removed ones included (a trainee's repo work
+   * outlives their environment), with the provisioning task (its `config` carries the
+   * template-forwarded repo URL) and the lifecycle history. Same grouping and fold as
+   * `getActiveProvisionedResources`. Feeds the instructor Trainees view.
+   */
+  async getTrainingResourceHistories(): Promise<
+    {
+      resource: Resource;
+      provision: ProvisioningTask;
+      events: { type: string; status: string; at: Date; check?: { name?: string; exitCode?: number; output?: string } }[];
+      /** The lab's task still pending or running (provision or lifecycle), with its current step. */
+      current?: { type: string; status: string; step?: string; since: Date };
+    }[]
+  > {
+    const rows = await this.db('provisioning_tasks').orderBy('created_at', 'asc');
+    const byResource = new Map<string, ProvisioningTask[]>();
+    for (const t of rows.map(r => this.mapTaskFromDb(r))) {
+      const key = `${t.agent_id}::${t.resource_name}`;
+      const group = byResource.get(key);
+      if (group) group.push(t);
+      else byResource.set(key, [t]);
+    }
+
+    const out: {
+      resource: Resource;
+      provision: ProvisioningTask;
+      events: { type: string; status: string; at: Date; check?: { name?: string; exitCode?: number; output?: string } }[];
+      current?: { type: string; status: string; step?: string; since: Date };
+    }[] = [];
+    for (const group of byResource.values()) {
+      const resource = foldTasksToResource(group);
+      if (!resource?.is_training) continue;
+      const provision = [...group].reverse().find(t => isProvisionTask(t.task_type))!;
+      const open = [...group]
+        .reverse()
+        .find(t => !isCheckTask(t.task_type) && (t.status === TaskStatus.PENDING || t.status === TaskStatus.IN_PROGRESS));
+      const activity = Array.isArray(open?.metadata?.activity) ? open!.metadata!.activity : [];
+      const lastStep = activity[activity.length - 1];
+      out.push({
+        resource,
+        provision,
+        current: open
+          ? {
+              type: open.task_type,
+              status: open.status,
+              step: typeof open.metadata?.phase === 'string' ? open.metadata.phase : undefined,
+              since: lastStep?.at ? new Date(lastStep.at) : open.started_at ?? open.created_at,
+            }
+          : undefined,
+        events: group.map(t => ({
+          type: t.task_type,
+          status: t.status,
+          at: t.completed_at ?? t.created_at,
+          ...(isCheckTask(t.task_type)
+            ? { check: { name: t.config?.checkName, exitCode: t.metadata?.check?.exitCode, output: t.metadata?.check?.output ?? t.error_message } }
+            : {}),
+        })),
+      });
+    }
+    return out;
+  }
+
+  /** Whether a task of this type is still pending or running for this resource. */
+  async hasOpenTask(agentId: string, resourceName: string, taskType: string): Promise<boolean> {
+    const row = await this.db('provisioning_tasks')
+      .where({ agent_id: agentId, resource_name: resourceName, task_type: taskType })
+      .whereIn('status', [TaskStatus.PENDING, TaskStatus.IN_PROGRESS])
+      .first('task_id');
+    return Boolean(row);
+  }
+
+  /** Instructor "Remove trainee": hides the lab from the Trainees view; the row is the audit record. */
+  async recordTraineeRemoval(r: {
+    agentId?: string;
+    resourceName?: string;
+    enrollmentId?: string;
+    traineeEmail: string;
+    repoUrl?: string;
+    repoDeleted: boolean;
+    removedBy: string;
+  }): Promise<void> {
+    await this.db('trainee_removals').insert({
+      id: randomUUID(),
+      agent_id: r.agentId ?? null,
+      resource_name: r.resourceName ?? null,
+      enrollment_id: r.enrollmentId ?? null,
+      trainee_email: r.traineeEmail,
+      repo_url: r.repoUrl ?? null,
+      repo_deleted: r.repoDeleted,
+      removed_by: r.removedBy,
+      removed_at: new Date().toISOString(),
+    });
+  }
+
+  /** `agent_id::resource_name` of every lab removed from the Trainees view. */
+  async removedTraineeLabs(): Promise<Set<string>> {
+    const rows = await this.db('trainee_removals').whereNotNull('agent_id').select('agent_id', 'resource_name');
+    return new Set(rows.map(r => `${r.agent_id}::${r.resource_name}`));
+  }
+
+  /** The latest provision task (any state) whose template-forwarded repo URL matches — the lab of a capstone repo. */
+  async findProvisionTaskByRepoUrl(repoUrl: string): Promise<ProvisioningTask | undefined> {
+    const norm = (u: unknown) => String(u ?? '').replace(/\.git$/, '').replace(/\/+$/, '').toLowerCase();
+    const rows = await this.db('provisioning_tasks').orderBy('created_at', 'desc');
+    return rows
+      .map(r => this.mapTaskFromDb(r))
+      .find(t => isProvisionTask(t.task_type) && norm(t.config?.githubRepoUrl ?? t.config?.gitlabRepoUrl) === norm(repoUrl));
   }
 
   /**
@@ -376,11 +579,15 @@ export class TaskStore {
   /**
    * Update agent last seen timestamp
    */
-  async updateAgentLastSeen(agentId: string): Promise<void> {
+  async updateAgentLastSeen(agentId: string, agentVersion?: string, capabilities?: AgentCapabilities): Promise<void> {
     await this.db('agent_registrations')
       .where({ agent_id: agentId })
       .update({
         last_seen: this.db.fn.now(),
+        // Agents ≥ 0.1.23 report their real version on every poll, so an `update` is picked up
+        // without re-login (registration alone used to record a hard-coded 0.1.0).
+        ...(agentVersion ? { agent_version: agentVersion } : {}),
+        ...(capabilities ? { capabilities: JSON.stringify(capabilities) } : {}),
       });
   }
 
@@ -448,6 +655,7 @@ export class TaskStore {
       os_platform: row.os_platform,
       platform_version: row.platform_version,
       agent_version: row.agent_version,
+      capabilities: typeof row.capabilities === 'string' ? JSON.parse(row.capabilities) : row.capabilities ?? undefined,
       last_seen: new Date(row.last_seen),
       created_at: new Date(row.created_at),
     };

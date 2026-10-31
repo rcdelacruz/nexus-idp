@@ -5,13 +5,14 @@ import {
   discoveryApiRef,
   identityApiRef,
 } from '@backstage/core-plugin-api';
-import { rootRouteRef } from './routes';
+import { rootRouteRef, traineesRouteRef } from './routes';
 import { LocalProvisionerClient, localProvisionerApiRef } from './api/LocalProvisionerClient';
 
 export const localProvisionerPlugin = createPlugin({
   id: 'local-provisioner',
   routes: {
     root: rootRouteRef,
+    trainees: traineesRouteRef,
   },
   apis: [
     createApiFactory({
@@ -32,5 +33,14 @@ export const LocalProvisionerPage = localProvisionerPlugin.provide(
     component: () =>
       import('./components/LocalProvisionerPage').then(m => m.LocalProvisionerPage),
     mountPoint: rootRouteRef,
+  }),
+);
+
+/** Instructor view: every trainee's training environments with their repo activity (admins + instructors). */
+export const TraineesPage = localProvisionerPlugin.provide(
+  createRoutableExtension({
+    name: 'TraineesPage',
+    component: () => import('./components/TraineesPage').then(m => m.TraineesPage),
+    mountPoint: traineesRouteRef,
   }),
 );

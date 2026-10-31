@@ -19,7 +19,11 @@ import {
   ConnectionDetails,
 } from '../types';
 import { ConfigManager } from '../config/ConfigManager';
+import { GitRunner, runGit, repoDirName } from './workspaceClone';
+import { randomBytes } from 'crypto';
 import logger from '../utils/logger';
+import { findPortConflicts, parsePublishedPorts, portConflictMessage, portInUseFromDockerError, templateConnection } from './ports';
+import { ComposeProgress, OutputTail, ProgressReporter } from './progress';
 
 const execAsync = promisify(exec);
 
@@ -28,10 +32,49 @@ const PULL_TIMEOUT_MS = 15 * 60 * 1000; // 15 min
 const UP_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
 const SHORT_TIMEOUT_MS = 60 * 1000; // ps / stop / start / down
 
-export type ProgressReporter = (phase: string, detail?: Record<string, any>) => void;
+export type { ProgressReporter } from './progress';
+
+/** A one-off job next to a lab (e.g. a capstone grader), from an instructor `run-check` task. */
+export interface LabJob {
+  /** Container image, e.g. hashicorp/terraform:1.11.4 (name:tag only). */
+  image: string;
+  /** Written into the job folder (mounted at /job): flat file name → base64 content. */
+  files: Record<string, string>;
+  /** Cloned into /job/repo with the trainee's own git login; `ref` is tried first (e.g. a submission tag). */
+  clone?: { url: string; ref?: string };
+  /** Attach the job container to the network of this lab service (reach it by service name). */
+  networkOfService?: string;
+  command: string[];
+  env?: Record<string, string>;
+  /** Result file inside /job; its content becomes the check output. */
+  outFile?: string;
+  timeoutMs?: number;
+}
+
+/** Validates a job from the portal before anything runs. Returns an error message, or undefined. */
+export function validateLabJob(job: any): string | undefined {
+  if (!job || typeof job !== 'object') return 'job must be an object';
+  if (typeof job.image !== 'string' || !/^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+$/.test(job.image)) return 'invalid image';
+  if (!job.files || typeof job.files !== 'object') return 'files must be an object';
+  for (const [name, b64] of Object.entries(job.files)) {
+    if (!/^[A-Za-z0-9._-]+$/.test(name) || name === '.' || name === '..' || name === 'repo') return `invalid file name: ${name}`;
+    if (typeof b64 !== 'string') return `invalid content for ${name}`;
+  }
+  if (!Array.isArray(job.command) || job.command.length === 0 || job.command.some((a: unknown) => typeof a !== 'string')) return 'command must be a non-empty string array';
+  if (job.env && (typeof job.env !== 'object' || Object.entries(job.env).some(([k, v]) => !/^[A-Z_][A-Z0-9_]*$/.test(k) || typeof v !== 'string'))) return 'invalid env';
+  if (job.clone) {
+    if (!repoDirName(String(job.clone.url))) return 'invalid clone url';
+    if (job.clone.ref !== undefined && (typeof job.clone.ref !== 'string' || !/^[A-Za-z0-9._/-]{1,100}$/.test(job.clone.ref) || job.clone.ref.includes('..'))) return 'invalid clone ref';
+  }
+  if (job.networkOfService !== undefined && !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(String(job.networkOfService))) return 'invalid networkOfService';
+  if (job.outFile !== undefined && !/^[A-Za-z0-9._-]+$/.test(String(job.outFile))) return 'invalid outFile';
+  return undefined;
+}
 
 export class DockerComposeExecutor {
   private configManager: ConfigManager;
+  /** Overridable in tests (maps https URLs to local repos). */
+  gitRunner: GitRunner = runGit;
   private templatesDir: string;
   // Resolved once: the Compose CLI available on this machine — v2 `docker compose` (modern,
   // shipped as a Docker plugin) or the legacy standalone `docker-compose` binary. Modern Docker
@@ -59,7 +102,7 @@ export class DockerComposeExecutor {
         );
       }
     }
-    logger.info(`Using compose command: ${this.composeCmd.join(' ')}`);
+    logger.debug(`Using compose command: ${this.composeCmd.join(' ')}`);
     return this.composeCmd;
   }
 
@@ -121,14 +164,20 @@ export class DockerComposeExecutor {
         this.writeSourceFiles(task.config.sourceFiles, taskDir);
       }
 
+      // Taken host ports fail now, before a long image pull, with the service and port named.
+      const taken = await this.portConflicts(taskDir);
+      if (taken.length) {
+        fs.rmSync(taskDir, { recursive: true, force: true });
+        return { success: false, error: portConflictMessage(taken) };
+      }
+
       // Image pull — skipped entirely when cached (offline-capable), else progress-reported.
       const pullResult = await this.pullImages(taskDir, onProgress);
       if (!pullResult.success) {
         return pullResult; // network-pull failure, distinct from a config failure
       }
 
-      onProgress?.('starting');
-      const result = await this.dockerComposeUp(taskDir, task);
+      const result = await this.dockerComposeUp(taskDir, task, onProgress);
       return result;
     } catch (error: any) {
       logger.error(`Task execution failed: ${error.message}`);
@@ -150,18 +199,8 @@ export class DockerComposeExecutor {
       return { success: true };
     }
 
-    onProgress?.('pulling-images');
     try {
-      const { output } = await this.runCompose(
-        ['pull'],
-        taskDir,
-        PULL_TIMEOUT_MS,
-        line => {
-          // docker-compose pull emits "Pulling <service> ..." — report per-service coarse progress.
-          const m = line.match(/^Pulling\s+([^\s.]+)/i);
-          if (m) onProgress?.('pulling-images', { service: m[1] });
-        },
-      );
+      const { output } = await this.runCompose(['pull'], taskDir, PULL_TIMEOUT_MS, this.progressLines('Downloading images', taskDir, onProgress));
       logger.info('Image pull complete');
       return { success: true, logs: output };
     } catch (error: any) {
@@ -200,6 +239,7 @@ export class DockerComposeExecutor {
   private async dockerComposeUp(
     taskDir: string,
     task: ProvisioningTask,
+    onProgress?: ProgressReporter,
   ): Promise<TaskExecutionResult> {
     try {
       logger.info(`Starting Docker Compose for resource: ${task.resource_name}`);
@@ -207,6 +247,8 @@ export class DockerComposeExecutor {
         ['up', '-d'],
         taskDir,
         UP_TIMEOUT_MS,
+        // `up` also builds images from source (DevOps/DevSecOps capstones): report each build step.
+        this.progressLines('Starting the containers', taskDir, onProgress),
       );
 
       if (!(await this.validateContainers(taskDir))) {
@@ -224,11 +266,27 @@ export class DockerComposeExecutor {
       };
     } catch (error: any) {
       logger.error(`Docker Compose execution failed: ${error.message}`);
+      // Don't leave a half-started lab holding ports (a retry with other ports must start clean).
+      await this.runCompose(['down', '-v'], taskDir, SHORT_TIMEOUT_MS).catch(() => undefined);
+      fs.rmSync(taskDir, { recursive: true, force: true });
+      const port = portInUseFromDockerError(String(error.message));
       return {
         success: false,
-        error: error.message,
+        error: port
+          ? portConflictMessage([{ service: 'a lab service', port, hostIp: '' }])
+          : error.message,
         logs: error.stderr || error.stdout || error.message,
       };
+    }
+  }
+
+  /** Host ports this lab publishes that something else already holds ([] when Compose can't say). */
+  private async portConflicts(taskDir: string) {
+    try {
+      const { stdout } = await execAsync(await this.composeExec('config --format json'), { cwd: taskDir, timeout: SHORT_TIMEOUT_MS });
+      return await findPortConflicts(parsePublishedPorts(stdout));
+    } catch {
+      return []; // older Compose without --format json: Docker still reports a clash at up time
     }
   }
 
@@ -266,6 +324,12 @@ export class DockerComposeExecutor {
       default:
         connectionString = primaryPort ? `${host}:${primaryPort}` : undefined;
     }
+
+    // A template can say how to connect: { service, url } with "{port}" for that service's
+    // published port (e.g. postgresql://dev:dev@localhost:{port}/app) — the generic string above
+    // has no user, password or database.
+    const fromTemplate = templateConnection(task.config.connection, ports);
+    if (fromTemplate) connectionString = fromTemplate;
 
     // uiPort (Kafka UI) or frontendPort (devops/devsecops capstone) — whichever browsable
     // dashboard this resource type has — becomes a proper http:// URL so the drawer can
@@ -454,6 +518,105 @@ export class DockerComposeExecutor {
     return this.lifecycleOp(taskId, ['restart'], 'running');
   }
 
+  /**
+   * Run a check inside one running service of an existing lab:
+   * `docker compose exec -T <service> <argv…>`. The argv array is passed straight to compose (no
+   * shell on this machine), runs only inside the lab's own container, and only for a lab this
+   * agent provisioned. Output is capped. Exit code 0 = check passed.
+   */
+  async runCheck(taskId: string, service: string, argv: string[], timeoutMs = 120_000): Promise<TaskExecutionResult> {
+    const taskDir = this.configManager.getTaskDir(taskId);
+    if (!fs.existsSync(path.join(taskDir, 'docker-compose.yml'))) {
+      return { success: false, error: `Resource not found locally (task ${taskId}).` };
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(service) || !Array.isArray(argv) || argv.length === 0 || argv.some(a => typeof a !== 'string')) {
+      return { success: false, error: 'Invalid check: service must be a compose service name and argv a non-empty string array' };
+    }
+    const MAX = 64 * 1024;
+    try {
+      const { code, output } = await this.runCompose(['exec', '-T', service, ...argv], taskDir, Math.min(timeoutMs, 10 * 60_000));
+      const out = output.length > MAX ? `${output.slice(0, MAX)}\n…(truncated)` : output;
+      return { success: code === 0, logs: out, metadata: { check: { exitCode: code, output: out } }, ...(code === 0 ? {} : { error: `Check exited with ${code}` }) };
+    } catch (error: any) {
+      // runWithProgress rejects on a non-zero exit with "… exited with code N: <output tail>".
+      const m = /exited with code (\d+): ([\s\S]*)$/.exec(String(error.message));
+      const exitCode = m ? Number(m[1]) : -1;
+      const output = m ? m[2] : String(error.message);
+      return { success: false, error: `Check exited with ${exitCode}`, logs: output, metadata: { check: { exitCode, output } } };
+    }
+  }
+
+  /**
+   * Run a one-off job container next to a lab — e.g. a capstone grader that needs the trainee's
+   * submitted repo and their local MiniStack. The job folder (portal files + a fresh clone of the
+   * trainee repo, made with the trainee's own git login) is mounted at /job, the container joins
+   * the lab's network, and everything is deleted afterwards. Instructor data in the job (a seed
+   * manifest) is on this machine only for the duration of the job.
+   */
+  async runJob(taskId: string, job: LabJob): Promise<TaskExecutionResult> {
+    const invalid = validateLabJob(job);
+    if (invalid) return { success: false, error: `Invalid job: ${invalid}` };
+    const taskDir = this.configManager.getTaskDir(taskId);
+    if (!fs.existsSync(path.join(taskDir, 'docker-compose.yml'))) {
+      return { success: false, error: `Resource not found locally (task ${taskId}).` };
+    }
+    const jobDir = path.join(taskDir, 'jobs', randomBytes(6).toString('hex'));
+    const MAX = 64 * 1024;
+    try {
+      fs.mkdirSync(jobDir, { recursive: true });
+      for (const [name, b64] of Object.entries(job.files)) fs.writeFileSync(path.join(jobDir, name), Buffer.from(b64, 'base64'));
+
+      if (job.clone) {
+        const dest = path.join(jobDir, 'repo');
+        let r = job.clone.ref ? await this.gitRunner(['clone', '--branch', job.clone.ref, '--', job.clone.url, dest]) : { code: 1, stdout: '', stderr: '' };
+        if (r.code !== 0) {
+          fs.rmSync(dest, { recursive: true, force: true });
+          r = await this.gitRunner(['clone', '--', job.clone.url, dest]); // no submission tag yet → default branch
+        }
+        if (r.code !== 0) {
+          return { success: false, error: 'Could not clone the trainee repo with this machine\'s git login', logs: r.stderr.slice(-2000) };
+        }
+      }
+
+      let network: string | undefined;
+      if (job.networkOfService) {
+        const { output } = await this.runCompose(['ps', '-q', job.networkOfService], taskDir, 60_000);
+        const id = output.trim().split('\n').pop();
+        if (!id) return { success: false, error: `Lab service ${job.networkOfService} is not running` };
+        const inspect = await this.runWithProgress('docker', ['inspect', '-f', '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}', id], taskDir, 30_000);
+        network = inspect.output.trim().split(/\s+/)[0];
+      }
+
+      const args = ['run', '--rm', '-v', `${jobDir}:/job`, '-w', '/job'];
+      if (network) args.push('--network', network);
+      for (const [k, v] of Object.entries(job.env ?? {})) args.push('-e', `${k}=${v}`);
+      args.push('--entrypoint', job.command[0], job.image, ...job.command.slice(1));
+
+      let code = 0;
+      let output = '';
+      try {
+        ({ code, output } = await this.runWithProgress('docker', args, taskDir, Math.min(job.timeoutMs ?? 15 * 60_000, 30 * 60_000)));
+      } catch (error: any) {
+        const m = /exited with code (\d+): ([\s\S]*)$/.exec(String(error.message));
+        code = m ? Number(m[1]) : -1;
+        output = m ? m[2] : String(error.message);
+      }
+      const outPath = job.outFile ? path.join(jobDir, job.outFile) : undefined;
+      const result = outPath && fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : undefined;
+      const out = (result ?? output).slice(-MAX);
+      return {
+        success: code === 0,
+        logs: output.slice(-MAX),
+        metadata: { check: { exitCode: code, output: out } },
+        ...(code === 0 ? {} : { error: `Job exited with ${code}` }),
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message, metadata: { check: { exitCode: -1, output: String(error.message) } } };
+    } finally {
+      fs.rmSync(jobDir, { recursive: true, force: true });
+    }
+  }
+
   private async lifecycleOp(
     taskId: string,
     args: string[],
@@ -476,6 +639,20 @@ export class DockerComposeExecutor {
     }
   }
 
+  /** The last `tail` log lines of every service (`compose logs`, v2 or v1 like every other op). */
+  async logs(taskId: string, tail = 200): Promise<TaskExecutionResult> {
+    const taskDir = this.configManager.getTaskDir(taskId);
+    if (!fs.existsSync(path.join(taskDir, 'docker-compose.yml'))) {
+      return { success: false, error: `Resource not found locally (task ${taskId}).` };
+    }
+    try {
+      const { output } = await this.runCompose(['logs', '--no-color', '--tail', String(tail)], taskDir, UP_TIMEOUT_MS);
+      return { success: true, logs: output };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
   /** Stop and remove containers + volumes for a task (`down -v`). */
   async cleanupTask(taskId: string): Promise<TaskExecutionResult> {
     const taskDir = this.configManager.getTaskDir(taskId);
@@ -483,16 +660,27 @@ export class DockerComposeExecutor {
       logger.warn(`Task directory not found: ${taskDir}`);
       return { success: true, logs: 'Nothing to tear down (no local task directory).' };
     }
+    if (!fs.existsSync(path.join(taskDir, 'docker-compose.yml'))) {
+      // A lab that failed before it started (port clash, missing Multipass…) can leave an empty
+      // folder behind (getTaskDir creates it): nothing is running, so removing it is the teardown.
+      fs.rmSync(taskDir, { recursive: true, force: true });
+      return { success: true, logs: 'Nothing was running; removed the empty lab folder.' };
+    }
     try {
       logger.info(`Tearing down task ${taskId}`);
       // Grouped with ps/stop/start under SHORT_TIMEOUT_MS above (down doesn't pull images) —
       // was previously coded to UP_TIMEOUT_MS (5 min) by mistake, so a wedged teardown made
       // the agent look hung for far longer than necessary before its own timeout even fired.
+      // --rmi local: also the images this lab built from source (a capstone's app, ~1.8 GB),
+      // never the pulled ones (postgres, kafka…), which stay cached for offline provisioning.
       const { output } = await this.runCompose(
-        ['down', '-v'],
+        ['down', '-v', '--rmi', 'local'],
         taskDir,
         SHORT_TIMEOUT_MS,
       );
+      // The lab's folder (compose file, its source files) goes too; the trainee's own repo clone
+      // lives elsewhere (~/stratpoint) and is never touched.
+      fs.rmSync(taskDir, { recursive: true, force: true });
       logger.info('Teardown completed');
       return { success: true, logs: output };
     } catch (error: any) {
@@ -506,6 +694,29 @@ export class DockerComposeExecutor {
    * or wedged docker operation can never hang the agent. `onLine` receives each output line.
    */
   /** Run a Compose subcommand using the detected CLI (docker compose | docker-compose). */
+  /**
+   * A line handler for a long compose command: keeps the last lines of output and reports the step
+   * the output shows (downloading, building <service> n/m, starting), with that output attached.
+   */
+  private progressLines(initial: string, taskDir: string, onProgress?: ProgressReporter): ((line: string) => void) | undefined {
+    if (!onProgress) return undefined;
+    onProgress(initial);
+    const tail = new OutputTail();
+    // Compose's default project name is the folder name, lower-cased.
+    const parser = new ComposeProgress(path.basename(taskDir).toLowerCase());
+    let phase = initial;
+    let detail: Record<string, unknown> | undefined;
+    return line => {
+      tail.push(`${line}\n`);
+      const p = parser.line(line);
+      if (p) {
+        phase = p.phase;
+        detail = p.detail;
+      }
+      onProgress(phase, { ...detail, output: tail.text() });
+    };
+  }
+
   private async runCompose(
     args: string[],
     cwd: string,

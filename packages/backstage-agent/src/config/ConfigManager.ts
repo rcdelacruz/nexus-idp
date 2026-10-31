@@ -40,7 +40,7 @@ export class ConfigManager {
         JSON.stringify(config, null, 2),
         'utf-8'
       );
-      logger.info(`Configuration saved to ${this.configPath}`);
+      logger.debug(`Configuration saved to ${this.configPath}`);
     } catch (error) {
       logger.error(`Failed to save configuration: ${error}`);
       throw new Error(`Failed to save configuration: ${error}`);

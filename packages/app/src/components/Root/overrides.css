@@ -4,7 +4,7 @@
  *
  * Dark mode:  class="theme-dark" on <html>
  * Light mode: class="theme-light" on <html>
- * Default:    dark
+ * Default:    light
  */
 
 /* ==========================================================
@@ -55,6 +55,7 @@ body[data-theme-mode='dark'] {
 }
 
 /* Light mode bui tokens */
+html,
 html.theme-light,
 body[data-theme-mode='light'] {
   --bui-bg-app:               #fafafa;
@@ -225,8 +226,8 @@ td[class*="bui-TableCell"] span[class*="secondary"] {
   --duration: 0.15s;
 }
 
-/* Dark mode tokens (default) */
-html, html.theme-dark, body[data-theme-mode='dark'] {
+/* Dark mode tokens */
+html.theme-dark, body[data-theme-mode='dark'] {
   --ds-background-100: #0a0a0a;
   --ds-background-200: #000000;
 
@@ -283,7 +284,7 @@ html, html.theme-light, body[data-theme-mode='light'] {
 }
 
 /* ── Geist color scale — dark mode overrides ──────────────────────────────── */
-html, html.theme-dark, body[data-theme-mode='dark'] {
+html.theme-dark, body[data-theme-mode='dark'] {
   --ds-contrast-fg: #fff;
   /* Blue */
   --ds-blue-200: hsl(214,  59%, 15%);  --ds-blue-800: hsl(212, 100%, 41%);  --ds-blue-900: hsl(210, 100%, 66%);
@@ -301,8 +302,8 @@ html, html.theme-dark, body[data-theme-mode='dark'] {
   --ds-pink-200: hsl(335,  43%, 16%);  --ds-pink-300: hsl(335,  47%, 21%);  --ds-pink-800: hsl(336,  74%, 51%);  --ds-pink-900: hsl(341,  90%, 67%);
 }
 
-/* Light mode tokens */
-html.theme-light, body[data-theme-mode='light'] {
+/* Light mode tokens (default) */
+html, html.theme-light, body[data-theme-mode='light'] {
   --ds-background-100: #ffffff;
   --ds-background-200: #fafafa;
 
@@ -570,6 +571,25 @@ body[data-theme-mode='light'] [class*="MuiButton-containedPrimary"]:hover {
 [class*="MuiButton-text"]:hover {
   background: var(--ds-gray-alpha-100) !important;
   color: var(--fg-primary) !important;
+}
+
+/* Destructive (red) — mark the button with data-destructive. An inline style can't beat the
+   !important rules above, so a style={{ color }} on a Button never turns it red. */
+[class*="MuiButton-root"][data-destructive] {
+  color: #e5484d !important;
+}
+[class*="MuiButton-outlined"][data-destructive] {
+  border-color: rgba(229, 72, 77, 0.5) !important;
+}
+[class*="MuiButton-root"][data-destructive]:hover {
+  color: #e5484d !important;
+  background: rgba(229, 72, 77, 0.08) !important;
+}
+[class*="MuiButton-outlined"][data-destructive]:hover {
+  border-color: #e5484d !important;
+}
+[class*="MuiButton-root"][data-destructive][class*="Mui-disabled"] {
+  opacity: 0.5;
 }
 
 /* ==========================================================

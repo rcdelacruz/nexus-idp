@@ -30,7 +30,7 @@ export class TokenManager {
     };
 
     this.configManager.saveConfig(config);
-    logger.info(`Authentication tokens saved for agent: ${agentId}`);
+    logger.debug(`Authentication tokens saved for agent: ${agentId}`);
   }
 
   /**

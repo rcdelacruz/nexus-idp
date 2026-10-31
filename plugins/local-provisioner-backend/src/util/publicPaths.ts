@@ -28,6 +28,9 @@ export const PUBLIC_AGENT_PATHS = [
   '/agent/register',
   '/agent/poll',
   '/agent/tasks/:taskId/status',
+  // Laptop seed container → seed outputs, authenticated by its single-use token in the handler
+  // (capstones/seedReportRoute.ts). The only public capstone path; nothing else under /capstones.
+  '/capstones/seed-report/:id',
 ] as const;
 
 function toSegments(path: string): string[] {

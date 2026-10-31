@@ -281,7 +281,9 @@ proxy:
 
     # ArgoCD API proxy — used by the ArgoCD history card on entity overview pages
     '/argocd/api':
-      target: ${ARGOCD_URL}
+      # Fallback keeps the backend booting if ARGOCD_URL is ever missing (an unset target makes the
+      # proxy plugin throw at startup) — see knowledge/patterns/proxy-target-env-var-crashes-boot.md.
+      target: ${ARGOCD_URL:-http://argocd-not-configured.invalid}
       changeOrigin: true
       secure: false
       headers:
@@ -304,6 +306,103 @@ argocd:
           # Create a dedicated service account for Backstage:
           #   argocd account create --account backstage
           #   argocd account generate-token --account backstage
+
+# Tech Insights — "Ops readiness" scorecard on service/website entity pages (OpsReadinessCard).
+# Every configured retriever needs `cadence` (startup throws without it); a retriever only runs if
+# it is listed here. techdocsFactRetriever is deliberately off: platform docs use engineering-docs.
+# Conventions checked: docs/content/monitoring-ops-links.md.
+techInsights:
+  factRetrievers:
+    entityOwnershipFactRetriever:
+      cadence: '7 * * * *'
+      lifecycle: { maxItems: 7 }
+    entityMetadataFactRetriever:
+      cadence: '7 * * * *'
+      lifecycle: { maxItems: 7 }
+    opsReadinessFactRetriever:
+      cadence: '7 * * * *'
+      initialDelay: { seconds: 30 }
+      lifecycle: { maxItems: 7 }
+  factChecker:
+    checks:
+      groupOwnerCheck:
+        type: json-rules-engine
+        name: Owned by a group
+        description: 'spec.owner is a group, not an individual'
+        factIds: [entityOwnershipFactRetriever]
+        # one object (jsonfc 0.10 rejects an array here despite its README); array value = OR
+        filter: { kind: component, spec.type: [service, website] }
+        rule:
+          conditions:
+            all:
+              - fact: hasGroupOwner
+                operator: equal
+                value: true
+      descriptionCheck:
+        type: json-rules-engine
+        name: Has a description
+        description: 'metadata.description is set'
+        factIds: [entityMetadataFactRetriever]
+        # one object (jsonfc 0.10 rejects an array here despite its README); array value = OR
+        filter: { kind: component, spec.type: [service, website] }
+        rule:
+          conditions:
+            all:
+              - fact: hasDescription
+                operator: equal
+                value: true
+      runbookLinkCheck:
+        type: json-rules-engine
+        name: Has a runbook link
+        description: 'metadata.links has a link titled "Runbook"'
+        factIds: [opsReadinessFactRetriever]
+        # one object (jsonfc 0.10 rejects an array here despite its README); array value = OR
+        filter: { kind: component, spec.type: [service, website] }
+        rule:
+          conditions:
+            all:
+              - fact: hasRunbookLink
+                operator: equal
+                value: true
+      dashboardLinkCheck:
+        type: json-rules-engine
+        name: Has a dashboard link
+        description: 'metadata.links has a link titled "Dashboard"'
+        factIds: [opsReadinessFactRetriever]
+        # one object (jsonfc 0.10 rejects an array here despite its README); array value = OR
+        filter: { kind: component, spec.type: [service, website] }
+        rule:
+          conditions:
+            all:
+              - fact: hasDashboardLink
+                operator: equal
+                value: true
+      onCallLinkCheck:
+        type: json-rules-engine
+        name: Has an on-call link
+        description: 'metadata.links has a link titled "On-call"'
+        factIds: [opsReadinessFactRetriever]
+        # one object (jsonfc 0.10 rejects an array here despite its README); array value = OR
+        filter: { kind: component, spec.type: [service, website] }
+        rule:
+          conditions:
+            all:
+              - fact: hasOnCallLink
+                operator: equal
+                value: true
+      grafanaMonitoringCheck:
+        type: json-rules-engine
+        name: Has Grafana monitoring
+        description: 'grafana/* annotation set (shows the Monitoring tab)'
+        factIds: [opsReadinessFactRetriever]
+        # one object (jsonfc 0.10 rejects an array here despite its README); array value = OR
+        filter: { kind: component, spec.type: [service, website] }
+        rule:
+          conditions:
+            all:
+              - fact: hasGrafanaAnnotation
+                operator: equal
+                value: true
 
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:

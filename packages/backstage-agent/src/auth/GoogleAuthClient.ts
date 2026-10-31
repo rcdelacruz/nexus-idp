@@ -4,10 +4,15 @@
  */
 
 import open from 'open';
+import chalk from 'chalk';
 import fetch from 'node-fetch';
 import { AgentRegisterResponse } from '../types';
 import logger from '../utils/logger';
 import { getMachineInfo } from '../utils/machineId';
+
+// The real package version (was hard-coded '0.1.0', which made every agent look ancient).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import { AGENT_VERSION } from '../utils/version';
 
 export class GoogleAuthClient {
   private backstageUrl: string;
@@ -23,11 +28,7 @@ export class GoogleAuthClient {
   async startOAuthFlow(): Promise<{ serviceToken: string; agentId: string; expiresAt: number; reconnected?: boolean }> {
     // Step 1: Get machine info for stable agent ID
     const machineInfo = getMachineInfo();
-    logger.info(`Machine ID: ${machineInfo.agentId}`);
-    logger.info(`Hostname: ${machineInfo.hostname}`);
-
     // Step 2: Request device code from backend with machine info
-    logger.info('Requesting device code...');
 
     const codeResponse = await fetch(
       `${this.backstageUrl}/api/local-provisioner/agent/device/code`,
@@ -39,6 +40,7 @@ export class GoogleAuthClient {
           hostname: machineInfo.hostname,
           platform: machineInfo.platform,
           platform_version: machineInfo.platformVersion,
+          agent_version: AGENT_VERSION,
         }),
       }
     );
@@ -62,19 +64,19 @@ export class GoogleAuthClient {
       ? verification_uri
       : `${this.backstageUrl}${verification_uri}`;
 
-    logger.info('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    logger.info('  To authorize this device, please follow these steps:');
-    logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-    logger.info(`  1. Visit: ${verificationUrl}`);
-    logger.info(`  2. Enter code: ${user_code}\n`);
-    logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    console.log(`  ${chalk.bold('Sign in to connect this machine')}  ${chalk.dim(`(${machineInfo.hostname})`)}`);
+    console.log('');
+    console.log(`    1. Open   ${chalk.cyan(verificationUrl)}`);
+    console.log(`    2. Enter  ${chalk.bold.yellow(user_code)}`);
+    console.log(`    3. Sign in with your ${chalk.bold('Google work account')}`);
+    console.log('');
 
     // Open browser automatically
     await open(verificationUrl).catch(err => {
-      logger.warn(`Could not open browser automatically: ${err.message}`);
+      console.log(chalk.dim(`  (Could not open the browser automatically: ${err.message}. Open the link above.)`));
     });
 
-    logger.info('Waiting for authorization...');
+    console.log(chalk.dim(`  Waiting for you to approve in the browser (the code expires in ${Math.round(expires_in / 60)} minutes)...`));
 
     // Step 3: Poll for token
     const pollInterval = (interval || 5) * 1000; // Convert to milliseconds
@@ -95,10 +97,6 @@ export class GoogleAuthClient {
 
         if (tokenResponse.ok) {
           const { access_token, agent_id, reconnected, expires_in } = await tokenResponse.json() as any;
-          logger.info('\n✓ Device authorized successfully!');
-          if (reconnected) {
-            logger.info('✓ Reconnected to existing agent');
-          }
           const tokenExpiresAt = Date.now() + (expires_in * 1000);
           return { serviceToken: access_token, agentId: agent_id, expiresAt: tokenExpiresAt, reconnected };
         }
@@ -139,7 +137,7 @@ export class GoogleAuthClient {
       const machineInfo = {
         machine_name: require('os').hostname(),
         os_platform: require('os').platform(),
-        agent_version: '0.1.0',
+        agent_version: AGENT_VERSION,
       };
 
       const response = await fetch(

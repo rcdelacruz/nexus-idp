@@ -225,7 +225,14 @@ describe('AgentService long-poll delivery', () => {
   it('every call updates last_seen, whether it returns immediately or waits', async () => {
     const service = makeServiceWithStore({ pollTimeoutSeconds: 5 });
     await service.longPoll(AGENT_ID, USER_EMAIL, AbortSignal.timeout(10));
-    expect((service as any).taskStore.updateAgentLastSeen).toHaveBeenCalledWith(AGENT_ID);
+    expect((service as any).taskStore.updateAgentLastSeen).toHaveBeenCalledWith(AGENT_ID, undefined, undefined);
+  });
+
+  it('records the version an agent reports on its poll (so an update is seen without re-login)', async () => {
+    const service = makeServiceWithStore({ pollTimeoutSeconds: 5 });
+    const caps = { arch: 'arm64', dockerMemoryBytes: 4 * 1024 ** 3 };
+    await service.longPoll(AGENT_ID, USER_EMAIL, AbortSignal.timeout(10), '0.1.23', caps);
+    expect((service as any).taskStore.updateAgentLastSeen).toHaveBeenCalledWith(AGENT_ID, '0.1.23', caps);
   });
 
   it('notifyAgent wakes a parked poll immediately instead of waiting for the timeout', async () => {

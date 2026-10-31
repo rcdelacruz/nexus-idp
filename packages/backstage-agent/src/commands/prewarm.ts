@@ -7,7 +7,7 @@
 
 import { Command } from 'commander';
 import { DockerComposeExecutor } from '../executor/DockerComposeExecutor';
-import logger from '../utils/logger';
+import { displayError, displayInfo, displaySuccess } from '../utils/logo';
 
 const TYPE_MAP: Record<string, string> = {
   kafka: 'provision-kafka',
@@ -22,16 +22,16 @@ export const prewarmCommand = new Command('prewarm')
   .action(async (type: string) => {
     const taskType = TYPE_MAP[type];
     if (!taskType) {
-      logger.error(`Unknown type "${type}". Use one of: ${Object.keys(TYPE_MAP).join(', ')}.`);
+      displayError(`Unknown type "${type}". Use one of: ${Object.keys(TYPE_MAP).join(', ')}.`);
       process.exit(1);
     }
-    logger.info(`Pre-warming images for ${type}... (this may take a while on a slow connection)`);
+    displayInfo(`Downloading the ${type} images now, so you can provision it later without internet. This can take a while on a slow connection...`);
     const executor = new DockerComposeExecutor();
     const result = await executor.prewarm(taskType);
     if (result.success) {
-      logger.info(`Done. You can now provision ${type} offline from cache.`);
+      displaySuccess(`Done. ${type} can now be provisioned offline.`);
     } else {
-      logger.error(`Prewarm failed: ${result.error}`);
+      displayError(`Download failed: ${result.error}`);
       process.exit(1);
     }
   });

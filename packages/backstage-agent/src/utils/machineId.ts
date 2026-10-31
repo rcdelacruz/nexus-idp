@@ -109,6 +109,8 @@ export function getMachineInfo(): MachineInfo {
   } catch {
     // Use platform name as fallback
   }
+  // CPU architecture matters for labs (arm64 Apple Silicon vs x64): "macOS 25.0 (arm64)".
+  platformVersion = `${platformVersion} (${process.arch})`;
 
   return {
     agentId,

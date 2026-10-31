@@ -12,6 +12,7 @@ import {
   AgentAuthResponse,
   AgentRegisterRequest,
   ProvisioningTask,
+  AgentCapabilities,
 } from '../types';
 import { extractEmailFromEntityRef as sharedExtractEmail } from '../util/identity';
 
@@ -31,6 +32,8 @@ interface DeviceCodeAuthorization {
     hostname: string;
     platform: string;
     platformVersion: string;
+    /** Sent by agents ≥ 0.1.23. */
+    agentVersion?: string;
   };
 }
 
@@ -86,6 +89,7 @@ export class AgentService {
     hostname: string;
     platform: string;
     platformVersion: string;
+    agentVersion?: string;
   }): Promise<{
     device_code: string;
     user_code: string;
@@ -210,7 +214,7 @@ export class AgentService {
 
     // If machine info was provided, use machine-based agent ID (upsert)
     if (authorization.machineInfo) {
-      const { agentId: machineAgentId, hostname, platform, platformVersion } = authorization.machineInfo;
+      const { agentId: machineAgentId, hostname, platform, platformVersion, agentVersion } = authorization.machineInfo;
 
       const result = await this.taskStore.upsertAgent(
         machineAgentId,
@@ -219,7 +223,7 @@ export class AgentService {
         platform,
         platformVersion,
         hostname, // machine_name = hostname
-        '0.1.0', // agent_version - TODO: get from CLI
+        agentVersion ?? '0.1.0', // agents before 0.1.23 don't send it (they are older than that)
       );
 
       agentId = result.agent.agent_id;
@@ -297,6 +301,8 @@ export class AgentService {
     agentId: string,
     userId: string,
     signal?: AbortSignal,
+    agentVersion?: string,
+    capabilities?: AgentCapabilities,
   ): Promise<{ tasks: ProvisioningTask[]; shouldShutdown: boolean }> {
     const agent = await this.taskStore.getAgentById(agentId);
     if (!agent) {
@@ -306,7 +312,7 @@ export class AgentService {
       throw new Error(`Agent ${agentId} does not belong to user ${userId}`);
     }
 
-    await this.taskStore.updateAgentLastSeen(agentId);
+    await this.taskStore.updateAgentLastSeen(agentId, agentVersion, capabilities);
     // Any live poll proves the agent is up right now — clears a stale flag from a previous
     // shutdown if this is a freshly-restarted agent reusing the same ID.
     this.explicitlyDisconnected.delete(agentId);

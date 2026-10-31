@@ -35,7 +35,7 @@ describe('AboutTab', () => {
 
     expect(screen.getByText('1.56.2')).toBeInTheDocument();
     expect(screen.getByText('v1.5.3')).toBeInTheDocument();
-    expect(screen.getByText('5 commits ahead')).toBeInTheDocument();
+    expect(screen.queryByText(/commits? ahead/)).not.toBeInTheDocument();
     expect(screen.getByText('8cb9318')).toHaveAttribute('title', BUILD_INFO.commit);
     expect(screen.getByText(/2026/)).toBeInTheDocument();
   });

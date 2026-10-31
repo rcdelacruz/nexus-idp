@@ -48,6 +48,12 @@ describe('isTaskCreationAllowed', () => {
     it('allows non-devops-owned templates', () => {
       expect(isTaskCreationAllowed(LEAD, template())).toBe(true);
     });
+
+    it('allows devops-owned training labs', () => {
+      expect(
+        isTaskCreationAllowed(LEAD, ownedByDevops({ spec: { type: 'training' } })),
+      ).toBe(true);
+    });
   });
 
   describe('assigned engineers', () => {
@@ -68,6 +74,26 @@ describe('isTaskCreationAllowed', () => {
     it('denies governance-type templates that are also devops-owned (no lead exception for engineers)', () => {
       expect(
         isTaskCreationAllowed(ENGINEER, ownedByDevops({ spec: { type: 'governance' } })),
+      ).toBe(false);
+    });
+
+    it('allows devops-owned training labs (Local Provisioner is for every engineer)', () => {
+      for (const team of ['web', 'mobile', 'data', 'cloud', 'ai', 'qa', 'sa']) {
+        expect(
+          isTaskCreationAllowed([`group:default/${team}-team`], ownedByDevops({ spec: { type: 'training' } })),
+        ).toBe(true);
+      }
+    });
+
+    it('matches spec.type case-insensitively, like the catalog read rule', () => {
+      expect(
+        isTaskCreationAllowed(ENGINEER, ownedByDevops({ spec: { type: 'Training' } })),
+      ).toBe(true);
+    });
+
+    it('still denies devops-owned infrastructure templates', () => {
+      expect(
+        isTaskCreationAllowed(ENGINEER, ownedByDevops({ spec: { type: 'infrastructure' } })),
       ).toBe(false);
     });
   });

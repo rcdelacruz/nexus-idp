@@ -10,6 +10,7 @@ import {
   Divider,
 } from '@material-ui/core';
 import { ProvisioningTask, TaskStatus } from '../../api/types';
+import { taskTypeLabel } from '../../api/transformers';
 
 const useStyles = makeStyles(theme => ({
   card: {
@@ -93,7 +94,7 @@ export const TaskDetailsCard = ({ task }: TaskDetailsCardProps) => {
             Task Information
           </Typography>
           <Typography variant="body2">
-            <strong>Type:</strong> {task.taskType}
+            <strong>Type:</strong> {taskTypeLabel(task)}
           </Typography>
           <Typography variant="body2">
             <strong>Agent ID:</strong> {task.agentId}

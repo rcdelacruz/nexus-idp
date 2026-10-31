@@ -6,8 +6,7 @@ import { Command } from 'commander';
 import { GoogleAuthClient } from '../auth/GoogleAuthClient';
 import { TokenManager } from '../auth/TokenManager';
 import { launchDaemon } from '../utils/daemonLauncher';
-import { displaySuccess, displayInfo, displayBanner } from '../utils/logo';
-import logger from '../utils/logger';
+import { displaySuccess, displayInfo, displayDetails, displayError } from '../utils/logo';
 
 export const loginCommand = new Command('login')
   .description('Authenticate with Backstage using Google OAuth')
@@ -18,16 +17,12 @@ export const loginCommand = new Command('login')
       const backstageUrl = options.url;
       const shouldStart = options.start !== false; // Default to true unless --no-start is specified
 
-      logger.info('Starting authentication flow...');
-      logger.info(`Backstage URL: ${backstageUrl}`);
 
       // Initialize auth client
       const authClient = new GoogleAuthClient(backstageUrl);
       const tokenManager = new TokenManager();
 
-      // Step 1: Start OAuth flow - agent is automatically registered during this flow
-      logger.info('Opening browser for Google OAuth...');
-      logger.info('Please sign in with your Stratpoint Google account');
+      // Step 1: Device-code sign-in (the agent is registered during this flow)
       const authResponse = await authClient.startOAuthFlow();
 
       // Step 2: Save tokens to config file
@@ -39,37 +34,27 @@ export const loginCommand = new Command('login')
       );
 
       console.log('');
-      displayBanner('Authentication Successful!');
-      console.log('');
-
-      if (authResponse.reconnected) {
-        displaySuccess('Reconnected to existing agent');
-      } else {
-        displaySuccess('Agent registered with Backstage');
-      }
-
-      displayInfo(`Agent ID: ${authResponse.agentId}`);
-      displayInfo(`Token expires: ${new Date(authResponse.expiresAt).toLocaleString()}`);
+      displaySuccess(authResponse.reconnected ? 'Signed in. This machine is already registered, so it reconnected.' : 'Signed in. This machine is now registered with the portal.');
+      displayDetails([
+        ['Agent ID', authResponse.agentId],
+        ['Signed in until', new Date(authResponse.expiresAt).toLocaleString()],
+      ]);
       console.log('');
 
       // Auto-start agent as a DETACHED daemon unless --no-start is specified. This keeps the
       // agent online after the login command exits / the terminal closes (it used to run in the
       // foreground, so Ctrl+C dropped you offline).
       if (shouldStart) {
-        console.log('');
-        logger.info('Starting agent in the background...');
-        console.log('');
         const result = await launchDaemon();
         process.exit(result.ok ? 0 : 1);
       } else {
-        console.log('');
-        displayInfo('Agent ready! Run "backstage-agent start" when you\'re ready to connect.');
+        displayInfo('Start the agent when you are ready: backstage-agent start');
         console.log('');
         process.exit(0);
       }
     } catch (error: any) {
-      logger.error('Authentication failed');
-      logger.error(error.message);
+      displayError(`Sign-in failed: ${error.message}`);
+      console.log('');
       process.exit(1);
     }
   });

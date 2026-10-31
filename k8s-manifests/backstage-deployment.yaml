@@ -119,15 +119,18 @@ spec:
           requests:
             cpu: 250m
             memory: 512Mi
+        # Up to 2 min to start (12 x 10 s), 5 s per check: with 3 x 1 s a slow start (a slow image
+        # pull, plugin init under load) got the container restarted mid-startup.
+        # Applies only until the first success; liveness/readiness take over after that.
         startupProbe:
-          failureThreshold: 3
+          failureThreshold: 12
           httpGet:
             path: /.backstage/health/v1/liveness
             port: 7007
             scheme: HTTP
           periodSeconds: 10
           successThreshold: 1
-          timeoutSeconds: 1
+          timeoutSeconds: 5
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:

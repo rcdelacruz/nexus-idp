@@ -6,10 +6,12 @@ import {
 } from '@material-ui/core';
 import {
   AlertCircle, CheckCircle, Circle, ExternalLink,
-  LayoutGrid, BookOpen, Loader, User, GitBranch,
+  LayoutGrid, BookOpen, Loader, User, GitBranch, Sparkles,
 } from 'lucide-react';
 import { useColors, semantic, badge } from '@stratpoint/theme-utils';
 import { userManagementApiRef } from '../api/refs';
+
+import { DEPT_TEAM_IDS_JWT } from '../constants';
 
 export { DEPT_TEAM_IDS, DEPT_TEAM_IDS_JWT } from '../constants';
 
@@ -92,7 +94,7 @@ function useIdentity() {
   const [state, setState] = useState({
     userRef: '', name: '', displayName: '', email: '',
     picture: undefined as string | undefined,
-    isNewUser: false, isAdmin: false, loading: true,
+    isNewUser: false, isAdmin: false, isTrainee: false, loading: true,
   });
   useEffect(() => {
     Promise.all([identityApi.getBackstageIdentity(), identityApi.getProfileInfo()])
@@ -110,6 +112,9 @@ function useIdentity() {
           picture: profile.picture,
           isNewUser: !hasDeptTeam && !isAdmin,
           isAdmin,
+          // No engineering team (canonical list, not the temporarily-restricted DEPT_TEAMS above)
+          // and not an admin — same rule as the HomePage onboarding redirect.
+          isTrainee: !isAdmin && !refs.some(r => DEPT_TEAM_IDS_JWT.some(t => r === `group:default/${t}`)),
           loading: false,
         });
       })
@@ -156,7 +161,7 @@ function useGitHubStatus(userRef: string, onMeLoaded?: (me: { onboarding_catalog
 // ── GitHub Connect Button ─────────────────────────────────────────────────────
 // Uses GitHub OAuth to get the username — no manual typing needed.
 
-const GitHubConnectButton = ({ onConnected }: { onConnected?: () => void }) => {
+const GitHubConnectButton = ({ onConnected, label = 'Connect GitHub account' }: { onConnected?: () => void; label?: string }) => {
   const api = useApi(userManagementApiRef);
   const githubAuth = useApi(githubAuthApiRef);
   const c = useColors();
@@ -206,7 +211,7 @@ const GitHubConnectButton = ({ onConnected }: { onConnected?: () => void }) => {
         {loading
           ? <Loader size={14} strokeWidth={1.5} aria-hidden="true" />
           : <GitBranch size={14} strokeWidth={1.5} aria-hidden="true" />}
-        {loading ? 'Connecting...' : 'Connect GitHub account'}
+        {loading ? 'Connecting...' : label}
       </button>
       {error && (
         <Box role="alert" display="flex" alignItems="center" style={{ gap: 6 }}>
@@ -417,6 +422,63 @@ const StepCard = ({ step, isLast }: StepCardProps) => {
   );
 };
 
+// ── Optional: AI-assisted development ──────────────────────────────────────────
+// Deliberately NOT a `steps` entry: steps drive the "N of M complete" counter and the
+// "all set" state, so adding one would reset every user who already finished onboarding.
+// Tooling split (decided 2026-10-30): trainees use OpenCode with the free Big Pickle model;
+// engineers on a team use the paid Claude Code / Codex seats.
+
+const NEXUS_DOCS = 'https://nexus.coderstudio.co/docs';
+
+const AiSetupCard = ({ isTrainee, cardStyle }: { isTrainee: boolean; cardStyle: React.CSSProperties }) => {
+  const c = useColors();
+  const links = isTrainee
+    ? [
+        { label: 'Install the toolkit', href: `${NEXUS_DOCS}#install` },
+        { label: 'Set up OpenCode', href: `${NEXUS_DOCS}#init-opencode` },
+        { label: 'The daily EPAV loop', href: `${NEXUS_DOCS}#day1` },
+      ]
+    : [
+        { label: 'Install the toolkit', href: `${NEXUS_DOCS}#install` },
+        { label: 'Claude Code setup', href: `${NEXUS_DOCS}#init-claude` },
+        { label: 'Codex setup', href: `${NEXUS_DOCS}#init-codex` },
+        { label: 'The daily EPAV loop', href: `${NEXUS_DOCS}#day1` },
+      ];
+  return (
+    <Box component="section" aria-label="Optional: AI-assisted development" style={{ ...cardStyle, marginTop: 24 }}>
+      <Box display="flex" alignItems="center" style={{ gap: 8, marginBottom: 6 }}>
+        <Sparkles size={14} strokeWidth={1.5} color={c.textSecondary} aria-hidden="true" />
+        <Typography style={{ fontSize: '0.875rem', fontWeight: 600, color: c.text }}>
+          Optional: AI-assisted development
+        </Typography>
+      </Box>
+      <Typography style={{ fontSize: '0.8125rem', color: c.textSecondary, lineHeight: 1.6, marginBottom: 12 }}>
+        {isTrainee
+          ? 'Work through training exercises with the nexus-dev toolkit in OpenCode, using the free Big Pickle model — no license needed. Each lab ships its exercises as tasks you run with /evaluate → /plan → /apply → /validate.'
+          : 'Plan, build and review with the nexus-dev toolkit in your Claude Code or Codex seat — the /evaluate → /plan → /apply → /validate loop plus reviewers like /code-review and /deployment-review.'}
+      </Typography>
+      <Box display="flex" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {links.map(l => (
+          <a
+            key={l.label}
+            href={l.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 6,
+              border: `1px solid ${c.border}`,
+              color: c.textSecondary, fontSize: '0.8125rem', fontWeight: 500, textDecoration: 'none',
+            }}
+          >
+            {l.label}<ExternalLink size={12} strokeWidth={1.5} aria-hidden="true" />
+          </a>
+        ))}
+      </Box>
+    </Box>
+  );
+};
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export const OnboardingPage = () => {
@@ -477,6 +539,8 @@ export const OnboardingPage = () => {
   const needsRegistration = !identity.isAdmin && isTeamAssigned === false && !isRegistered;
 
   const githubDone = ghStatus === 'verified';
+  // The org's own account owns every portal-created repo; GitHub refuses it as a collaborator.
+  const linkedToOrgAccount = githubDone && !!ghLogin && !!githubOwner && ghLogin.toLowerCase() === githubOwner.toLowerCase();
   // Show spinner while DB check is in flight (for non-admins without a session flag).
   const registrationChecking = !identity.isAdmin && isTeamAssigned === undefined && !isRegistered;
 
@@ -520,9 +584,26 @@ export const OnboardingPage = () => {
       description: githubDone
         ? `GitHub account linked: @${ghLogin ?? 'connected'}. Project creation will use this account in ${githubOwner}.`
         : `Connect your GitHub account so the portal can create repos under ${githubOwner} on your behalf.`,
-      done: githubDone,
+      done: githubDone && !linkedToOrgAccount,
       autoDetected: true,
-      custom: githubDone ? undefined : <GitHubConnectButton onConnected={refreshGitHub} />,
+      custom: githubDone ? (
+        <Box style={{ marginTop: 6 }}>
+          {linkedToOrgAccount && (
+            <Typography role="alert" style={{ fontSize: '0.8125rem', color: '#e5484d' }}>
+              @{ghLogin} is the organization's own GitHub account. Repos the portal creates for you can't be shared with it, so link your personal account.
+            </Typography>
+          )}
+          <Typography style={{ fontSize: '0.75rem', color: c.textSecondary, marginTop: 4 }}>
+            GitHub connects the account you're signed into on github.com — sign out there first to switch accounts.
+          </Typography>
+          <GitHubConnectButton
+            onConnected={refreshGitHub}
+            label={linkedToOrgAccount ? 'Connect your personal GitHub account' : 'Use a different GitHub account'}
+          />
+        </Box>
+      ) : (
+        <GitHubConnectButton onConnected={refreshGitHub} />
+      ),
     },
     {
       id: 'catalog-tour',
@@ -634,6 +715,9 @@ export const OnboardingPage = () => {
               <StepCard key={step.id} step={step} isLast={idx === steps.length - 1} />
             ))}
           </Box>
+
+          {/* Optional AI setup — not a step, never affects completion */}
+          <AiSetupCard isTrainee={identity.isTrainee} cardStyle={card} />
 
           {/* All done */}
           {allDone && (

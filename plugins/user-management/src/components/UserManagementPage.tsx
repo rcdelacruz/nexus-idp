@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useColors, semantic, badge } from '@stratpoint/theme-utils';
 import { userManagementApiRef } from '../api/refs';
-import { localProvisionerApiRef, ProvisioningTask, TaskDetailDrawer } from '@internal/plugin-local-provisioner';
+import { localProvisionerApiRef, ProvisioningTask, TaskDetailDrawer, taskTypeLabel } from '@internal/plugin-local-provisioner';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -747,7 +747,8 @@ export const UserManagementPage = () => {
             }}
             columns={[
               { title: 'User', field: 'userId' },
-              { title: 'Task', field: 'taskType' },
+              // field kept for search/sort; render shows generic labs as "training: <labId>"
+              { title: 'Task', field: 'taskType', render: (task: ProvisioningTask) => taskTypeLabel(task) },
               { title: 'Resource', field: 'resourceName' },
               { title: 'Agent', field: 'agentId' },
               {

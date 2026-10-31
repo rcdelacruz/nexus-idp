@@ -53,6 +53,35 @@ function deriveEmailFromRef(ref: string | undefined, domain: string): string | u
   return username.includes('@') ? username : `${username}@${domain}`;
 }
 
+/**
+ * Why the trainee's machine can't run a lab, or undefined. Unknown capabilities (older agents)
+ * never block. Exported for tests.
+ */
+export function machineRequirementProblem(
+  req: { minDockerMemoryGb?: number; architectures?: string[] } | undefined,
+  caps: { arch?: string; dockerMemoryBytes?: number } | undefined,
+): string | undefined {
+  if (!req || !caps) return undefined;
+  if (req.architectures?.length && caps.arch && !req.architectures.includes(caps.arch)) {
+    return `This lab doesn't run on your machine's CPU (${caps.arch}). Supported: ${req.architectures.join(', ')}.`;
+  }
+  if (req.minDockerMemoryGb && caps.dockerMemoryBytes) {
+    const have = caps.dockerMemoryBytes / 1024 ** 3;
+    // Docker reports slightly less than the configured limit (e.g. 3.8 GiB for "4 GB"), so allow 10%.
+    if (have < req.minDockerMemoryGb * 0.9) {
+      return (
+        `This lab needs about ${req.minDockerMemoryGb} GB of memory for Docker; yours has ${have.toFixed(1)} GB.\n\n` +
+        'Raise it, then run the template again:\n' +
+        '  • Docker Desktop (Mac/Windows): Settings → Resources → Memory\n' +
+        '  • Windows with WSL2: set memory= in %UserProfile%\\.wslconfig, then `wsl --shutdown`\n' +
+        '  • Colima: colima start --memory <GB>\n' +
+        '  • OrbStack: Settings → System → Memory limit'
+      );
+    }
+  }
+  return undefined;
+}
+
 export interface LocalProvisionActionOptions {
   discovery: DiscoveryService;
   auth: AuthService;
@@ -69,9 +98,32 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
       input: {
         taskType: z => z.string({ description: 'Type of provisioning task (e.g., provision-kafka)' }),
         resourceName: z => z.string({ description: 'Unique name for the resource' }),
-        dockerComposeFile: z => z.string({ description: 'Path to the rendered docker-compose.yml file (relative to workspace)' }),
+        dockerComposeFile: z =>
+          z.string({ description: 'Path to the rendered docker-compose.yml file (relative to workspace). Not used for VM labs (vm).' }).optional(),
+        vm: z =>
+          z
+            .object({
+              image: z.string(),
+              cpus: z.number().int(),
+              memoryGb: z.number().int(),
+              diskGb: z.number().int(),
+              sshUser: z.string(),
+              seedDir: z.string({ description: 'Workspace dir whose files are copied into the VM at /tmp/lab-seed' }),
+              seedCommand: z.array(z.string()),
+              seedEnv: z.record(z.string(), z.string()).optional(),
+            })
+            .optional()
+            .describe('VM lab (Multipass, agent ≥ 0.1.23) instead of Docker Compose — e.g. the Linux capstone'),
         sourceDir: z => z.string({ description: 'Path (relative to workspace) to a fetched source directory the compose file builds images from, e.g. ./rendered/app — sent to the agent alongside the compose file so `build: context:` has something to build. Omit for templates that only reference public images.' }).optional(),
         config: z => z.record(z.string(), z.unknown()).optional(),
+        requirements: z =>
+          z
+            .object({
+              minDockerMemoryGb: z.number().positive().optional(),
+              architectures: z.array(z.string()).optional(),
+            })
+            .optional()
+            .describe("What the trainee's machine needs (checked against what their agent reports; older agents report nothing and are let through)"),
       },
       output: {
         taskId: z => z.string(),
@@ -80,21 +132,37 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
       },
     },
     async handler(ctx) {
-      const { taskType, resourceName, dockerComposeFile, sourceDir, config = {} } = ctx.input;
+      const { taskType, resourceName, dockerComposeFile, sourceDir, config = {}, vm } = ctx.input;
 
       ctx.logger.info(`Queuing ${taskType} task for resource: ${resourceName}`);
 
-      // Read the rendered docker-compose.yml from workspace
-      const dockerComposePath = path.join(ctx.workspacePath, dockerComposeFile);
+      // VM labs: the seed files travel with the VM spec; there is no compose file.
+      let vmConfig: Record<string, unknown> | undefined;
+      if (vm) {
+        const seedAbs = path.join(ctx.workspacePath, vm.seedDir);
+        if (!(await fs.pathExists(seedAbs))) throw new InputError(`vm.seedDir not found: ${vm.seedDir}`);
+        const seedFiles: Record<string, string> = {};
+        for (const entry of await fs.readdir(seedAbs, { withFileTypes: true })) {
+          if (entry.isFile()) seedFiles[entry.name] = (await fs.readFile(path.join(seedAbs, entry.name))).toString('base64');
+        }
+        const { seedDir: _seedDir, ...rest } = vm;
+        vmConfig = { ...rest, seedFiles };
+        ctx.logger.info(`VM lab: ${vm.image}, ${vm.cpus} CPU, ${vm.memoryGb} GB RAM, ${vm.diskGb} GB disk, ${Object.keys(seedFiles).length} seed file(s)`);
+      } else if (!dockerComposeFile) {
+        throw new InputError('Either dockerComposeFile or vm is required');
+      }
 
-      if (!await fs.pathExists(dockerComposePath)) {
+      // Read the rendered docker-compose.yml from workspace
+      const dockerComposePath = vm ? '' : path.join(ctx.workspacePath, dockerComposeFile!);
+
+      if (!vm && !(await fs.pathExists(dockerComposePath))) {
         throw new InputError(
           `Docker Compose file not found: ${dockerComposeFile}. ` +
           `Make sure to run fetch:template action first to render the template.`
         );
       }
 
-      const dockerComposeTemplate = await fs.readFile(dockerComposePath, 'utf-8');
+      const dockerComposeTemplate = vm ? '' : await fs.readFile(dockerComposePath, 'utf-8');
       ctx.logger.debug(`Read docker-compose.yml template (${dockerComposeTemplate.length} bytes)`);
 
       // If the compose file builds images from a fetched source directory (rather than only
@@ -221,6 +289,11 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
       // Use the most recently active ONLINE agent.
       const activeAgent = onlineAgents[0];
 
+      // Stop early, with the fix, when the trainee's machine can't run this lab (agents ≥ 0.1.23
+      // report their capabilities; unknown values never block).
+      const problem = machineRequirementProblem(ctx.input.requirements, activeAgent.capabilities);
+      if (problem) throw new InputError(problem);
+
       ctx.logger.info(`Using agent: ${activeAgent.agent_id} (last seen: ${activeAgent.last_seen})`);
 
       // Create provisioning task
@@ -238,7 +311,9 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
             agent_id: activeAgent.agent_id,
             config: {
               ...config,
-              dockerCompose: dockerComposeContent, // Pass rendered docker-compose.yml
+              ...(vmConfig
+                ? { executor: 'multipass', vm: vmConfig }
+                : { dockerCompose: dockerComposeContent }), // rendered docker-compose.yml
               ...(sourceFiles ? { sourceFiles } : {}),
             },
             priority: 5,

@@ -106,20 +106,24 @@ export function isTaskCreationAllowed(groups: string[], template: Entity): boole
 
   const isTemplateKind = template.kind?.toLowerCase() === 'template';
   const isGovernance = (template.spec as { type?: unknown } | undefined)?.type === 'governance';
-  const isTraining = (template.spec as { type?: unknown } | undefined)?.type === 'training';
+  // Lowercased to match the catalog's HAS_SPEC rule, which compares case-insensitively — otherwise
+  // a `type: Training` template would be visible in the catalog but blocked here.
+  const specType = (template.spec as { type?: unknown } | undefined)?.type;
+  const isTraining = typeof specType === 'string' && specType.toLowerCase() === 'training';
   const isTeardownApp = template.metadata?.name === 'teardown-app';
   const ownedByDevops = isOwnedByDevops(template);
 
   if (isLead(groups)) {
     // Leads: any non-devops-owned template, plus devops-owned governance templates
-    // (e.g. promote-app).
-    return !ownedByDevops || isGovernance;
+    // (e.g. promote-app) and training labs.
+    return !ownedByDevops || isGovernance || isTraining;
   }
 
   if (isAssignedEngineer(groups)) {
-    // Engineers: any non-devops-owned template, except teardown-app outright (irreversible
-    // destructive action — leads/admins only, see .claude/plans/teardown-application-plan.md).
-    return !ownedByDevops && !isTeardownApp;
+    // Engineers: any non-devops-owned template plus training labs (Local Provisioner, for every
+    // engineer), except teardown-app outright (irreversible destructive action — leads/admins
+    // only, see .claude/plans/teardown-application-plan.md).
+    return (!ownedByDevops || isTraining) && !isTeardownApp;
   }
 
   if (isUnassigned(groups)) {

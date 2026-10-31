@@ -158,7 +158,9 @@ permission:
 proxy:
   endpoints:
     '/argocd/api':
-      target: ${ARGOCD_URL}
+      # Fallback keeps the backend booting if ARGOCD_URL is ever missing (an unset target makes the
+      # proxy plugin throw at startup) — see knowledge/patterns/proxy-target-env-var-crashes-boot.md.
+      target: ${ARGOCD_URL:-http://argocd-not-configured.invalid}
       changeOrigin: true
       secure: false
       headers:

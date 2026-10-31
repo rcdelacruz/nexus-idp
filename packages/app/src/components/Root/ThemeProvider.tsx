@@ -13,7 +13,7 @@ export const ThemeContext = React.createContext<{
 });
 
 export const ThemeProvider = ({ children }: PropsWithChildren<{}>) => {
-  const [themeId, setThemeId] = useLocalStorage<string>('theme', 'dark');
+  const [themeId, setThemeId] = useLocalStorage<string>('theme', 'light');
   const theme = themeId === 'dark' ? nexusDarkTheme : nexusLightTheme;
 
   React.useEffect(() => {

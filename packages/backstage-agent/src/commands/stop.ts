@@ -4,7 +4,7 @@
 
 import { Command } from 'commander';
 import * as fs from 'fs';
-import logger from '../utils/logger';
+import { displaySuccess, displayInfo, displayError } from '../utils/logo';
 import { getPidFilePath, safeUnlinkPidFile as safeUnlink } from '../utils/pidFile';
 
 export const stopCommand = new Command('stop')
@@ -14,8 +14,9 @@ export const stopCommand = new Command('stop')
       const pidFile = getPidFilePath();
 
       if (!fs.existsSync(pidFile)) {
-        logger.error('No running agent found (PID file does not exist)');
-        process.exit(1);
+        // Not running is the state "stop" wants, so it succeeds (keeps `stop && start` working).
+        displayInfo('The agent is not running.');
+        process.exit(0);
       }
 
       const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
@@ -24,13 +25,12 @@ export const stopCommand = new Command('stop')
       try {
         process.kill(pid, 0); // Signal 0 checks if process exists
       } catch (error) {
-        logger.warn('Agent process not found, cleaning up PID file');
+        displayInfo('The agent is not running.');
         safeUnlink(pidFile);
         process.exit(0);
       }
 
       // Send SIGTERM for graceful shutdown
-      logger.info(`Stopping agent (PID: ${pid})...`);
       process.kill(pid, 'SIGTERM');
 
       // Wait for process to stop (max 5 seconds)
@@ -43,22 +43,20 @@ export const stopCommand = new Command('stop')
           attempts++;
         } catch (error) {
           // Process stopped
-          logger.info('✓ Agent stopped successfully');
+          displaySuccess(`Agent stopped (PID ${pid})`);
           safeUnlink(pidFile);
           process.exit(0);
         }
       }
 
       // If still running after 5 seconds, force kill
-      logger.warn('Agent did not stop gracefully, forcing shutdown...');
       process.kill(pid, 'SIGKILL');
       safeUnlink(pidFile);
-      logger.info('✓ Agent stopped (forced)');
+      displaySuccess(`Agent stopped (PID ${pid}, forced after 5 s)`);
       process.exit(0);
 
     } catch (error: any) {
-      logger.error('Failed to stop agent');
-      logger.error(error.message);
+      displayError(`Could not stop the agent: ${error.message}`);
       process.exit(1);
     }
   });

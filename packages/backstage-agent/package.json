@@ -1,11 +1,12 @@
 {
   "name": "@stratpoint/backstage-agent",
-  "version": "0.1.22",
+  "version": "0.1.28",
   "description": "Backstage Local Provisioner Agent - Provisions local development resources",
   "main": "dist/index.js",
   "bin": "./bin/backstage-agent.js",
   "files": [
     "dist/**/*",
+    "!dist/**/*.test.*",
     "bin/**/*",
     "README.md",
     "LICENSE",
@@ -18,7 +19,8 @@
     "clean": "rm -rf dist",
     "prepublishOnly": "yarn clean && yarn build",
     "lint": "eslint src --ext .ts",
-    "test": "jest"
+    "test": "jest",
+    "test:unit": "tsc && node --test \"dist/**/*.test.js\""
   },
   "keywords": [
     "backstage",

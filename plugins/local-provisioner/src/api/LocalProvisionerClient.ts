@@ -21,6 +21,8 @@ import {
   BackendAgentRegistration,
   BackendResourcesResponse,
   Resource,
+  TraineeRow,
+  CapstoneSecrets,
 } from './types';
 import {
   transformTask,
@@ -62,6 +64,21 @@ export interface LocalProvisionerApi {
   getResources(): Promise<Resource[]>;
   getAgentStatus(): Promise<AgentRegistration | null>;
   getAgents(): Promise<AgentRegistration[]>;
+  /** Admins + instructors: every trainee's training environments with their GitHub repo activity. */
+  getTrainees(options?: { refresh?: boolean }): Promise<TraineeRow[]>;
+  /** Admins + instructors: open the Day-4 sabotaged PR on a capstone trainee's repo (idempotent). */
+  openCapstoneHandout(enrollmentId: string): Promise<{ prUrl: string; created: boolean }>;
+  /** Admins + instructors: seeded credentials, answer key and manifest for grading. Audit-logged server-side. */
+  getCapstoneSecrets(enrollmentId: string): Promise<CapstoneSecrets>;
+  /** Admins + instructors: run a capstone check inside the trainee's lab via their agent. */
+  runCapstoneCheck(enrollmentId: string, check: string): Promise<{ taskId: string }>;
+  /** Admins + instructors: remove an enrollment from the list (frees the trainee number). */
+  /**
+   * Admins + instructors: take a trainee row off the Trainees view (withdraws its capstone
+   * enrollment) and optionally delete their GitHub repo. The server checks the repo is the
+   * trainee's own lab repo; on any failure nothing is removed and the error says why.
+   */
+  removeTrainee(input: { agentId?: string; resourceName?: string; enrollmentId?: string; deleteRepo: boolean }): Promise<{ repoDeleted: string | null }>;
   disconnectAgent(agentId: string): Promise<void>;
   revokeAgent(agentId: string): Promise<void>;
 }
@@ -144,6 +161,74 @@ export class LocalProvisionerClient implements LocalProvisionerApi {
 
     const data: BackendTaskListResponse = await response.json();
     return transformTasks(data.tasks);
+  }
+
+  async getTrainees(options: { refresh?: boolean } = {}): Promise<TraineeRow[]> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.getAuthHeaders();
+    const url = new URL(`${baseUrl}/tasks/admin/trainees`);
+    if (options.refresh) url.searchParams.set('refresh', '1');
+
+    const response = await fetch(url.toString(), { headers });
+    if (!response.ok) {
+      const error = new Error(
+        response.status === 403
+          ? 'Access denied: the Trainees view is for instructors and admins'
+          : `Failed to load trainees: ${response.statusText}`,
+      );
+      (error as Error & { status?: number }).status = response.status;
+      throw error;
+    }
+    const data: { trainees: TraineeRow[] } = await response.json();
+    return data.trainees;
+  }
+
+  async openCapstoneHandout(enrollmentId: string): Promise<{ prUrl: string; created: boolean }> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.getAuthHeaders();
+    const res = await fetch(`${baseUrl}/capstones/enrollments/${encodeURIComponent(enrollmentId)}/handout`, { method: 'POST', headers });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.message ?? body.error ?? `Handout failed: ${res.statusText}`);
+    return body;
+  }
+
+  async runCapstoneCheck(enrollmentId: string, check: string): Promise<{ taskId: string }> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.getAuthHeaders();
+    const res = await fetch(
+      `${baseUrl}/capstones/enrollments/${encodeURIComponent(enrollmentId)}/checks/${encodeURIComponent(check)}`,
+      { method: 'POST', headers },
+    );
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error ?? `Check failed to start: ${res.statusText}`);
+    return body;
+  }
+
+  async removeTrainee(input: {
+    agentId?: string;
+    resourceName?: string;
+    enrollmentId?: string;
+    deleteRepo: boolean;
+  }): Promise<{ repoDeleted: string | null }> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.getAuthHeaders();
+    const res = await fetch(`${baseUrl}/tasks/admin/trainees/remove`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(input),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error ?? `Could not remove the trainee: ${res.statusText}`);
+    return { repoDeleted: body.repoDeleted ?? null };
+  }
+
+  async getCapstoneSecrets(enrollmentId: string): Promise<CapstoneSecrets> {
+    const baseUrl = await this.getBaseUrl();
+    const headers = await this.getAuthHeaders();
+    const res = await fetch(`${baseUrl}/capstones/enrollments/${encodeURIComponent(enrollmentId)}/secrets`, { headers });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error ?? `Could not load the enrollment data: ${res.statusText}`);
+    return body;
   }
 
   /**
