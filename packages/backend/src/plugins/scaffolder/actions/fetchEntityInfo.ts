@@ -1,6 +1,9 @@
 import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
 import { CatalogClient } from '@backstage/catalog-client';
-import { AuthService, DiscoveryService } from '@backstage/backend-plugin-api';
+import { AuthService, DiscoveryService, UserInfoService } from '@backstage/backend-plugin-api';
+import { parseEntityRef, stringifyEntityRef } from '@backstage/catalog-model';
+import { isAdmin, isDevOps } from '../../permission';
+import { callerMayTearDown } from '../lib/teardownGuards';
 
 /**
  * catalog:fetch-entity-info
@@ -16,8 +19,8 @@ import { AuthService, DiscoveryService } from '@backstage/backend-plugin-api';
  *     input:
  *       entityRef: ${{ parameters.entityRef }}
  */
-export function createFetchEntityInfoAction(options: { discovery: DiscoveryService; auth: AuthService }) {
-  const { discovery, auth } = options;
+export function createFetchEntityInfoAction(options: { discovery: DiscoveryService; auth: AuthService; userInfo?: UserInfoService }) {
+  const { discovery, auth, userInfo } = options;
 
   return createTemplateAction({
     id: 'catalog:fetch-entity-info',
@@ -26,6 +29,14 @@ export function createFetchEntityInfoAction(options: { discovery: DiscoveryServi
       input: z =>
         z.object({
           entityRef: z.string().describe('Entity ref, e.g. component:default/my-service'),
+          confirmation: z
+            .string()
+            .optional()
+            .describe('What the user typed to confirm a destructive run. When given, it must equal the repository name the entity resolves to (the form only checks this in the browser).'),
+          requireOwner: z
+            .boolean()
+            .optional()
+            .describe('Refuse unless the caller owns the entity (or is a platform admin / devops). Set by destructive templates such as teardown-app.'),
         }),
       output: z =>
         z.object({
@@ -40,7 +51,7 @@ export function createFetchEntityInfoAction(options: { discovery: DiscoveryServi
         }),
     },
     async handler(ctx) {
-      const { entityRef } = ctx.input;
+      const { entityRef, requireOwner, confirmation } = ctx.input;
 
       const catalogClient = new CatalogClient({ discoveryApi: discovery });
       const { token } = await auth.getPluginRequestToken({
@@ -51,6 +62,23 @@ export function createFetchEntityInfoAction(options: { discovery: DiscoveryServi
 
       if (!entity) {
         throw new Error(`Entity "${entityRef}" not found in catalog`);
+      }
+
+      if (requireOwner) {
+        // Fail closed: without a way to resolve who the caller is, a destructive run is refused.
+        if (!userInfo) throw new Error('Cannot check who owns this entity: user information is not available');
+        const info = await userInfo.getUserInfo(await ctx.getInitiatorCredentials());
+        const rawOwner = typeof entity.spec?.owner === 'string' ? entity.spec.owner : undefined;
+        let ownerRef: string | undefined;
+        try {
+          ownerRef = rawOwner ? stringifyEntityRef(parseEntityRef(rawOwner, { defaultKind: 'group', defaultNamespace: 'default' })) : undefined;
+        } catch {
+          ownerRef = undefined;
+        }
+        const groups = info.ownershipEntityRefs;
+        if (!callerMayTearDown({ userRef: info.userEntityRef, groups, isPrivileged: isAdmin(groups) || isDevOps(groups) }, ownerRef)) {
+          throw new Error(`You are not allowed to do this to "${entityRef}": it is owned by ${ownerRef ?? 'nobody'}, and only its owners, platform admins and devops can.`);
+        }
       }
 
       const annotations = entity.metadata.annotations ?? {};
@@ -79,6 +107,10 @@ export function createFetchEntityInfoAction(options: { discovery: DiscoveryServi
           `Cannot determine GitHub repo for "${entityRef}". ` +
             `Ensure "github.com/project-slug" annotation is set in catalog-info.yaml`,
         );
+      }
+
+      if (confirmation !== undefined && confirmation !== repoName) {
+        throw new Error(`The confirmation "${confirmation}" does not match the repository name "${repoName}". Nothing was done.`);
       }
 
       const containerPort = Number(

@@ -18,6 +18,7 @@ import {
   catalogConditions,
   createCatalogConditionalDecision,
 } from '@backstage/plugin-catalog-backend/alpha';
+import { createScaffolderTaskConditionalDecision, scaffolderTaskConditions } from '@backstage/plugin-scaffolder-backend/alpha';
 
 /**
  * Department team group refs — engineers assigned to these have "assigned engineer" access.
@@ -44,11 +45,13 @@ const DEPT_TEAMS = [
  * on the scaffolder.task.create handling below for why).
  */
 
-/** Platform admins — full access to everything including FinOps */
+/**
+ * Platform admins — full access to everything including FinOps.
+ * Exactly `backstage-admins`, the group UserEntityProvider and stratpoint/org/groups.yaml define. (A second name, `admins`,
+ * used to be accepted too; no such group exists, so it only served whoever managed to declare one.)
+ */
 export const isAdmin = (groups: string[]) =>
-  groups.some(
-    ref => ref === 'group:default/backstage-admins' || ref === 'group:default/admins',
-  );
+  groups.some(ref => ref === 'group:default/backstage-admins');
 
 /** Team leads — any group ending in -lead */
 /** Trainers: see every trainee's environments and repo activity (Local Provisioner Trainees view). */
@@ -100,6 +103,9 @@ export const isUnassigned = (groups: string[]) =>
  * │                 │                         │ onboarding only                         │
  * └─────────────────┴─────────────────────────┴─────────────────────────────────────────┘
  */
+/** The teams a project can have (the registration form's list). Keep in step with project-registration-backend/src/service/teams.ts. */
+export const PROJECT_TEAM_NAMES: readonly string[] = ['web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team', 'sa-team'];
+
 export class CatalogPermissionPolicy implements PermissionPolicy {
   private db: Awaited<ReturnType<DatabaseService['getClient']>> | null = null;
 
@@ -115,7 +121,8 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
     }
   }
 
-  /** Get team refs from projects created by this user */
+  /** Get team refs from projects created by this user. Only the teams a project can have (rows written before the registration
+   *  API checked `team_name` may hold any text, and each one becomes a catalog-visibility claim for the project manager). */
   private async getProjectTeamRefs(userEntityRef: string): Promise<string[]> {
     if (!this.db) return [];
     try {
@@ -126,7 +133,7 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         .where('status', 'active');
       return rows
         .map((r: any) => r.team_name)
-        .filter(Boolean)
+        .filter((t: unknown): t is string => typeof t === 'string' && PROJECT_TEAM_NAMES.includes(t))
         .map((t: string) => `group:default/${t}`);
     } catch {
       return [];
@@ -148,6 +155,21 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
     // ── Platform Admin: full access ──────────────────────────────────────────
     if (isAdmin(groups)) {
       return { result: AuthorizeResult.ALLOW };
+    }
+
+    // ── Scaffolder tasks: your own only ──────────────────────────────────────
+    // `scaffolder.task.read` and `.cancel` used to fall into blanket ALLOWs (any name ending in `.read`, the `scaffolder.` prefix), so
+    // every user could list everyone's tasks (template parameters, who ran what) and any engineer could cancel a lead's running
+    // teardown half-way. The task list is filtered to the caller's own tasks; read and cancel by id are refused for anyone else's.
+    // Admins returned above. Checked before the unassigned/assigned blocks, which would otherwise match first.
+    if (permissionName === 'scaffolder.task.read' || permissionName === 'scaffolder.task.cancel') {
+      if (!isResourcePermission(request.permission, 'scaffolder-task')) {
+        return { result: AuthorizeResult.DENY };
+      }
+      return createScaffolderTaskConditionalDecision(
+        request.permission,
+        scaffolderTaskConditions.isTaskOwner({ createdBy: [user.info.userEntityRef] }),
+      );
     }
 
     // ── Local Provisioner admin activity view: admin only ────────────────────
@@ -367,6 +389,13 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
         return { result: AuthorizeResult.DENY };
       }
 
+      // Dry-run takes an INLINE template from the caller and runs its fetch steps with the portal's credentials, returning the
+      // workspace: a way to read any file the scaffolder's URL readers can reach (and any private repo the portal token sees).
+      // Admins returned above; nobody else needs it (templates live in engineering-standards).
+      if (permissionName === 'scaffolder.template.dry-run') {
+        return { result: AuthorizeResult.DENY };
+      }
+
       // Infra template execution (admins + devops only), governance templates
       // (spec.type: governance, admins + devops + leads), and the teardown-app exclusion
       // for engineers (irreversible destructive action — leads/admins only) are all enforced
@@ -405,6 +434,14 @@ export class CatalogPermissionPolicy implements PermissionPolicy {
     // above; .run is the only one that would otherwise fall through to the default DENY.
     if (permissionName === 'tech-insights.check.run') {
       return { result: AuthorizeResult.ALLOW };
+    }
+
+    // The Kubernetes proxy forwards ANY method and path to the cluster API with the portal pod's own service account, which is
+    // bound cluster-wide to backstage-scaffolder-writer (read/delete Secrets and Namespaces in every namespace). Letting every
+    // engineer through it is letting every engineer read any Secret. Admins only (they returned above). Pod logs and events in the
+    // Kubernetes tab use this route: give engineers a read-only service account (plugin `serviceAccountToken`) before opening it.
+    if (permissionName === 'kubernetes.proxy') {
+      return { result: AuthorizeResult.DENY };
     }
 
     // Kubernetes + ArgoCD: assigned engineers and leads can view

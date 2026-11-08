@@ -203,7 +203,7 @@ describe('AgentService long-poll delivery', () => {
   });
 
   it('returns immediately when a task is already pending — does not wait for a wake or timeout', async () => {
-    const task = { task_id: 't1', task_type: 'provision-kafka' };
+    const task = { task_id: 't1', task_type: 'provision-kafka', user_id: USER_EMAIL };
     const service = makeServiceWithStore({ pendingTasks: [task], pollTimeoutSeconds: 5 });
 
     const start = Date.now();

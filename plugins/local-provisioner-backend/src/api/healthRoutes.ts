@@ -9,7 +9,7 @@ import { Knex } from 'knex';
  * Create health check API routes
  */
 export function createHealthRoutes(db: Knex): Router {
-  const router = Router();
+  const router = Router({ caseSensitive: true }); // see service/router.ts
 
   /**
    * GET /health

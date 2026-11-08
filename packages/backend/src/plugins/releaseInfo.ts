@@ -48,6 +48,101 @@ export async function findRelease(
 const CACHE_MS = 10 * 60_000;
 const ERROR_CACHE_MS = 60_000;
 const SHA = /^[0-9a-f]{7,40}$/i;
+const MAX_CACHED_COMMITS = 200;
+const LOOKUPS_PER_MINUTE = 20;
+
+/**
+ * Any signed-in user can send any commit id. Each new one used to add a cache entry for good and cost up to 21 GitHub calls on the
+ * portal's token, so a loop of random ids could grow memory and use up the token's hourly limit for every other feature
+ * (audit 2026-11-07). The cache now holds at most `max` commits (the oldest goes first), and new lookups are capped per minute.
+ */
+export class BoundedCache<V> {
+  private readonly entries = new Map<string, V>();
+  constructor(private readonly max: number) {}
+  get(key: string): V | undefined {
+    return this.entries.get(key);
+  }
+  set(key: string, value: V): void {
+    this.entries.delete(key);
+    this.entries.set(key, value);
+    while (this.entries.size > this.max) {
+      this.entries.delete(this.entries.keys().next().value as string);
+    }
+  }
+  get size(): number {
+    return this.entries.size;
+  }
+}
+
+/** Allows `limit` things per `windowMs`; false once the budget is used up, until the window has passed. */
+export function createBudget(limit: number, windowMs: number, now: () => number = Date.now): () => boolean {
+  let windowStart = now();
+  let used = 0;
+  return () => {
+    const t = now();
+    if (t - windowStart >= windowMs) {
+      windowStart = t;
+      used = 0;
+    }
+    if (used >= limit) return false;
+    used++;
+    return true;
+  };
+}
+
+export interface ReleaseRouterOptions {
+  owner?: string;
+  repo?: string;
+  /** GET on the portal's repo (`/releases?...`, `/compare/...`, `/commits/...`): parsed JSON, or throws. */
+  gh: (path: string) => Promise<any>;
+  logger: { warn(message: string): void };
+  now?: () => number;
+  maxCachedCommits?: number;
+  lookupsPerMinute?: number;
+}
+
+type CacheEntry = { at: number; ttl: number; value: Promise<ReleaseAnswer> };
+
+export function createReleaseRouter(options: ReleaseRouterOptions): Router {
+  const { owner, repo, gh, logger } = options;
+  const now = options.now ?? Date.now;
+  const cache = new BoundedCache<CacheEntry>(options.maxCachedCommits ?? MAX_CACHED_COMMITS);
+  const budget = createBudget(options.lookupsPerMinute ?? LOOKUPS_PER_MINUTE, 60_000, now);
+
+  const lookup = async (commit: string): Promise<ReleaseAnswer> => {
+    // An id that is not a commit of this repository costs ONE call, not a walk through twenty releases.
+    await gh(`/commits/${encodeURIComponent(commit)}`);
+    const releases = (await gh('/releases?per_page=20')) as Array<{ tag_name: string; draft: boolean }>;
+    const tags = releases.filter(r => !r.draft).map(r => r.tag_name);
+    return findRelease(tags, async tag => (await gh(`/compare/${encodeURIComponent(tag)}...${commit}`)).status);
+  };
+
+  const router = Router();
+  router.get('/release', async (req, res) => {
+    const commit = String(req.query.commit ?? '');
+    if (!SHA.test(commit)) return res.status(400).json({ error: 'commit must be a git sha' });
+    if (!owner || !repo) return res.status(200).json({});
+    const key = commit.toLowerCase();
+    let entry = cache.get(key);
+    if (!entry || now() - entry.at > entry.ttl) {
+      // New lookups are limited; the page falls back to the build-time tag when it gets nothing.
+      if (!budget()) return res.status(200).json({});
+      const fresh: CacheEntry = { at: now(), ttl: CACHE_MS, value: lookup(key) };
+      fresh.value.catch(e => {
+        fresh.ttl = ERROR_CACHE_MS;
+        logger.warn(`Release lookup for ${key} failed: ${e.message}`);
+      });
+      cache.set(key, fresh);
+      entry = fresh;
+    }
+    try {
+      return res.status(200).json(await entry.value);
+    } catch {
+      return res.status(200).json({}); // the page falls back to the build-time tag
+    }
+  });
+  return router;
+}
 
 export const releaseInfoPlugin = createBackendPlugin({
   pluginId: 'release-info',
@@ -65,8 +160,6 @@ export const releaseInfoPlugin = createBackendPlugin({
           .getOptionalConfigArray('integrations.github')
           ?.find(c => (c.getOptionalString('host') ?? 'github.com') === 'github.com')
           ?.getOptionalString('token');
-        const cache = new Map<string, { at: number; ttl: number; value: Promise<ReleaseAnswer> }>();
-
         const gh = async (path: string) => {
           const res = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner!)}/${encodeURIComponent(repo!)}${path}`, {
             headers: {
@@ -81,33 +174,7 @@ export const releaseInfoPlugin = createBackendPlugin({
           return res.json();
         };
 
-        const lookup = async (commit: string): Promise<ReleaseAnswer> => {
-          const releases = (await gh('/releases?per_page=20')) as Array<{ tag_name: string; draft: boolean }>;
-          const tags = releases.filter(r => !r.draft).map(r => r.tag_name);
-          return findRelease(tags, async tag => (await gh(`/compare/${encodeURIComponent(tag)}...${commit}`)).status);
-        };
-
-        const router = Router();
-        router.get('/release', async (req, res) => {
-          const commit = String(req.query.commit ?? '');
-          if (!SHA.test(commit)) return res.status(400).json({ error: 'commit must be a git sha' });
-          if (!owner || !repo) return res.status(200).json({});
-          const key = commit.toLowerCase();
-          const hit = cache.get(key);
-          if (!hit || Date.now() - hit.at > hit.ttl) {
-            const entry = { at: Date.now(), ttl: CACHE_MS, value: lookup(key) };
-            entry.value.catch(e => {
-              entry.ttl = ERROR_CACHE_MS;
-              logger.warn(`Release lookup for ${key} failed: ${e.message}`);
-            });
-            cache.set(key, entry);
-          }
-          try {
-            return res.status(200).json(await cache.get(key)!.value);
-          } catch {
-            return res.status(200).json({}); // the page falls back to the build-time tag
-          }
-        });
+        const router = createReleaseRouter({ owner, repo, gh, logger });
         httpRouter.use(router);
       },
     });

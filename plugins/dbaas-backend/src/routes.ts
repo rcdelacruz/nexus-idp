@@ -1,6 +1,6 @@
 import Router from 'express-promise-router';
 import express, { Request, Response } from 'express';
-import { NotFoundError, InputError, ConflictError } from '@backstage/errors';
+import { NotFoundError, InputError, ConflictError, NotAllowedError } from '@backstage/errors';
 import { HttpAuthService, UserInfoService, LoggerService, RootConfigService } from '@backstage/backend-plugin-api';
 import { DbaasStore } from './database/DbaasStore';
 import { encrypt, decrypt } from './crypto';
@@ -52,7 +52,7 @@ export function createRouter(options: {
   // ── POST /connections ───────────────────────────────────────────────────────
   router.post('/connections', async (req: Request, res: Response) => {
     const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
-    const { userEntityRef } = await userInfo.getUserInfo(credentials);
+    const { userEntityRef, ownershipEntityRefs } = await userInfo.getUserInfo(credentials);
     logger.info(`DBaaS: POST /connections from ${userEntityRef}, provider=${req.body?.provider}`);
 
     const { provider, label, credentials: rawCreds, visibility, teamRef } = req.body;
@@ -74,6 +74,12 @@ export function createRouter(options: {
     if (visibility === 'team') {
       if (!teamRef || typeof teamRef !== 'string' || !/^group:[^/]+\/.+$/.test(teamRef.trim())) {
         throw new InputError('teamRef must be a valid group entity ref (e.g. group:default/my-team) when visibility is team');
+      }
+      // The connection's databases appear in the catalog owned by this team and are visible to its members: only a member may
+      // share a connection with a team (or an admin). Without this anyone could file databases under another team's name.
+      const claims = (ownershipEntityRefs ?? []).map(r => r.toLowerCase());
+      if (!claims.includes(teamRef.trim().toLowerCase()) && !claims.includes('group:default/backstage-admins')) {
+        throw new NotAllowedError(`You can only share a connection with a team you belong to; you are not a member of ${teamRef.trim()}`);
       }
     }
 

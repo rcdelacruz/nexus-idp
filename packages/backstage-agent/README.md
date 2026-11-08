@@ -43,9 +43,33 @@ The Backstage Agent is a CLI tool that runs on a developer's machine to provisio
 
 ## Installation
 
-### Global Installation (Recommended)
+### Installer (Recommended)
 
-Install the agent globally using npm:
+macOS and Linux. Needs Node 20 or newer and Docker (Docker Desktop is recommended):
+
+```bash
+curl -fsSL https://<your-portal>/api/local-provisioner/agent/install.sh | sh
+```
+
+The portal's **My agents** section shows this command with its own address filled in. The script installs
+the agent into `~/.backstage-agent/npm`, writes a launcher that always runs the agent with the Node that
+installed it, and adds that launcher to the PATH of every new terminal, so `backstage-agent` is found
+whichever Node version nvm or Homebrew has active in that terminal. It links the launcher into a folder that
+is already on your PATH (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` or `~/bin`), so the command
+works at once, in the same window and in any shell. When none of those can be written it adds the launcher
+to your zsh, bash or fish startup file and prints the one line to run in the current window.
+Read the script first if you like: open the same address in a browser.
+
+Remove it again, whichever way it was installed (your login, logs and labs are kept):
+
+```bash
+backstage-agent --uninstall     # same as: backstage-agent uninstall
+```
+
+Versions before 0.1.32 do not have it; the installer script removes them:
+`curl -fsSL https://<your-portal>/api/local-provisioner/agent/install.sh | sh -s -- --uninstall`
+
+### With npm (Windows, or if you prefer)
 
 ```bash
 npm install -g @stratpoint/backstage-agent
@@ -56,6 +80,10 @@ Or using yarn:
 ```bash
 yarn global add @stratpoint/backstage-agent
 ```
+
+On a machine with several Node installs (nvm, Homebrew) npm puts the command next to the Node that was
+active when you installed, and a terminal using another Node does not see it
+(`zsh: command not found: backstage-agent`). The installer above avoids that.
 
 ### Verify Installation
 

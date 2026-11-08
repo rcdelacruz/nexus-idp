@@ -1,0 +1,1303 @@
+[
+ {
+  "name": "Context engineering",
+  "quadrant": "techniques",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Progressive context disclosure",
+   "Context graph"
+  ],
+  "description": "<p>Sample description for <strong>Context engineering</strong>.</p>"
+ },
+ {
+  "name": "Curated shared instructions for software teams",
+  "quadrant": "techniques",
+  "ring": "adopt",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "AGENTS.md"
+  ],
+  "description": "<p>Sample description for <strong>Curated shared instructions for software teams</strong>.</p>"
+ },
+ {
+  "name": "DORA metrics",
+  "quadrant": "techniques",
+  "ring": "adopt",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Coding throughput as a measure of productivity"
+  ],
+  "description": "<p>Sample description for <strong>DORA metrics</strong>.</p>"
+ },
+ {
+  "name": "Passkeys",
+  "quadrant": "techniques",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Passkeys</strong>.</p>"
+ },
+ {
+  "name": "Structured output from LLMs",
+  "quadrant": "techniques",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Pydantic AI",
+   "Instructor"
+  ],
+  "description": "<p>Sample description for <strong>Structured output from LLMs</strong>.</p>"
+ },
+ {
+  "name": "Zero trust architecture",
+  "quadrant": "techniques",
+  "ring": "adopt",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Zero trust security for CI/CD"
+  ],
+  "description": "<p>Sample description for <strong>Zero trust architecture</strong>.</p>"
+ },
+ {
+  "name": "Agent Skills",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Context engineering",
+   "Agent instruction bloat",
+   "OpenClaw"
+  ],
+  "description": "<p>Sample description for <strong>Agent Skills</strong>.</p>"
+ },
+ {
+  "name": "Browser-based component testing",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Component testing"
+  ],
+  "description": "<p>Sample description for <strong>Browser-based component testing</strong>.</p>"
+ },
+ {
+  "name": "Feedback sensors for coding agents",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Curated shared instructions for software teams"
+  ],
+  "description": "<p>Sample description for <strong>Feedback sensors for coding agents</strong>.</p>"
+ },
+ {
+  "name": "Mapping code smells to refactoring techniques",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Agent Skills",
+   "AGENTS.md"
+  ],
+  "description": "<p>Sample description for <strong>Mapping code smells to refactoring techniques</strong>.</p>"
+ },
+ {
+  "name": "Mutation testing",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Stryker",
+   "Pitest",
+   "cargo-mutants"
+  ],
+  "description": "<p>Sample description for <strong>Mutation testing</strong>.</p>"
+ },
+ {
+  "name": "Progressive context disclosure",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Context engineering",
+   "Agent Skills",
+   "Agent instruction bloat"
+  ],
+  "description": "<p>Sample description for <strong>Progressive context disclosure</strong>.</p>"
+ },
+ {
+  "name": "Sandboxed execution for coding agents",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Dev Containers",
+   "Sprites"
+  ],
+  "description": "<p>Sample description for <strong>Sandboxed execution for coding agents</strong>.</p>"
+ },
+ {
+  "name": "Semantic layer",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Metrics store",
+   "Model Context Protocol (MCP)"
+  ],
+  "description": "<p>Sample description for <strong>Semantic layer</strong>.</p>"
+ },
+ {
+  "name": "Server-driven UI",
+  "quadrant": "techniques",
+  "ring": "trial",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Server-driven UI</strong>.</p>"
+ },
+ {
+  "name": "Agentic reinforcement learning environments",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Agent Lightning"
+  ],
+  "description": "<p>Sample description for <strong>Agentic reinforcement learning environments</strong>.</p>"
+ },
+ {
+  "name": "Architecture drift reduction with LLMs",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Spectral",
+   "ArchUnit",
+   "Spring Modulith"
+  ],
+  "description": "<p>Sample description for <strong>Architecture drift reduction with LLMs</strong>.</p>"
+ },
+ {
+  "name": "Code intelligence as agentic tooling",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Serena",
+   "Claude Code",
+   "OpenCode"
+  ],
+  "description": "<p>Sample description for <strong>Code intelligence as agentic tooling</strong>.</p>"
+ },
+ {
+  "name": "Context graph",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "GraphRAG"
+  ],
+  "description": "<p>Sample description for <strong>Context graph</strong>.</p>"
+ },
+ {
+  "name": "Feedback flywheel",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Spec-driven development",
+   "Curated shared instructions for software teams",
+   "Feedback sensors for coding agents"
+  ],
+  "description": "<p>Sample description for <strong>Feedback flywheel</strong>.</p>"
+ },
+ {
+  "name": "HTML Tools",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>HTML Tools</strong>.</p>"
+ },
+ {
+  "name": "LLM evaluation using semantic entropy",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>LLM evaluation using semantic entropy</strong>.</p>"
+ },
+ {
+  "name": "Measuring collaboration quality with coding agents",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Coding throughput as a measure of productivity",
+   "DORA metrics",
+   "Feedback flywheel"
+  ],
+  "description": "<p>Sample description for <strong>Measuring collaboration quality with coding agents</strong>.</p>"
+ },
+ {
+  "name": "MITRE ATLAS",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "SAIF"
+  ],
+  "description": "<p>Sample description for <strong>MITRE ATLAS</strong>.</p>"
+ },
+ {
+  "name": "Ralph loop",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Team of coding agents",
+   "Coding agent swarms"
+  ],
+  "description": "<p>Sample description for <strong>Ralph loop</strong>.</p>"
+ },
+ {
+  "name": "Reverse engineering for design system",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Figma"
+  ],
+  "description": "<p>Sample description for <strong>Reverse engineering for design system</strong>.</p>"
+ },
+ {
+  "name": "Role-based contextual isolation in RAG",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Role-based contextual isolation in RAG</strong>.</p>"
+ },
+ {
+  "name": "Skills as executable onboarding documentation",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Agent Skills",
+   "Curated shared instructions for software teams",
+   "Context engineering"
+  ],
+  "description": "<p>Sample description for <strong>Skills as executable onboarding documentation</strong>.</p>"
+ },
+ {
+  "name": "Small language models",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Model distillation"
+  ],
+  "description": "<p>Sample description for <strong>Small language models</strong>.</p>"
+ },
+ {
+  "name": "Team of coding agents",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Coding agent swarms"
+  ],
+  "description": "<p>Sample description for <strong>Team of coding agents</strong>.</p>"
+ },
+ {
+  "name": "Temporal fakes",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Model Context Protocol (MCP)",
+   "Go language",
+   "NVIDIA DCGM Exporter"
+  ],
+  "description": "<p>Sample description for <strong>Temporal fakes</strong>.</p>"
+ },
+ {
+  "name": "Toxic flow analysis for AI",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "OpenClaw",
+   "Agent Skills",
+   "Agent Scan"
+  ],
+  "description": "<p>Sample description for <strong>Toxic flow analysis for AI</strong>.</p>"
+ },
+ {
+  "name": "Vision language models for end-to-end document parsing",
+  "quadrant": "techniques",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Vision language models for end-to-end document parsing</strong>.</p>"
+ },
+ {
+  "name": "Agent instruction bloat",
+  "quadrant": "techniques",
+  "ring": "caution",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Progressive context disclosure"
+  ],
+  "description": "<p>Sample description for <strong>Agent instruction bloat</strong>.</p>"
+ },
+ {
+  "name": "AI-accelerated shadow IT",
+  "quadrant": "techniques",
+  "ring": "caution",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>AI-accelerated shadow IT</strong>.</p>"
+ },
+ {
+  "name": "Codebase cognitive debt",
+  "quadrant": "techniques",
+  "ring": "caution",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Coding agent swarms",
+   "Complacency with AI-generated code",
+   "Team cognitive load"
+  ],
+  "description": "<p>Sample description for <strong>Codebase cognitive debt</strong>.</p>"
+ },
+ {
+  "name": "Coding agent swarms",
+  "quadrant": "techniques",
+  "ring": "caution",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Team of coding agents",
+   "Beads"
+  ],
+  "description": "<p>Sample description for <strong>Coding agent swarms</strong>.</p>"
+ },
+ {
+  "name": "Coding throughput as a measure of productivity",
+  "quadrant": "techniques",
+  "ring": "caution",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "DORA metrics"
+  ],
+  "description": "<p>Sample description for <strong>Coding throughput as a measure of productivity</strong>.</p>"
+ },
+ {
+  "name": "Ignoring durability in agent workflows",
+  "quadrant": "techniques",
+  "ring": "caution",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "LangGraph",
+   "Pydantic AI",
+   "Temporal"
+  ],
+  "description": "<p>Sample description for <strong>Ignoring durability in agent workflows</strong>.</p>"
+ },
+ {
+  "name": "MCP by default",
+  "quadrant": "techniques",
+  "ring": "caution",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Model Context Protocol (MCP)"
+  ],
+  "description": "<p>Sample description for <strong>MCP by default</strong>.</p>"
+ },
+ {
+  "name": "Pixel-streamed development environments",
+  "quadrant": "techniques",
+  "ring": "caution",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Coder",
+   "Google Cloud Workstations",
+   "Development environments in the cloud"
+  ],
+  "description": "<p>Sample description for <strong>Pixel-streamed development environments</strong>.</p>"
+ },
+ {
+  "name": "AG-UI Protocol",
+  "quadrant": "platforms",
+  "ring": "trial",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Model Context Protocol (MCP)",
+   "HTML Tools",
+   "MCP Apps"
+  ],
+  "description": "<p>Sample description for <strong>AG-UI Protocol</strong>.</p>"
+ },
+ {
+  "name": "Amazon Bedrock AgentCore",
+  "quadrant": "platforms",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "GCP Vertex AI Agent Builder",
+   "LangGraph"
+  ],
+  "description": "<p>Sample description for <strong>Amazon Bedrock AgentCore</strong>.</p>"
+ },
+ {
+  "name": "Apache APISIX",
+  "quadrant": "platforms",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Kubernetes"
+  ],
+  "description": "<p>Sample description for <strong>Apache APISIX</strong>.</p>"
+ },
+ {
+  "name": "Graphiti",
+  "quadrant": "platforms",
+  "ring": "trial",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Retrieval-augmented generation (RAG)",
+   "GraphRAG",
+   "Model Context Protocol (MCP)"
+  ],
+  "description": "<p>Sample description for <strong>Graphiti</strong>.</p>"
+ },
+ {
+  "name": "Langfuse",
+  "quadrant": "platforms",
+  "ring": "trial",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "ClickHouse",
+   "Helicone",
+   "LangSmith"
+  ],
+  "description": "<p>Sample description for <strong>Langfuse</strong>.</p>"
+ },
+ {
+  "name": "Port",
+  "quadrant": "platforms",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Port</strong>.</p>"
+ },
+ {
+  "name": "Replit",
+  "quadrant": "platforms",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Replit</strong>.</p>"
+ },
+ {
+  "name": "SigNoz",
+  "quadrant": "platforms",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "ClickHouse"
+  ],
+  "description": "<p>Sample description for <strong>SigNoz</strong>.</p>"
+ },
+ {
+  "name": "Agent Trace",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Git",
+   "Mercurial",
+   "Jujutsu"
+  ],
+  "description": "<p>Sample description for <strong>Agent Trace</strong>.</p>"
+ },
+ {
+  "name": "ClickStack",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "OpenTelemetry",
+   "ClickHouse"
+  ],
+  "description": "<p>Sample description for <strong>ClickStack</strong>.</p>"
+ },
+ {
+  "name": "Coder",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Pixel-streamed development environments"
+  ],
+  "description": "<p>Sample description for <strong>Coder</strong>.</p>"
+ },
+ {
+  "name": "Databricks Agent Bricks",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Databricks Agent Bricks</strong>.</p>"
+ },
+ {
+  "name": "DuckLake",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "DuckDB"
+  ],
+  "description": "<p>Sample description for <strong>DuckLake</strong>.</p>"
+ },
+ {
+  "name": "FalkorDB",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>FalkorDB</strong>.</p>"
+ },
+ {
+  "name": "Google Dialogflow CX",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "DialogFlow"
+  ],
+  "description": "<p>Sample description for <strong>Google Dialogflow CX</strong>.</p>"
+ },
+ {
+  "name": "MCP Apps",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>MCP Apps</strong>.</p>"
+ },
+ {
+  "name": "Monarch",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Monarch</strong>.</p>"
+ },
+ {
+  "name": "Neutree",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Neutree</strong>.</p>"
+ },
+ {
+  "name": "OptScale",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>OptScale</strong>.</p>"
+ },
+ {
+  "name": "Rhesis",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Rhesis</strong>.</p>"
+ },
+ {
+  "name": "Runpod",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Runpod</strong>.</p>"
+ },
+ {
+  "name": "Sprites",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Sandboxed execution for coding agents",
+   "Dev Containers"
+  ],
+  "description": "<p>Sample description for <strong>Sprites</strong>.</p>"
+ },
+ {
+  "name": "torchforge",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Monarch",
+   "vLLM",
+   "torchtitan"
+  ],
+  "description": "<p>Sample description for <strong>torchforge</strong>.</p>"
+ },
+ {
+  "name": "torchtitan",
+  "quadrant": "platforms",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>torchtitan</strong>.</p>"
+ },
+ {
+  "name": "Axe-core",
+  "quadrant": "tools",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Axe-core</strong>.</p>"
+ },
+ {
+  "name": "Claude Code",
+  "quadrant": "tools",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "OpenAI Codex",
+   "OpenCode",
+   "Pi"
+  ],
+  "description": "<p>Sample description for <strong>Claude Code</strong>.</p>"
+ },
+ {
+  "name": "Cursor",
+  "quadrant": "tools",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Agent Skills",
+   "Claude Code"
+  ],
+  "description": "<p>Sample description for <strong>Cursor</strong>.</p>"
+ },
+ {
+  "name": "Kafbat UI",
+  "quadrant": "tools",
+  "ring": "adopt",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Apache Kafka"
+  ],
+  "description": "<p>Sample description for <strong>Kafbat UI</strong>.</p>"
+ },
+ {
+  "name": "mise",
+  "quadrant": "tools",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "asdf-vm"
+  ],
+  "description": "<p>Sample description for <strong>mise</strong>.</p>"
+ },
+ {
+  "name": "cargo-mutants",
+  "quadrant": "tools",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Mutation testing"
+  ],
+  "description": "<p>Sample description for <strong>cargo-mutants</strong>.</p>"
+ },
+ {
+  "name": "Claude Code plugin marketplace",
+  "quadrant": "tools",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Cursor",
+   "Agent Skills"
+  ],
+  "description": "<p>Sample description for <strong>Claude Code plugin marketplace</strong>.</p>"
+ },
+ {
+  "name": "Dev Containers",
+  "quadrant": "tools",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Sandboxed execution for coding agents",
+   "Sprites"
+  ],
+  "description": "<p>Sample description for <strong>Dev Containers</strong>.</p>"
+ },
+ {
+  "name": "Figma Make",
+  "quadrant": "tools",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Self-serve UI prototyping with GenAI"
+  ],
+  "description": "<p>Sample description for <strong>Figma Make</strong>.</p>"
+ },
+ {
+  "name": "OpenAI Codex",
+  "quadrant": "tools",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>OpenAI Codex</strong>.</p>"
+ },
+ {
+  "name": "Typst",
+  "quadrant": "tools",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Typst</strong>.</p>"
+ },
+ {
+  "name": "Agent Scan",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Agent Scan</strong>.</p>"
+ },
+ {
+  "name": "Beads",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Beads</strong>.</p>"
+ },
+ {
+  "name": "Bloom",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Bloom</strong>.</p>"
+ },
+ {
+  "name": "CDK Terrain",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "CDKTF"
+  ],
+  "description": "<p>Sample description for <strong>CDK Terrain</strong>.</p>"
+ },
+ {
+  "name": "CodeScene",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Social code analysis",
+   "AI-friendly code design"
+  ],
+  "description": "<p>Sample description for <strong>CodeScene</strong>.</p>"
+ },
+ {
+  "name": "ConfIT",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>ConfIT</strong>.</p>"
+ },
+ {
+  "name": "Entire CLI",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Claude Code",
+   "OpenCode",
+   "Cursor"
+  ],
+  "description": "<p>Sample description for <strong>Entire CLI</strong>.</p>"
+ },
+ {
+  "name": "Git AI",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Git AI</strong>.</p>"
+ },
+ {
+  "name": "Google Antigravity",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Model Context Protocol (MCP)",
+   "Agent Development Kit (ADK)"
+  ],
+  "description": "<p>Sample description for <strong>Google Antigravity</strong>.</p>"
+ },
+ {
+  "name": "Google Mainframe Assessment Tool",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Using GenAI to understand legacy codebases"
+  ],
+  "description": "<p>Sample description for <strong>Google Mainframe Assessment Tool</strong>.</p>"
+ },
+ {
+  "name": "OpenCode",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>OpenCode</strong>.</p>"
+ },
+ {
+  "name": "OpenSpec",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Spec-driven development",
+   "GitHub Spec Kit",
+   "Superpowers"
+  ],
+  "description": "<p>Sample description for <strong>OpenSpec</strong>.</p>"
+ },
+ {
+  "name": "PageIndex",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>PageIndex</strong>.</p>"
+ },
+ {
+  "name": "Pencil",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Cursor",
+   "Claude Code",
+   "Figma"
+  ],
+  "description": "<p>Sample description for <strong>Pencil</strong>.</p>"
+ },
+ {
+  "name": "Pi",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "OpenCode",
+   "Agent Development Kit (ADK)",
+   "LangGraph"
+  ],
+  "description": "<p>Sample description for <strong>Pi</strong>.</p>"
+ },
+ {
+  "name": "Qwen 3 TTS",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Qwen 3 TTS</strong>.</p>"
+ },
+ {
+  "name": "SGLang",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "vLLM",
+   "LiteLLM",
+   "MLX"
+  ],
+  "description": "<p>Sample description for <strong>SGLang</strong>.</p>"
+ },
+ {
+  "name": "ty",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "uv",
+   "Ruff"
+  ],
+  "description": "<p>Sample description for <strong>ty</strong>.</p>"
+ },
+ {
+  "name": "Warp",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Claude Code"
+  ],
+  "description": "<p>Sample description for <strong>Warp</strong>.</p>"
+ },
+ {
+  "name": "WuppieFuzz",
+  "quadrant": "tools",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>WuppieFuzz</strong>.</p>"
+ },
+ {
+  "name": "OpenClaw",
+  "quadrant": "tools",
+  "ring": "caution",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Toxic flow analysis for AI",
+   "Sandboxed execution for coding agents"
+  ],
+  "description": "<p>Sample description for <strong>OpenClaw</strong>.</p>"
+ },
+ {
+  "name": "Apache Iceberg",
+  "quadrant": "languages-and-frameworks",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Trino"
+  ],
+  "description": "<p>Sample description for <strong>Apache Iceberg</strong>.</p>"
+ },
+ {
+  "name": "Declarative Automation Bundles",
+  "quadrant": "languages-and-frameworks",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Declarative Automation Bundles</strong>.</p>"
+ },
+ {
+  "name": "React JS",
+  "quadrant": "languages-and-frameworks",
+  "ring": "adopt",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Vite",
+   "Next.js"
+  ],
+  "description": "<p>Sample description for <strong>React JS</strong>.</p>"
+ },
+ {
+  "name": "React Native",
+  "quadrant": "languages-and-frameworks",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>React Native</strong>.</p>"
+ },
+ {
+  "name": "Svelte",
+  "quadrant": "languages-and-frameworks",
+  "ring": "adopt",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Svelte</strong>.</p>"
+ },
+ {
+  "name": "Typer",
+  "quadrant": "languages-and-frameworks",
+  "ring": "adopt",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Typer</strong>.</p>"
+ },
+ {
+  "name": "Agent Development Kit (ADK)",
+  "quadrant": "languages-and-frameworks",
+  "ring": "trial",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "LangGraph",
+   "CrewAI"
+  ],
+  "description": "<p>Sample description for <strong>Agent Development Kit (ADK)</strong>.</p>"
+ },
+ {
+  "name": "DeepEval",
+  "quadrant": "languages-and-frameworks",
+  "ring": "trial",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Retrieval-augmented generation (RAG)",
+   "LlamaIndex",
+   "LangChain"
+  ],
+  "description": "<p>Sample description for <strong>DeepEval</strong>.</p>"
+ },
+ {
+  "name": "Docling",
+  "quadrant": "languages-and-frameworks",
+  "ring": "trial",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Retrieval-augmented generation (RAG)",
+   "Structured output from LLMs",
+   "ColPali"
+  ],
+  "description": "<p>Sample description for <strong>Docling</strong>.</p>"
+ },
+ {
+  "name": "LangExtract",
+  "quadrant": "languages-and-frameworks",
+  "ring": "trial",
+  "status": "moved in",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Structured output from LLMs",
+   "Pydantic AI"
+  ],
+  "description": "<p>Sample description for <strong>LangExtract</strong>.</p>"
+ },
+ {
+  "name": "LangGraph",
+  "quadrant": "languages-and-frameworks",
+  "ring": "trial",
+  "status": "moved out",
+  "isNew": "FALSE",
+  "relatedBlips": [
+   "Pydantic AI"
+  ],
+  "description": "<p>Sample description for <strong>LangGraph</strong>.</p>"
+ },
+ {
+  "name": "LiteLLM",
+  "quadrant": "languages-and-frameworks",
+  "ring": "trial",
+  "status": "no change",
+  "isNew": "FALSE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>LiteLLM</strong>.</p>"
+ },
+ {
+  "name": "Modern.js",
+  "quadrant": "languages-and-frameworks",
+  "ring": "trial",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Modern.js</strong>.</p>"
+ },
+ {
+  "name": "Agent Lightning",
+  "quadrant": "languages-and-frameworks",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Agentic reinforcement learning environments",
+   "Microsoft Autogen",
+   "CrewAI"
+  ],
+  "description": "<p>Sample description for <strong>Agent Lightning</strong>.</p>"
+ },
+ {
+  "name": "GitHub Spec Kit",
+  "quadrant": "languages-and-frameworks",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Spec-driven development",
+   "Agent instruction bloat",
+   "Agent Skills"
+  ],
+  "description": "<p>Sample description for <strong>GitHub Spec Kit</strong>.</p>"
+ },
+ {
+  "name": "Mastra",
+  "quadrant": "languages-and-frameworks",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Node.js",
+   "Next.js"
+  ],
+  "description": "<p>Sample description for <strong>Mastra</strong>.</p>"
+ },
+ {
+  "name": "Pipecat",
+  "quadrant": "languages-and-frameworks",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>Pipecat</strong>.</p>"
+ },
+ {
+  "name": "Superpowers",
+  "quadrant": "languages-and-frameworks",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Software engineering agents",
+   "Agent Skills",
+   "Claude Code plugin marketplace"
+  ],
+  "description": "<p>Sample description for <strong>Superpowers</strong>.</p>"
+ },
+ {
+  "name": "TanStack Start",
+  "quadrant": "languages-and-frameworks",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Next.js"
+  ],
+  "description": "<p>Sample description for <strong>TanStack Start</strong>.</p>"
+ },
+ {
+  "name": "TOON (Token-Oriented Object Notation)",
+  "quadrant": "languages-and-frameworks",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [],
+  "description": "<p>Sample description for <strong>TOON (Token-Oriented Object Notation)</strong>.</p>"
+ },
+ {
+  "name": "Unsloth",
+  "quadrant": "languages-and-frameworks",
+  "ring": "assess",
+  "status": "new",
+  "isNew": "TRUE",
+  "relatedBlips": [
+   "Domain-specific LLMs"
+  ],
+  "description": "<p>Sample description for <strong>Unsloth</strong>.</p>"
+ }
+]

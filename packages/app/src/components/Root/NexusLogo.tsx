@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTheme } from '@material-ui/core';
+import { useColors } from '@stratpoint/theme-utils';
 
 // ─── nexus-logo-only.svg — N mark only, viewBox 0 0 294 273 ─────────────────
 const N_MARK_PATH =
@@ -12,8 +12,8 @@ const FULL_LOGO_PATH =
 const FONT = '"Geist", "Helvetica Neue", Arial, sans-serif';
 
 function useLogoColor(override?: string) {
-  const theme = useTheme();
-  return override ?? (theme.palette.type === 'dark' ? '#ededed' : 'rgb(24,54,87)');
+  const c = useColors();
+  return override ?? (c.isDark ? c.text : 'rgb(24,54,87)');
 }
 
 // ─── Full logo for login page (nexus-logo.svg) ────────────────────────────────

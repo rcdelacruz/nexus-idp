@@ -228,6 +228,45 @@ export interface Resource {
 }
 
 /**
+ * Another of the user's running labs that holds a host port a retried task needs, as returned by
+ * `GET /tasks/:taskId/retry-conflicts`.
+ */
+export interface BackendLabConflict {
+  resource_name: string;
+  resource_type?: string;
+  state: 'running';
+  /** The contested ports. */
+  ports: number[];
+  /** The lab's provision task: what its teardown targets. */
+  provision_task_id: string;
+}
+
+/** The half-made VM a failed attempt of the same VM lab may have left (see `GET /tasks/:id/retry-conflicts`). */
+export interface BackendRetryLeftover {
+  resource_name: string;
+  provision_task_id: string;
+}
+
+export interface RetryLeftover {
+  resourceName: string;
+  provisionTaskId: string;
+}
+
+/** What Retry has to deal with first. */
+export interface RetryPlan {
+  conflicts: LabConflict[];
+  leftover: RetryLeftover | null;
+}
+
+export interface LabConflict {
+  resourceName: string;
+  resourceType?: string;
+  state: 'running';
+  ports: number[];
+  provisionTaskId: string;
+}
+
+/**
  * Task stats for frontend components
  */
 export interface TaskStats {
@@ -287,7 +326,54 @@ export interface TraineeRepoActivity {
   truncatedTree?: boolean;
 }
 
-export interface TraineeRow {
+/** One result of an instructor check or grade on a trainee's lab, as the Trainees view receives it. */
+export interface TraineeCheck {
+  name?: string;
+  status: string;
+  at: string;
+  exitCode?: number;
+  /** The check's result (a grade is JSON in its last line); for a failed check without one, the reason. */
+  output?: string;
+  /** The agent's reason for a failed check ("Job exited with 1"). */
+  error?: string;
+  /** The end of the job's log, only for the newest result of a check that failed. */
+  logs?: string;
+}
+
+/** The capstone enrollment a Trainees row is (or matches). */
+export interface TraineeCapstone {
+  id: string;
+  capstone: string;
+  traineeNo: string;
+  status: string;
+  handoutPrUrl?: string;
+  handoutAt?: string;
+  /** Laptop-seeded capstones (Terraform): still waiting for the lab's seed report. */
+  awaitingSeedReport?: boolean;
+  /** When the laptop reported its seed — trainee-controlled, so unverified. */
+  seedReportedAt?: string;
+  /** Set when an instructor marked the capstone done. */
+  completedAt?: string;
+  completedBy?: string;
+  /** A report was kept when it was marked done. */
+  hasReport?: boolean;
+  /** A capstone marked done sits in the Archive and is deleted this many days after it was marked done. */
+  archiveRetentionDays?: number;
+  /** When an archived capstone will be deleted. */
+  archiveExpiresAt?: string;
+  /** Checks an instructor can run in the trainee's lab (agent ≥ 0.1.23). */
+  availableChecks?: { name: string; title: string }[];
+  /** How this capstone's handout is labelled and explained (older backends: undefined). */
+  handout?: { label: string; instructions: string };
+}
+
+/** What every row of the Trainees view has. */
+interface TraineeRowBase {
+  /**
+   * Opaque: `lab:<agentId>::<resourceName>` or `cap:<enrollmentId>`. Sent back to the server to ask for a row's GitHub activity or
+   * detail; never parsed here.
+   */
+  key: string;
   traineeEmail: string;
   /** The lab's agent (with resourceName, identifies the lab); absent on a capstone-only row. */
   agentId?: string;
@@ -303,27 +389,53 @@ export interface TraineeRow {
     /** What the agent is doing right now (a provision or lifecycle task still running). */
     current?: { type: string; status: string; step?: string; since: string };
   };
+  repoUrl?: string;
+  capstone?: TraineeCapstone;
+}
+
+/** Why an instructor should look at a trainee first. From the database (the server) or from GitHub data (this page). */
+export interface TraineeAttention {
+  /** 2 = something is wrong, 1 = worth a look. */
+  severity: 1 | 2;
+  code: string;
+  text: string;
+}
+
+/** One row of the list: small, from the database only. GitHub data comes separately, per row, as `TraineeActivityItem`. */
+export interface TraineeListRow extends TraineeRowBase {
+  /** There is a github.com repository to ask GitHub about. */
+  hasGithubRepo: boolean;
+  attention?: TraineeAttention;
+}
+
+/** The part of a repository's activity the list cells show. */
+export type TraineeRepoBrief = Pick<
+  TraineeRepoActivity,
+  'owner' | 'repo' | 'htmlUrl' | 'defaultBranch' | 'empty' | 'lastCommit' | 'commitsPerDay' | 'progress' | 'ci'
+>;
+
+export type TraineeActivityCode = 'ok' | 'no_repo' | 'archived' | 'not_found' | 'rate_limited' | 'unavailable';
+
+/** GitHub activity of one row (`brief` for the list cells, `full` for the panel and the report). */
+export interface TraineeActivityItem {
+  key: string;
+  repoUrl?: string;
+  /** When the server read it from GitHub (cached reads keep their old time). */
+  fetchedAt: string;
+  code: TraineeActivityCode;
+  repo?: TraineeRepoBrief | TraineeRepoActivity;
+  /** Why there is no `repo`. */
+  note?: string;
+}
+
+/** One trainee in full: the panel and the report. */
+export interface TraineeRow extends TraineeRowBase {
   events: { type: string; status: string; at: string }[];
   /** Instructor check results from this lab (newest first). */
-  checks?: { name?: string; status: string; at: string; exitCode?: number; output?: string }[];
+  checks?: TraineeCheck[];
   catalogEntityRef?: string;
-  repoUrl?: string;
   repo?: TraineeRepoActivity;
   repoNote?: string;
-  capstone?: {
-    id: string;
-    capstone: string;
-    traineeNo: string;
-    status: string;
-    handoutPrUrl?: string;
-    handoutAt?: string;
-    /** Laptop-seeded capstones (Terraform): still waiting for the lab's seed report. */
-    awaitingSeedReport?: boolean;
-    /** When the laptop reported its seed — trainee-controlled, so unverified. */
-    seedReportedAt?: string;
-    /** Checks an instructor can run in the trainee's lab (agent ≥ 0.1.23). */
-    availableChecks?: { name: string; title: string }[];
-  };
 }
 
 /** Instructor-only seed outputs of a capstone enrollment (GET /capstones/enrollments/:id/secrets). */
@@ -332,4 +444,12 @@ export interface CapstoneSecrets {
   answerKey: string;
   seedManifest: unknown;
   gradeCommand?: string;
+}
+
+/**
+ * An instructor's check (a grade). It is queued on the trainee's lab, so it appears in the trainee's own list, but it is the
+ * instructor's record: the trainee cannot delete it, re-run it or select it.
+ */
+export function isCheckTask(task: { taskType: string }): boolean {
+  return task.taskType === 'run-check';
 }

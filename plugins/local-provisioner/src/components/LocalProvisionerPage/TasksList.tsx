@@ -32,7 +32,7 @@ import {
   Clock,
   Inbox,
 } from 'lucide-react';
-import { ProvisioningTask, Resource, TaskStatus } from '../../api/types';
+import { ProvisioningTask, Resource, TaskStatus, isCheckTask } from '../../api/types';
 import { taskTypeLabel } from '../../api/transformers';
 import { currentStep, formatDuration } from '../../api/activity';
 
@@ -142,6 +142,8 @@ export const TasksList = ({
   onToggleSelectAll,
 }: TasksListProps) => {
   const classes = useStyles();
+  // Instructor checks sit in the list but are not the trainee's to select, delete or retry.
+  const selectable = tasks.filter(t => !isCheckTask(t));
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [menuTask, setMenuTask] = useState<ProvisioningTask | null>(null);
 
@@ -198,8 +200,8 @@ export const TasksList = ({
               <TableCell padding="checkbox">
                 <Checkbox
                   size="small"
-                  indeterminate={selectedTaskIds.size > 0 && selectedTaskIds.size < tasks.length}
-                  checked={tasks.length > 0 && selectedTaskIds.size === tasks.length}
+                  indeterminate={selectedTaskIds.size > 0 && selectedTaskIds.size < selectable.length}
+                  checked={selectable.length > 0 && selectedTaskIds.size === selectable.length}
                   onChange={onToggleSelectAll}
                   inputProps={{ 'aria-label': 'select all tasks' }}
                 />
@@ -217,12 +219,14 @@ export const TasksList = ({
               return (
                 <TableRow key={task.id} hover style={{ cursor: 'pointer' }}>
                   <TableCell padding="checkbox" onClick={e => e.stopPropagation()}>
-                    <Checkbox
-                      size="small"
-                      checked={selectedTaskIds.has(task.id)}
-                      onChange={() => onToggleSelect(task.id)}
-                      inputProps={{ 'aria-label': `select task ${task.resourceName}` }}
-                    />
+                    {!isCheckTask(task) && (
+                      <Checkbox
+                        size="small"
+                        checked={selectedTaskIds.has(task.id)}
+                        onChange={() => onToggleSelect(task.id)}
+                        inputProps={{ 'aria-label': `select task ${task.resourceName}` }}
+                      />
+                    )}
                   </TableCell>
                   <TableCell onClick={() => onView(task)}>{task.resourceName}</TableCell>
                   <TableCell className={classes.typeCell} onClick={() => onView(task)}>
@@ -281,7 +285,7 @@ export const TasksList = ({
               Re-send to agent
             </MenuItem>
           ),
-          menuTask.status === 'failed' && (
+          menuTask.status === 'failed' && !isCheckTask(menuTask) && (
             <MenuItem key="retry" onClick={() => run(() => onRetry(menuTask))}>
               <ListItemIcon style={{ minWidth: 32 }}>
                 <RotateCcw size={16} strokeWidth={1.5} />
@@ -340,16 +344,18 @@ export const TasksList = ({
               Cancel &amp; remove
             </MenuItem>
           ),
-          <MenuItem
-            key="delete"
-            className={classes.destructive}
-            onClick={() => run(() => onDelete(menuTask))}
-          >
-            <ListItemIcon style={{ minWidth: 32 }}>
-              <Trash2 size={16} strokeWidth={1.5} color="#e5484d" />
-            </ListItemIcon>
-            Delete task
-          </MenuItem>,
+          !isCheckTask(menuTask) && (
+            <MenuItem
+              key="delete"
+              className={classes.destructive}
+              onClick={() => run(() => onDelete(menuTask))}
+            >
+              <ListItemIcon style={{ minWidth: 32 }}>
+                <Trash2 size={16} strokeWidth={1.5} color="#e5484d" />
+              </ListItemIcon>
+              Delete task
+            </MenuItem>
+          ),
           ].filter(Boolean);
         })()}
       </Menu>

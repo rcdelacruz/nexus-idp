@@ -12,18 +12,26 @@ import * as path from 'path';
 import * as os from 'os';
 import { TokenManager } from '../auth/TokenManager';
 import { displaySuccess, displayInfo, displayError, displayDetails, displayCommands } from './logo';
+import { dockerHelp, dockerState, DockerState } from './dockerCheck';
 
 export interface LaunchResult {
   ok: boolean;
   pid?: number;
-  reason?: 'already-running' | 'no-auth' | 'expired' | 'failed';
+  reason?: 'already-running' | 'no-auth' | 'expired' | 'failed' | 'no-docker';
+}
+
+/** Replaceable in tests. */
+export interface LaunchDeps {
+  docker?: () => Promise<DockerState>;
+  spawnFn?: typeof spawn;
 }
 
 /**
  * Launch the agent as a detached background daemon. Idempotent: if a daemon is already running,
  * returns ok:true without starting a second one. Prints user-facing status.
  */
-export async function launchDaemon(): Promise<LaunchResult> {
+export async function launchDaemon(deps: LaunchDeps = {}): Promise<LaunchResult> {
+  const spawnFn = deps.spawnFn ?? spawn;
   const agentDir = path.join(os.homedir(), '.backstage-agent');
   const pidFile = path.join(agentDir, 'agent.pid');
 
@@ -54,6 +62,17 @@ export async function launchDaemon(): Promise<LaunchResult> {
     return { ok: false, reason: 'expired' };
   }
 
+  // The daemon exits at once when Docker is not ready: say so here, with what to install, instead of
+  // starting something that dies and sends the user to a log file.
+  const docker = await (deps.docker ?? dockerState)();
+  if (docker !== 'ok') {
+    displayError('Docker is not ready, so the agent cannot start.');
+    for (const line of dockerHelp(docker)) displayInfo(line);
+    displayInfo('You stay signed in. Start the agent when Docker is ready: backstage-agent start');
+    console.log('');
+    return { ok: false, reason: 'no-docker' };
+  }
+
   // Log files
   const logDir = path.join(agentDir, 'logs');
   if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
@@ -64,7 +83,9 @@ export async function launchDaemon(): Promise<LaunchResult> {
 
   // Spawn detached daemon
   const daemonScript = path.join(__dirname, '..', 'daemon', 'agentDaemon.js');
-  const child = spawn('node', [daemonScript], {
+  // process.execPath, not 'node': the terminal that runs `start` may have no node on its PATH (the
+  // agent can be started through a launcher that pinned the Node it was installed with).
+  const child = spawnFn(process.execPath, [daemonScript], {
     detached: true,
     stdio: ['ignore', out, err],
     env: { ...process.env, NODE_ENV: process.env.NODE_ENV || 'production' },

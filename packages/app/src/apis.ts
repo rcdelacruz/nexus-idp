@@ -17,13 +17,12 @@ import {
 import { apiDocsConfigRef, defaultDefinitionWidgets, OpenApiDefinitionWidget } from '@backstage/plugin-api-docs';
 import { userManagementApiRef, UserManagementApiImpl } from '@internal/plugin-user-management';
 import { OAuth2, createFetchApi, FetchMiddlewares } from '@backstage/core-app-api';
-import { techRadarApiRef } from '@backstage-community/plugin-tech-radar';
-import { ThoughtworksTechRadarApi } from './components/techRadar/ThoughtworksTechRadarApi';
 import { githubActionsApiRef, GithubActionsClient } from '@backstage-community/plugin-github-actions';
 import { Octokit } from '@octokit/rest';
 import { catalogImportApiRef, CatalogImportClient } from '@backstage/plugin-catalog-import';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import { scmAuthApiRef } from '@backstage/integration-react';
+import { makeProxyInterceptor } from './apiDocsProxy';
 
 export const apis: AnyApiFactory[] = [
   // Extends the default Backstage FetchApi with token injection + revoked-session auto sign-out.
@@ -82,9 +81,9 @@ export const apis: AnyApiFactory[] = [
     factory: ({ configApi }) => ScmIntegrationsApi.fromConfig(configApi),
   }),
   ScmAuth.createDefaultApiFactory(),
-  // Override GitHub Actions API to route through the Backstage proxy.
+  // Override GitHub Actions API to route through the portal's read-only GitHub route.
   // Users sign in via Google (not GitHub), so scmAuthApi has no GitHub token.
-  // The /github/api proxy endpoint injects the server-side GITHUB_TOKEN.
+  // The github-actions-api plugin (GET only, runs/jobs/logs/branches of the configured orgs) adds the server-side GITHUB_TOKEN.
   createApiFactory({
     api: githubActionsApiRef,
     deps: { configApi: configApiRef, discoveryApi: discoveryApiRef, fetchApi: fetchApiRef },
@@ -92,19 +91,14 @@ export const apis: AnyApiFactory[] = [
       const noopScmAuth = { getCredentials: async () => ({ token: '', headers: {} }) };
       const client = new GithubActionsClient({ configApi, scmAuthApi: noopScmAuth } as any);
       (client as any).getOctokit = async () => {
-        const proxyUrl = await discoveryApi.getBaseUrl('proxy');
+        const baseUrl = await discoveryApi.getBaseUrl('github-actions-api');
         return new Octokit({
-          baseUrl: `${proxyUrl}/github/api`,
+          baseUrl,
           request: { fetch: fetchApi.fetch },
         });
       };
       return client;
     },
-  }),
-  createApiFactory({
-    api: techRadarApiRef,
-    deps: {},
-    factory: () => new ThoughtworksTechRadarApi(),
   }),
   createApiFactory({
     api: userManagementApiRef,
@@ -128,8 +122,8 @@ export const apis: AnyApiFactory[] = [
   // Backstage CORS proxy backend, avoiding browser cross-origin restrictions.
   createApiFactory({
     api: apiDocsConfigRef,
-    deps: { configApi: configApiRef },
-    factory: ({ configApi }) => {
+    deps: { configApi: configApiRef, identityApi: identityApiRef },
+    factory: ({ configApi, identityApi }) => {
       const widgets = defaultDefinitionWidgets();
       // Compute proxy base URL synchronously from config — avoids async failures in the interceptor.
       const backendUrl = configApi.getString('backend.baseUrl');
@@ -144,17 +138,12 @@ export const apis: AnyApiFactory[] = [
             component: (definition: string) =>
               React.createElement(OpenApiDefinitionWidget, {
                 definition,
-                requestInterceptor: (req: any) => {
-                  try {
-                    const reqUrl = new URL(req.url);
-                    // Only proxy requests to a different origin
-                    if (reqUrl.origin === window.location.origin) return req;
-                    req.url = `${proxyBase}/forward?url=${encodeURIComponent(req.url)}`;
-                  } catch {
-                    // URL parsing failed, pass through unchanged
-                  }
-                  return req;
-                },
+                // The proxy serves signed-in users only: the interceptor attaches the portal token (SwaggerUI accepts a promise).
+                requestInterceptor: makeProxyInterceptor({
+                  proxyBase,
+                  origin: window.location.origin,
+                  getToken: async () => (await identityApi.getCredentials()).token,
+                }),
               }),
           };
         },

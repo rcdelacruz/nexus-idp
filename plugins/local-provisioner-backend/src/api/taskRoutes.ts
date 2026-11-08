@@ -4,21 +4,24 @@
 
 import { Request, Router } from 'express';
 import { LoggerService } from '@backstage/backend-plugin-api';
-import { TaskQueueService } from '../service/TaskQueueService';
+import { CheckRowProtectedError, TaskQueueService } from '../service/TaskQueueService';
 import { AgentService } from '../service/AgentService';
+import { findLeftover, findPortConflicts } from '../service/portConflicts';
 import { TraineeActivityService } from '../service/traineeActivity/TraineeActivityService';
-import { MIN_CHECK_AGENT, supportsChecks } from '../capstones/capstoneRoutes';
+import { MIN_CHECK_AGENT, MIN_WORKSPACE_MOUNT_AGENT, supportsChecks } from '../capstones/capstoneRoutes';
 import {
   CreateTaskRequest,
   ProvisioningTask,
   ResourceState,
   TaskType,
+  isCheckTask,
   isLifecycleTask,
   lookupByResourceType,
   resourceTypeForTask,
   validateTrainingTask,
   isVmLabTask,
 } from '../types';
+import { sameUser } from '../util/identity';
 
 /**
  * Lifecycle transitions that are no-ops or invalid given a resource's current state — e.g.
@@ -52,6 +55,30 @@ function getUserId(req: Request): string | undefined {
 }
 
 /**
+ * A check task (an instructor's grade or probe) is queued on the trainee's lab, so it sits in the trainee's own task list. Its
+ * config holds the grader and the answer key (job files), its logs and result hold the hidden expected values: instructors read
+ * those through the Trainees view (store level), never through the trainee's list, so they are removed from the routes that
+ * answer the task's owner (`GET /tasks`, `GET /tasks/:taskId`).
+ */
+export function hideCheckInternals(task: ProvisioningTask): ProvisioningTask {
+  const exitCode = task.metadata?.check?.exitCode;
+  const generic = /^(Check|Job) exited with -?\d+$/.test(task.error_message ?? '');
+  return {
+    ...task,
+    config: { checkName: task.config?.checkName, targetTaskId: task.config?.targetTaskId },
+    logs: undefined,
+    metadata: exitCode === undefined ? {} : { check: { exitCode } },
+    error_message: task.error_message && !generic ? 'The check did not complete.' : task.error_message,
+  };
+}
+
+/** Most rows one `activity` call may name, and most for the full level (nine to eleven GitHub calls each). */
+export const TRAINEE_ACTIVITY_MAX_KEYS = 50;
+export const TRAINEE_ACTIVITY_MAX_FULL_KEYS = 5;
+/** `lab:<agent>::<name>`: resource names are free text, so the key has a cap of its own. */
+export const TRAINEE_KEY_MAX_LENGTH = 400;
+
+/**
  * Create task-related API routes
  */
 export function createTaskRoutes(
@@ -61,7 +88,7 @@ export function createTaskRoutes(
   resourceDocsUrls: Record<string, string> = {},
   traineeActivity?: TraineeActivityService,
 ): Router {
-  const router = Router();
+  const router = Router({ caseSensitive: true }); // see service/router.ts: the permission mapping is keyed on the exact path
 
   /**
    * Attach `docs_url` (e.g. training materials) for the task's resource type, if configured via
@@ -75,6 +102,13 @@ export function createTaskRoutes(
     const docsUrl = lookupByResourceType(resourceDocsUrls, resourceType);
     return docsUrl ? { ...task, docs_url: docsUrl } : task;
   };
+
+  /**
+   * What the owner of a task is allowed to see: check rows (an instructor's grade or probe, queued on the trainee's lab) are
+   * reduced by `hideCheckInternals`. `GET /admin/all` (admins) keeps the full rows.
+   */
+  const forOwner = (task: ProvisioningTask): ProvisioningTask =>
+    isCheckTask(task.task_type) ? hideCheckInternals(task) : withDocsLink(task);
 
   /**
    * GET /tasks
@@ -104,7 +138,7 @@ export function createTaskRoutes(
         : tasks;
 
       return res.status(200).json({
-        tasks: filteredTasks.map(withDocsLink),
+        tasks: filteredTasks.map(forOwner),
         total: filteredTasks.length,
       });
     } catch (error: any) {
@@ -175,22 +209,72 @@ export function createTaskRoutes(
   });
 
   /**
-   * GET /tasks/admin/trainees
-   * Instructor Trainees view: every training environment across all users, with the trainee's
-   * GitHub repo activity. Gated by `traineesReadPermission` in the auth middleware
-   * (service/router.ts) — admins + instructors only. Registered before `/:taskId` so it isn't
-   * shadowed. `?refresh=1` bypasses the 5-minute repo cache.
+   * The instructor Trainees view, in three calls (all gated by `traineesReadPermission` in the auth middleware, service/router.ts, so
+   * admins + instructors only; registered before `/:taskId` so they are not shadowed):
+   *
+   * GET  /tasks/admin/trainees/list      every training lab and capstone, database only (no GitHub), small rows, most serious first
+   * POST /tasks/admin/trainees/activity  { keys[<=50], level: brief|full, refresh? } GitHub activity of the rows named by key
+   * GET  /tasks/admin/trainees/detail?key=  one trainee in full (timeline and every check result), database only
+   *
+   * Keys are the opaque `key` of a list row; the repository, lab and enrollment are looked up from the portal's own records.
    */
-  router.get('/admin/trainees', async (req, res) => {
+  router.get('/admin/trainees/list', async (_req, res) => {
     if (!traineeActivity) {
       return res.status(501).json({ error: 'Trainee activity is not configured' });
     }
     try {
-      const trainees = await traineeActivity.listTrainees({ refresh: req.query.refresh === '1' });
+      const trainees = await traineeActivity.listTrainees();
       return res.status(200).json({ trainees, generatedAt: new Date().toISOString() });
     } catch (error: any) {
-      logger.error('Failed to build trainee activity', error);
+      logger.error('Failed to build the trainee list', error);
       return res.status(500).json({ error: 'Failed to load trainees', message: error.message });
+    }
+  });
+
+  router.post('/admin/trainees/activity', async (req, res) => {
+    if (!traineeActivity) {
+      return res.status(501).json({ error: 'Trainee activity is not configured' });
+    }
+    const b = req.body ?? {};
+    if (!Array.isArray(b.keys) || b.keys.length === 0 || b.keys.length > TRAINEE_ACTIVITY_MAX_KEYS) {
+      return res.status(400).json({ error: `keys must be a list of 1 to ${TRAINEE_ACTIVITY_MAX_KEYS} row keys` });
+    }
+    if (b.keys.some((k: unknown) => typeof k !== 'string' || k.length === 0 || k.length > TRAINEE_KEY_MAX_LENGTH)) {
+      return res.status(400).json({ error: 'every key must be a text of at most 400 characters' });
+    }
+    if (b.level !== undefined && b.level !== 'brief' && b.level !== 'full') {
+      return res.status(400).json({ error: 'level must be "brief" or "full"' });
+    }
+    const level = b.level === 'full' ? 'full' : 'brief';
+    if (level === 'full' && b.keys.length > TRAINEE_ACTIVITY_MAX_FULL_KEYS) {
+      return res.status(400).json({ error: `the full level takes at most ${TRAINEE_ACTIVITY_MAX_FULL_KEYS} keys` });
+    }
+    try {
+      const activity = await traineeActivity.activity(b.keys, level, b.refresh === true);
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({ activity });
+    } catch (error: any) {
+      logger.error('Failed to read trainee activity', error);
+      return res.status(500).json({ error: 'Failed to load trainee activity', message: error.message });
+    }
+  });
+
+  router.get('/admin/trainees/detail', async (req, res) => {
+    if (!traineeActivity) {
+      return res.status(501).json({ error: 'Trainee activity is not configured' });
+    }
+    const key = req.query.key;
+    if (typeof key !== 'string' || key.length === 0 || key.length > TRAINEE_KEY_MAX_LENGTH) {
+      return res.status(400).json({ error: 'key must be the key of a row of the list' });
+    }
+    try {
+      const trainee = await traineeActivity.detail(key);
+      if (!trainee) return res.status(404).json({ error: 'Trainee not found' });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({ trainee });
+    } catch (error: any) {
+      logger.error('Failed to read the trainee', error);
+      return res.status(500).json({ error: 'Failed to load the trainee', message: error.message });
     }
   });
 
@@ -252,10 +336,52 @@ export function createTaskRoutes(
         });
       }
 
-      return res.status(200).json(withDocsLink(task));
+      return res.status(200).json(forOwner(task));
     } catch (error: any) {
       return res.status(500).json({
         error: 'Failed to fetch task',
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * GET /tasks/:taskId/retry-conflicts
+   * What Retry has to deal with first: `conflicts` = the caller's other running labs on this task's
+   * agent that hold a host port the task needs (offer to remove them: a port can be held by one
+   * container only); `leftover` = the half-made VM a failed attempt of this same lab may have left
+   * (removed before the retry, or it would stop at "instance already exists").
+   */
+  router.get('/:taskId/retry-conflicts', async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) {
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Could not resolve authenticated user',
+        });
+      }
+      const task = await taskQueueService.getTask(req.params.taskId);
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found', taskId: req.params.taskId });
+      }
+      if (task.user_id !== userId) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You do not have permission to view this task',
+        });
+      }
+      // One read of the agent's labs (it loads the agent's whole task history) shared by both checks.
+      const labs = await taskQueueService.getLabsForAgent(task.agent_id);
+      const source = { getLabsForAgent: async () => labs };
+      const [conflicts, leftover] = await Promise.all([
+        findPortConflicts(task, userId, source),
+        findLeftover(task, userId, source),
+      ]);
+      return res.status(200).json({ conflicts, leftover: leftover ?? null });
+    } catch (error: any) {
+      return res.status(500).json({
+        error: 'Failed to check port conflicts',
         message: error.message,
       });
     }
@@ -323,6 +449,20 @@ export function createTaskRoutes(
         });
       }
 
+      // A task runs on the laptop of the agent's owner: only that person may queue one there. (Before this check, anyone who knew
+      // another person's agent id could queue their own compose file onto that person's machine.) An unknown agent id falls through
+      // to the existing checks below; this is placed before the ones that look the agent up and echo its details back.
+      if (agentService) {
+        const targetAgent = await agentService.getAgentById(createRequest.agent_id);
+        if (targetAgent && !sameUser(targetAgent.user_id, userId)) {
+          logger.warn(`Refused a task for agent ${createRequest.agent_id}: it belongs to another user than ${userId}`);
+          return res.status(403).json({
+            error: 'Forbidden',
+            message: 'This agent belongs to another user',
+          });
+        }
+      }
+
       // Single chokepoint guard: refuse to queue ANY task (provision or lifecycle stop/start/
       // restart/deprovision) to an offline agent — it would sit "pending" forever. Every path
       // (scaffolder, direct API, UI lifecycle buttons) creates tasks here, so this one check
@@ -339,7 +479,22 @@ export function createTaskRoutes(
         }
       }
 
-      if (agentService && !(await agentService.isAgentOnline(createRequest.agent_id))) {
+      // A lab that mounts the trainee's repo needs the agent to clone it first; an older agent
+      // would start the container with an empty mount path and fail with a Docker error.
+      if ((createRequest.config as any)?.workspaceMount === true && agentService) {
+        const agent = await agentService.getAgentById(createRequest.agent_id);
+        if (!supportsChecks(agent?.agent_version, MIN_WORKSPACE_MOUNT_AGENT)) {
+          return res.status(409).json({
+            error: 'Agent too old',
+            message: `This lab works on your cloned repo and needs backstage-agent ${MIN_WORKSPACE_MOUNT_AGENT}+ (yours: ${agent?.agent_version ?? 'unknown'}). Run \`backstage-agent update\`, then retry.`,
+          });
+        }
+      }
+
+      // Confirmed, not inferred: queueing a lab to an agent that has already gone leaves the
+      // trainee with a half-made lab (AgentService.confirmAgentOnline wakes the agent's poll and
+      // needs it to answer; a live agent takes about a second).
+      if (agentService && !(await agentService.confirmAgentOnline(createRequest.agent_id))) {
         return res.status(409).json({
           error: 'Agent offline',
           message:
@@ -420,6 +575,14 @@ export function createTaskRoutes(
         taskId,
       });
     } catch (error: any) {
+      // First: by type, not by message (the messages below are matched by substring).
+      if (error instanceof CheckRowProtectedError) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Instructor checks cannot be deleted',
+        });
+      }
+
       if (error.message.includes('not found')) {
         return res.status(404).json({
           error: 'Task not found',

@@ -1,5 +1,6 @@
 import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
 import { getClusterConfig, buildApiPath, k8sRequest, ClusterConfig } from '../lib/k8sClient';
+import { checkNamespaceDeletable } from '../lib/teardownGuards';
 
 const CNPG_API_VERSION = 'postgresql.cnpg.io/v1';
 const ARGOCD_API_VERSION = 'argoproj.io/v1alpha1';
@@ -39,7 +40,30 @@ export function createDeleteNamespaceAction() {
       const config = await getClusterConfig();
       const deleted: string[] = [];
 
+      // Decide for ALL namespaces before deleting any: a refused name stops the whole run with nothing touched.
+      const toDelete: string[] = [];
       for (const namespace of namespaces) {
+        let labels: Record<string, string> | undefined;
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const existing = await k8sRequest(`${config.server}${buildApiPath('v1', 'Namespace', undefined, namespace)}`, 'GET', undefined, config);
+          labels = existing?.metadata?.labels;
+        } catch (err: any) {
+          if (err.statusCode === 404) {
+            ctx.logger.warn(`Namespace ${namespace} not found — already deleted`);
+            deleted.push(namespace);
+            continue;
+          }
+          throw err;
+        }
+        const verdict = checkNamespaceDeletable(namespace, labels);
+        if (!verdict.ok) {
+          throw new Error(`Refusing to delete namespace "${namespace}": ${verdict.reason}. Nothing was deleted.`);
+        }
+        toDelete.push(namespace);
+      }
+
+      for (const namespace of toDelete) {
         // eslint-disable-next-line no-await-in-loop
         await teardownNamespace(config, namespace, timeoutSeconds, ctx.logger);
         deleted.push(namespace);

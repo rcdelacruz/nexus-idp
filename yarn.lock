@@ -9802,10 +9802,15 @@ __metadata:
     "@backstage/core-plugin-api": "npm:^1.12.11"
     "@backstage/dev-utils": "npm:^1.1.28"
     "@backstage/plugin-catalog-react": "npm:^3.3.0"
+    "@backstage/test-utils": "npm:^1.7.23"
     "@backstage/theme": "npm:^0.7.3"
     "@internal/plugin-local-provisioner": "npm:*"
     "@material-ui/core": "npm:^4.9.13"
     "@stratpoint/theme-utils": "npm:*"
+    "@testing-library/dom": "npm:^10.0.0"
+    "@testing-library/jest-dom": "npm:^6.0.0"
+    "@testing-library/react": "npm:^16.0.0"
+    "@testing-library/user-event": "npm:^14.0.0"
     "@types/react": "npm:^18.0.0"
     jest: "npm:^30.0.0"
     lucide-react: "npm:0.577.0"
@@ -17526,6 +17531,7 @@ __metadata:
     knex: "npm:^3.0.0"
     node-fetch: "npm:^2.6.7"
     supertest: "npm:^6.0.0"
+    yaml: "npm:^2.0.0"
     yn: "npm:^4.0.0"
   languageName: unknown
   linkType: soft
@@ -17574,6 +17580,7 @@ __metadata:
     "@types/node": "npm:^22.0.0"
     express: "npm:^4.21.2"
     js-yaml: "npm:^4.1.0"
+    knex: "npm:^3.0.0"
   languageName: unknown
   linkType: soft
 
@@ -20864,6 +20871,7 @@ __metadata:
     react-router-dom: "npm:^6.3.0"
     react-use: "npm:^17.0.0"
     webpack: "npm:~5.103.0"
+    yaml: "npm:^2.0.0"
   languageName: unknown
   linkType: soft
 

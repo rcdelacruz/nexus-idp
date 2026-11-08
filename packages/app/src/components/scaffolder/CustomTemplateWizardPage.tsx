@@ -22,6 +22,7 @@ import { customizeValidator } from '@rjsf/validator-ajv8';
 import { Box, Button, Tooltip, Typography } from '@material-ui/core';
 import { CheckCircle, FileText, Eye, Loader } from 'lucide-react';
 import { useColors, semantic } from '@stratpoint/theme-utils';
+import { newRunState } from './labRedirect';
 
 import type { TemplateWizardPageProps } from '@backstage/plugin-scaffolder/alpha';
 
@@ -214,7 +215,9 @@ export const CustomTemplateWizardPage = (props: TemplateWizardPageProps) => {
         values: formState,
         secrets: contextSecrets,
       });
-      navigate(`/create/tasks/${taskId}`);
+      // The mark tells the run page this run was just started by this user, so that it may send them
+      // to their lab when the run succeeds (see labRedirect.ts).
+      navigate(`/create/tasks/${taskId}`, { state: newRunState() });
     } catch (e: any) {
       setIsCreating(false);
       setWizardError(e instanceof Error ? e : new Error(String(e)));

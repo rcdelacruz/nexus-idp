@@ -1,3 +1,5 @@
+import { PALETTES, THEME_IDS } from '@stratpoint/theme-utils';
+import type { Palette, ThemeId } from '@stratpoint/theme-utils';
 import {
   createUnifiedTheme,
   createBaseThemeOptions,
@@ -12,42 +14,41 @@ const geistMono = '"Geist Mono", "Fira Code", "Courier New", monospace';
 const COMPLETED_DARK  = '#50e3c2';
 const COMPLETED_LIGHT = '#079669';
 
-// Exact Vercel Geist dark mode design tokens
-const D = {
-  bg:          '#000000',
-  surface:     '#0a0a0a',
-  surfaceHover:'#1a1a1a',
-  border:      '#2e2e2e',
-  borderHover: '#454545',
-  textPrimary: '#ededed',
-  textSecondary:'#a1a1a1',
-  textTertiary: '#878787',
-  textDisabled: '#454545',
-  blue:        '#3291ff',
-  blueDark:    '#0070f3',
+// Colours come from the palette of the theme being built (packages/theme-utils/src/palettes.ts).
+type Rgb = [number, number, number];
+const toRgb = (h: string): Rgb => {
+  const n = parseInt(h.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+const mixHex = (a: string, b: string, t: number) => {
+  const x = toRgb(a);
+  const y = toRgb(b);
+  return `#${[0, 1, 2].map(k => Math.round(x[k] + (y[k] - x[k]) * t).toString(16).padStart(2, '0')).join('')}`;
 };
 
-// Exact Vercel Geist light mode design tokens
-const L = {
-  bg:          '#fafafa',
-  surface:     '#ffffff',
-  surfaceHover:'#f5f5f5',
-  border:      '#e5e5e5',
-  borderHover: '#c9c9c9',
-  textPrimary: '#171717',
-  textSecondary:'#4d4d4d',
-  textTertiary: '#8f8f8f',
-  textDisabled: '#c9c9c9',
-  blue:        '#0070f3',
-  blueDark:    '#0060df',
-};
+const tokensFor = (p: Palette) => ({
+  bg: p.bg,
+  surface: p.surface,
+  surfaceHover: p.isDark ? p.avatarBg : p.surfaceSubtle,
+  border: p.border,
+  borderHover: p.borderHover,
+  textPrimary: p.text,
+  textSecondary: p.textSecondary,
+  textTertiary: p.textMuted,
+  textDisabled: p.textDisabled,
+  blue: p.blue,
+  blueDark: p.css?.['--blue-dark'] ?? (p.isDark ? '#0070f3' : mixHex(p.blue, '#000000', 0.1)),
+});
 
 // Flat page theme — no wave, no gradient
-const flat = genPageTheme({ colors: ['#000000', '#000000'], shape: 'none' as any });
-const flatLight = genPageTheme({ colors: ['#fafafa', '#fafafa'], shape: 'none' as any });
+const flatFor = (p: Palette) => genPageTheme({ colors: [p.bg, p.bg], shape: 'none' as any });
 
-const makeComponents = (isDark: boolean) => {
-  const c = isDark ? D : L;
+const makeComponents = (p: Palette) => {
+  const isDark = p.isDark;
+  const c = tokensFor(p);
+  const sb = PALETTES[p.sidebar]; // the sidebar is always a dark surface
+  // The solid ("contained") button is the text colour on the page colour, inverted.
+  const solidHover = p.buttonHover ?? (isDark ? mixHex(p.text, '#000000', 0.1) : mixHex(p.text, '#ffffff', 0.2));
 
   return {
     // ---- Global ----
@@ -155,9 +156,9 @@ const makeComponents = (isDark: boolean) => {
         },
         contained: { boxShadow: 'none', '&:hover': { boxShadow: 'none' } },
         containedPrimary: {
-          backgroundColor: isDark ? '#ededed' : '#171717',
-          color: isDark ? '#000000' : '#ffffff',
-          '&:hover': { backgroundColor: isDark ? '#d4d4d4' : '#383838', boxShadow: 'none' },
+          backgroundColor: p.text,
+          color: isDark ? p.bg : '#ffffff',
+          '&:hover': { backgroundColor: solidHover, boxShadow: 'none' },
         },
         outlined: {
           border: 'none',
@@ -233,7 +234,7 @@ const makeComponents = (isDark: boolean) => {
           fontFamily: geistFont,
           fontSize: '0.875rem',
           borderRadius: 6,
-          backgroundColor: isDark ? '#0a0a0a' : '#ffffff',
+          backgroundColor: isDark ? p.surface : p.inputBg,
           color: c.textPrimary,
           // No height here — fixed height breaks multiline inputs and floating labels.
           // Single-line height (40px) is enforced via the input slot padding instead.
@@ -337,7 +338,7 @@ const makeComponents = (isDark: boolean) => {
           fontWeight: 500,
           fontSize: '0.75rem',
           color: c.textSecondary,
-          backgroundColor: isDark ? '#0a0a0a' : '#fafafa',
+          backgroundColor: isDark ? p.surface : p.bg,
           letterSpacing: '0.05em',
           textTransform: 'uppercase',
           borderBottom: `1px solid ${c.border}`,
@@ -581,13 +582,13 @@ const makeComponents = (isDark: boolean) => {
         tooltip: {
           fontFamily: geistFont,
           fontSize: '0.75rem',
-          backgroundColor: isDark ? '#1a1a1a' : '#171717',
-          color: isDark ? '#ededed' : '#ffffff',
+          backgroundColor: isDark ? p.avatarBg : p.text,
+          color: isDark ? p.text : '#ffffff',
           borderRadius: 6,
           border: `1px solid ${c.border}`,
           padding: '5px 10px',
         },
-        arrow: { color: isDark ? '#1a1a1a' : '#171717' },
+        arrow: { color: isDark ? p.avatarBg : p.text },
       },
     },
 
@@ -1136,17 +1137,17 @@ const makeComponents = (isDark: boolean) => {
     BackstageSidebar: {
       styleOverrides: {
         drawer: {
-          background: '#000000',
+          background: sb.bg,
           border: 'none',
-          borderRight: '1px solid #2e2e2e',
+          borderRight: `1px solid ${sb.border}`,
           borderRadius: 0,
           boxShadow: 'none',
           padding: 0,
         },
         drawerPaper: {
-          background: '#000000',
+          background: sb.bg,
           border: 'none',
-          borderRight: '1px solid #2e2e2e',
+          borderRight: `1px solid ${sb.border}`,
           borderRadius: 0,
           boxShadow: 'none',
           padding: 0,
@@ -1261,7 +1262,7 @@ const makeComponents = (isDark: boolean) => {
           minHeight: '48px !important',
           // Search input — replace material underline with bordered Geist input
           '& .MuiInput-root, & .MuiInputBase-root': {
-            backgroundColor: isDark ? '#0a0a0a' : '#ffffff',
+            backgroundColor: isDark ? p.surface : p.inputBg,
             borderRadius: 6,
             fontSize: '0.875rem',
             height: 36,
@@ -1310,7 +1311,7 @@ const makeComponents = (isDark: boolean) => {
           color: c.textSecondary,
           letterSpacing: '0.05em',
           textTransform: 'uppercase',
-          backgroundColor: `${isDark ? '#0a0a0a' : '#fafafa'} !important`,
+          backgroundColor: `${isDark ? p.surface : p.bg} !important`,
           borderTop: `1px solid ${c.border} !important`,
           borderBottom: `1px solid ${c.border} !important`,
           padding: '10px 16px !important',
@@ -1647,76 +1648,55 @@ const makeComponents = (isDark: boolean) => {
   };
 };
 
-export const nexusDarkTheme = createUnifiedTheme({
-  ...createBaseThemeOptions({
-    palette: {
-      ...palettes.dark,
-      primary: { main: '#3291ff', light: '#60a5fa', dark: '#0070f3', contrastText: '#fff' },
-      secondary: { main: '#7928ca', light: '#8a3fd1', dark: '#6621b3', contrastText: '#fff' },
-      background: { default: '#000000', paper: '#1a1a1a' },
-      text: { primary: '#ededed', secondary: '#a1a1a1', disabled: '#454545' },
-      divider: '#2e2e2e',
-      status: {
-        ok: '#50e3c2',
-        warning: '#f5a623',
-        error: '#e5484d',
-        pending: '#878787',
-        running: '#3291ff',
-        aborted: '#454545',
+/** One MUI theme per palette; its id is on `palette.nexusTheme` so useColors() can find the same palette. */
+export const createNexusTheme = (id: ThemeId) => {
+  const p = PALETTES[id];
+  const sb = PALETTES[p.sidebar];
+  const isDark = p.isDark;
+  const blueDark = tokensFor(p).blueDark;
+  const flat = flatFor(p);
+  return createUnifiedTheme({
+    ...createBaseThemeOptions({
+      palette: {
+        ...(isDark ? palettes.dark : palettes.light),
+        nexusTheme: id,
+        primary: { main: p.blue, light: isDark ? '#60a5fa' : '#3291ff', dark: blueDark, contrastText: '#fff' },
+        secondary: { main: '#7928ca', light: '#8a3fd1', dark: '#6621b3', contrastText: '#fff' },
+        background: { default: p.bg, paper: isDark ? p.avatarBg : p.surface },
+        text: { primary: p.text, secondary: p.textSecondary, disabled: p.textDisabled },
+        divider: p.border,
+        status: {
+          ok: isDark ? COMPLETED_DARK : COMPLETED_LIGHT,
+          warning: isDark ? '#f5a623' : '#d97706',
+          error: '#e5484d',
+          pending: p.textMuted,
+          running: p.blue,
+          aborted: p.textDisabled,
+        },
+        navigation: {
+          background: sb.bg,
+          indicator: sb.text,
+          color: sb.textMuted,
+          selectedColor: sb.text,
+          navItem: { hoverBackground: sb.avatarBg },
+          submenu: { background: sb.avatarBg },
+        },
       },
-      navigation: {
-        background: '#000000',
-        indicator: '#ededed',
-        color: '#878787',
-        selectedColor: '#ededed',
-        navItem: { hoverBackground: '#1a1a1a' },
-        submenu: { background: '#1a1a1a' },
-      },
+    }),
+    fontFamily: geistFont,
+    defaultPageTheme: 'home',
+    pageTheme: {
+      home: flat, documentation: flat, tool: flat,
+      service: flat, website: flat, library: flat,
+      other: flat, app: flat, apis: flat,
     },
-  }),
-  fontFamily: geistFont,
-  defaultPageTheme: 'home',
-  pageTheme: {
-    home: flat, documentation: flat, tool: flat,
-    service: flat, website: flat, library: flat,
-    other: flat, app: flat, apis: flat,
-  },
-  components: makeComponents(true) as any,
-});
+    components: makeComponents(p) as any,
+  });
+};
 
-export const nexusLightTheme = createUnifiedTheme({
-  ...createBaseThemeOptions({
-    palette: {
-      ...palettes.light,
-      primary: { main: '#0070f3', light: '#3291ff', dark: '#0060df', contrastText: '#fff' },
-      secondary: { main: '#7928ca', light: '#8a3fd1', dark: '#6621b3', contrastText: '#fff' },
-      background: { default: '#fafafa', paper: '#ffffff' },
-      text: { primary: '#171717', secondary: '#4d4d4d', disabled: '#c9c9c9' },
-      divider: '#e5e5e5',
-      status: {
-        ok: '#079669',
-        warning: '#d97706',
-        error: '#e5484d',
-        pending: '#8f8f8f',
-        running: '#0070f3',
-        aborted: '#c9c9c9',
-      },
-      navigation: {
-        background: '#000000',
-        indicator: '#ededed',
-        color: '#878787',
-        selectedColor: '#ededed',
-        navItem: { hoverBackground: '#1a1a1a' },
-        submenu: { background: '#1a1a1a' },
-      },
-    },
-  }),
-  fontFamily: geistFont,
-  defaultPageTheme: 'home',
-  pageTheme: {
-    home: flatLight, documentation: flatLight, tool: flatLight,
-    service: flatLight, website: flatLight, library: flatLight,
-    other: flatLight, app: flatLight, apis: flatLight,
-  },
-  components: makeComponents(false) as any,
-});
+/** Every theme the user can pick in Settings → Appearance. */
+export const nexusThemes = Object.fromEntries(THEME_IDS.map(id => [id, createNexusTheme(id)])) as Record<ThemeId, ReturnType<typeof createNexusTheme>>;
+
+// The two the rest of the app has always imported: today's default dark and light.
+export const nexusDarkTheme = nexusThemes.dark;
+export const nexusLightTheme = nexusThemes.light;

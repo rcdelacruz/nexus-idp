@@ -11,9 +11,25 @@ import {
 } from '../permissions';
 
 describe('permissionForRequest', () => {
-  it('maps the Trainees view to its own permission, trailing slash included', () => {
-    expect(permissionForRequest('GET', '/tasks/admin/trainees')).toBe(traineesReadPermission);
-    expect(permissionForRequest('GET', '/tasks/admin/trainees/')).toBe(traineesReadPermission);
+  it('maps the Trainees view (list, detail and the GitHub activity read) to its own permission, trailing slash and letter case included', () => {
+    expect(permissionForRequest('GET', '/tasks/admin/trainees/list')).toBe(traineesReadPermission);
+    expect(permissionForRequest('GET', '/tasks/admin/trainees/list/')).toBe(traineesReadPermission);
+    expect(permissionForRequest('GET', '/Tasks/Admin/Trainees/List')).toBe(traineesReadPermission);
+    expect(permissionForRequest('GET', '/tasks/admin/trainees/detail')).toBe(traineesReadPermission);
+    expect(permissionForRequest('GET', '/tasks/admin/trainees/detail/')).toBe(traineesReadPermission);
+    // Reading activity is a POST only because it carries up to 50 keys.
+    expect(permissionForRequest('POST', '/tasks/admin/trainees/activity')).toBe(traineesReadPermission);
+    expect(permissionForRequest('POST', '/tasks/admin/trainees/activity/')).toBe(traineesReadPermission);
+    expect(permissionForRequest('POST', '/TASKS/ADMIN/TRAINEES/ACTIVITY')).toBe(traineesReadPermission);
+  });
+
+  it('the old list path and every other read or write under /tasks/admin/trainees stays admin-only', () => {
+    expect(permissionForRequest('GET', '/tasks/admin/trainees')).toBe(taskReadAllPermission);
+    expect(permissionForRequest('GET', '/tasks/admin/trainees/other')).toBe(taskReadAllPermission);
+    expect(permissionForRequest('GET', '/tasks/admin/trainees/activity')).toBe(taskReadAllPermission);
+    expect(permissionForRequest('POST', '/tasks/admin/trainees/list')).toBe(taskReadAllPermission);
+    expect(permissionForRequest('POST', '/tasks/admin/trainees/detail')).toBe(taskReadAllPermission);
+    expect(permissionForRequest('DELETE', '/tasks/admin/trainees/activity')).toBe(taskReadAllPermission);
   });
 
   it('defaults every other /tasks/admin path to the strict read-all permission', () => {
@@ -33,6 +49,8 @@ describe('permissionForRequest', () => {
   it('keeps the user-scoped task routes on their existing permissions', () => {
     expect(permissionForRequest('GET', '/tasks')).toBe(taskReadPermission);
     expect(permissionForRequest('GET', '/tasks/123e4567-e89b-12d3-a456-426614174000')).toBe(taskReadPermission);
+    // Retry's port check reads the caller's own task: an ordinary read, nothing more.
+    expect(permissionForRequest('GET', '/tasks/123e4567-e89b-12d3-a456-426614174000/retry-conflicts')).toBe(taskReadPermission);
     expect(permissionForRequest('POST', '/tasks')).toBe(taskCreatePermission);
     expect(permissionForRequest('DELETE', '/tasks/x')).toBe(taskDeletePermission);
     expect(permissionForRequest('GET', '/agent/poll')).toBeUndefined();

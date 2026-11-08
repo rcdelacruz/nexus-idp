@@ -4,6 +4,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarPage, useSidebarOpenState } from '@backstage/core-components';
 import { Sidebar } from '@backstage/core-components';
 import { useApi, identityApiRef, appThemeApiRef, githubAuthApiRef } from '@backstage/core-plugin-api';
+import { themeIsDark } from '@stratpoint/theme-utils';
+import { otherModeTheme, rememberTheme, useActiveThemeId } from './themePreference';
 import { catalogApiRef } from '@backstage/plugin-catalog-react';
 import { DEPT_TEAM_IDS_JWT } from '@internal/plugin-onboarding';
 
@@ -81,6 +83,7 @@ import {
   ChevronDown, ChevronRight, ClipboardCheck, UserCog, FolderKanban, FilePlus, ListTodo, Bell, GraduationCap,
 } from 'lucide-react';
 import { NexusLogoMark } from './NexusLogo';
+import { RoutedPage, isNavItemActive } from './pageRouting';
 import { engineeringDocsApiRef } from '@internal/plugin-engineering-docs';
 import { DocSource } from '@internal/plugin-engineering-docs';
 
@@ -292,12 +295,7 @@ const NavItem = ({ icon: Icon, label, to, onClick, exact = false }: NavItemProps
   const { isOpen } = useSidebarOpenState();
   const location = useLocation();
 
-  let isActive = false;
-  if (to) {
-    isActive = exact
-      ? location.pathname === to
-      : to !== '/' && location.pathname.startsWith(to);
-  }
+  const isActive = isNavItemActive(location.pathname, to, exact);
 
   const className = `${classes.navItem} ${isActive ? classes.navItemActive : ''}`;
 
@@ -488,23 +486,16 @@ const AppSidebar = ({ isNewUser, isAdmin, isPM, isInstructor }: { isNewUser?: bo
   const classes = useStyles();
   const { isOpen } = useSidebarOpenState();
   const appThemeApi = useApi(appThemeApiRef);
-  const [themeId, setThemeIdState] = useState(() => appThemeApi.getActiveThemeId() ?? 'light');
-  const isDark = themeId === 'dark';
+  const themeId = useActiveThemeId();
+  const isDark = themeIsDark(themeId);
 
-  useEffect(() => {
-    const subscription = appThemeApi.activeThemeId$().subscribe(id => {
-      setThemeIdState(id ?? 'light');
-    });
-    return () => subscription.unsubscribe();
-  }, [appThemeApi]);
-
-  const toggleTheme = () => appThemeApi.setActiveThemeId(isDark ? 'light' : 'dark');
+  const toggleTheme = () => appThemeApi.setActiveThemeId(otherModeTheme(themeId));
 
   return (
     <div className={`${classes.sidebarInner} sidebar-dark-theme`}>
       {/* Logo */}
       <Link to={isNewUser === true ? '/onboarding' : '/'} className={classes.logoArea}>
-        <NexusLogoMark size={24} color="#ededed" />
+        <NexusLogoMark size={24} color="var(--bui-fg-primary)" />
         {isOpen && <span className={classes.logoText}>Nexus IDP</span>}
       </Link>
 
@@ -560,47 +551,30 @@ const AppSidebar = ({ isNewUser, isAdmin, isPM, isInstructor }: { isNewUser?: bo
   );
 };
 
-const PageTransition = ({ children }: PropsWithChildren<{}>) => {
-  const [opacity, setOpacity] = useState(0);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setOpacity(1));
-    return () => cancelAnimationFrame(frame);
-  }, []);
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', opacity, transition: 'opacity 0.2s ease' }}>
-      {children}
-    </div>
-  );
-};
-
 const RootContent = ({ children }: PropsWithChildren<{}>) => {
   const appThemeApi = useApi(appThemeApiRef);
-  const [themeId, setThemeIdState] = useState(() => appThemeApi.getActiveThemeId() ?? 'light');
-  const isDark = themeId === 'dark';
+  const themeId = useActiveThemeId();
+  const isDark = themeIsDark(themeId);
   const location = useLocation();
   const navigate = useNavigate();
   const { isNewUser, isAdmin, isPM, isInstructor } = useUserRole();
 
+  // "theme-dark|theme-light" is the mode (many rules in overrides.css key off it); "tv-<id>" selects the palette's
+  // variables in themes.generated.css.
   useEffect(() => {
-    const subscription = appThemeApi.activeThemeId$().subscribe(id => {
-      setThemeIdState(id ?? 'light');
-    });
-    return () => subscription.unsubscribe();
-  }, [appThemeApi]);
-
-  useEffect(() => {
-    document.documentElement.className = isDark ? 'theme-dark' : 'theme-light';
-  }, [isDark]);
+    document.documentElement.className = `${isDark ? 'theme-dark' : 'theme-light'} tv-${themeId}`;
+    rememberTheme(themeId);
+  }, [isDark, themeId]);
 
   useEffect(() => {
     const toggle = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 't') {
-        appThemeApi.setActiveThemeId(isDark ? 'light' : 'dark');
+        appThemeApi.setActiveThemeId(otherModeTheme(themeId));
       }
     };
     window.addEventListener('keydown', toggle);
     return () => window.removeEventListener('keydown', toggle);
-  }, [appThemeApi, isDark]);
+  }, [appThemeApi, themeId]);
 
   // New users: Onboarding + Docs + Tech Radar + Local Provisioner + Settings only — per RBAC plan
   // /device is included even though it has no sidebar (see noSidebarPages below) — it's
@@ -629,9 +603,9 @@ const RootContent = ({ children }: PropsWithChildren<{}>) => {
       <Sidebar>
         <AppSidebar isNewUser={isNewUser} isAdmin={isAdmin} isPM={isPM} isInstructor={isInstructor} />
       </Sidebar>
-      <PageTransition key={location.pathname}>
+      <RoutedPage>
         {children}
-      </PageTransition>
+      </RoutedPage>
     </SidebarPage>
   );
 };

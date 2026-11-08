@@ -108,6 +108,27 @@ async function verifyGitHubOrgEmail(
   }
 }
 
+// Teams a person may pick for themselves at sign-up (POST /register). Everything else (department teams) is assigned by an admin
+// (POST /assign). Keep in step with DEPT_TEAMS in plugins/onboarding OnboardingPage.tsx; the backend must enforce this, the UI
+// only hides the other choices (audit 2026-11-07: any new hire could post {"team":"cloud-team"} and get that team's rights).
+const SELF_REGISTER_TEAMS = ['general-engineers'];
+
+const AUTO_LINK_MAX = 5;
+const AUTO_LINK_WINDOW_MS = 10 * 60 * 1000;
+const autoLinkAttempts = new Map<string, number[]>();
+
+/** At most AUTO_LINK_MAX auto-link searches per person per window (in memory: one portal replica). Exported for tests. */
+export function allowAutoLinkAttempt(name: string, now: number = Date.now()): boolean {
+  const recent = (autoLinkAttempts.get(name) ?? []).filter(t => now - t < AUTO_LINK_WINDOW_MS);
+  if (recent.length >= AUTO_LINK_MAX) {
+    autoLinkAttempts.set(name, recent);
+    return false;
+  }
+  recent.push(now);
+  autoLinkAttempts.set(name, recent);
+  return true;
+}
+
 const DEPT_TEAMS = ['general-engineers', 'web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team', 'pm-team', 'sa-team'];
 
 // Only users authenticated via Google OAuth with the org domain are issued tokens by Backstage.
@@ -180,8 +201,8 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
       team?: string;
     };
 
-    if (!team || !DEPT_TEAMS.includes(team)) {
-      throw new InputError(`Invalid team. Must be one of: ${DEPT_TEAMS.join(', ')}`);
+    if (!team || !SELF_REGISTER_TEAMS.includes(team)) {
+      throw new InputError(`Invalid team. You can register as: ${SELF_REGISTER_TEAMS.join(', ')}. An admin assigns department teams.`);
     }
 
     logger.info(`User ${name} self-registering to team ${team}`);
@@ -205,6 +226,12 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
 
     const name = assertOrgUser(info.userEntityRef, orgDomain);
     const email = `${name}@${orgDomain}`;
+
+    // Each call spends the portal's shared GitHub token (5000 requests an hour, also used by catalog discovery and scaffolding):
+    // a few attempts per person is plenty, since the answer for one person does not change from one call to the next.
+    if (!allowAutoLinkAttempt(name)) {
+      throw new NotAllowedError('Too many attempts. Try again in a few minutes.');
+    }
 
     if (!githubToken) {
       res.json({ found: false });
@@ -273,13 +300,14 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
       throw new InputError(orgAccountMessage(githubUsername.trim()));
     }
 
-    if (oauthToken) {
-      // OAuth path: verify the token actually belongs to this GitHub account (read:user only)
-      await verifyGitHubTokenOwner(githubUsername.trim(), oauthToken);
-    } else if (githubToken) {
-      // Fallback: check public email using the server token
-      await verifyGitHubOrgEmail(githubUsername.trim(), githubToken, orgDomain);
+    // The proof is mandatory: the token must belong to the account being linked. The fallback that used to run without it only checked
+    // that the CLAIMED account's public email was on the company domain, which says nothing about who is asking: anyone could link a
+    // colleague's account (and the lab form then shares their repos with that colleague), and each attempt spent the portal's GitHub token.
+    if (!oauthToken) {
+      throw new InputError('Sign in with GitHub to link your account (the portal needs proof that the account is yours).');
     }
+    // verify the token actually belongs to this GitHub account (read:user only)
+    await verifyGitHubTokenOwner(githubUsername.trim(), oauthToken);
 
     logger.info(`User ${name} linking GitHub username: ${githubUsername}`);
 
@@ -306,9 +334,10 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
       throw new InputError('gitlabUsername is required');
     }
 
-    if (oauthToken) {
-      await verifyGitLabTokenOwner(gitlabUsername.trim(), oauthToken);
+    if (!oauthToken) {
+      throw new InputError('Sign in with GitLab to link your account (the portal needs proof that the account is yours).');
     }
+    await verifyGitLabTokenOwner(gitlabUsername.trim(), oauthToken);
 
     logger.info(`User ${name} linking GitLab username: ${gitlabUsername}`);
 
@@ -373,6 +402,8 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
       teams,
       isLead,
     });
+    // Their token still carries the old groups: refuse it so the next request needs a fresh sign-in (which has the new ones).
+    await revocationStore.invalidateSessionsBefore(`user:default/${userName}`);
 
     res.json({ ok: true, message: `${userName} assigned to [${teams.join(', ')}].` });
   }));
@@ -405,10 +436,53 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
     if (!user) throw new InputError(`User '${userName}' not found`);
 
     await userStore.setAdmin(userName, makeAdmin);
+    // A demoted admin's token still says admin for the rest of its life: refuse it, so the change takes effect on the next request.
+    await revocationStore.invalidateSessionsBefore(`user:default/${userName}`);
 
     const action = makeAdmin ? 'promoted to admin' : 'demoted from admin';
     logger.info(`Admin ${info.userEntityRef} ${action}: ${userName}`);
     res.json({ ok: true, message: `${user.display_name} has been ${action}.` });
+  }));
+
+  // ── POST /instructor ──────────────────────────────────────────────────────
+  // Admin-only: grant or revoke the instructor role (membership of the `instructors` group,
+  // synced to the catalog by UserEntityProvider). Independent of the user's department team.
+  // Body: { userName: string; isInstructor: boolean }
+  router.post('/instructor', wrap(async (req: Request, res: Response) => {
+    const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
+    const info = await userInfo.getUserInfo(credentials);
+
+    const isAdmin = info.ownershipEntityRefs.includes('group:default/backstage-admins');
+    if (!isAdmin) {
+      throw new NotAllowedError('Only platform admins can grant or revoke the instructor role');
+    }
+
+    const { userName, isInstructor } = req.body as {
+      userName?: string;
+      isInstructor?: boolean;
+    };
+
+    if (!userName) throw new InputError('userName is required');
+    if (typeof isInstructor !== 'boolean') throw new InputError('isInstructor must be a boolean');
+
+    const user = await userStore.getByName(userName);
+    if (!user) throw new InputError(`User '${userName}' not found`);
+
+    // A row with no team that is not an admin is a "ghost" (linked GitHub before finishing
+    // onboarding). UserEntityProvider deliberately emits no catalog entity for it, so a role
+    // granted to it could never take effect: refuse the GRANT instead of saving a flag that does
+    // nothing. Revoking is always allowed: an admin with no team who was made an instructor and
+    // then demoted is exactly such a row, still emitted because of the flag, and must be removable.
+    if (isInstructor && user.teams.length === 0 && !user.is_admin) {
+      throw new InputError(`${user.display_name} has not finished onboarding yet. Ask them to complete it first.`);
+    }
+
+    await userStore.setInstructor(userName, isInstructor);
+    await revocationStore.invalidateSessionsBefore(`user:default/${userName}`);
+
+    const action = isInstructor ? 'is now an instructor' : 'is no longer an instructor';
+    logger.info(`Admin ${info.userEntityRef} ${isInstructor ? 'made' : 'removed'} instructor: ${userName}`);
+    res.json({ ok: true, message: `${user.display_name} ${action}.` });
   }));
 
   // DELETE /users/:name

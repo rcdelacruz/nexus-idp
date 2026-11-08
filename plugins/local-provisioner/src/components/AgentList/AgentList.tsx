@@ -28,6 +28,7 @@ import {
 } from '@material-ui/core';
 import { AgentRegistration } from '../../api/types';
 import { getConnectivity } from '../../api/connectivity';
+import { AgentRequirements } from '../AgentRequirements';
 import { CheckCircle, ZapOff, Monitor, Filter, MoreVertical, Square, Trash2, Play, Info } from 'lucide-react';
 
 /**
@@ -425,6 +426,9 @@ export const AgentList = ({
             );
           })}
         </List>
+        <Box mt={2} pt={2} borderTop="1px solid var(--border)">
+          <AgentRequirements />
+        </Box>
       </CardContent>
 
       {/* Action Menu */}
@@ -605,6 +609,9 @@ export const AgentList = ({
           <Box mt={2} mb={1}>
             <Typography variant="subtitle2" gutterBottom>
               What this does:
+            </Typography>
+            <Typography variant="body2" color="textSecondary" gutterBottom>
+              • Needs Docker open and running first (Docker Desktop is recommended). If it is not, the command says so.
             </Typography>
             <Typography variant="body2" color="textSecondary" gutterBottom>
               • Starts the agent as a background daemon process

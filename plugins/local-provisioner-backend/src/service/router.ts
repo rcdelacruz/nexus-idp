@@ -3,14 +3,12 @@
  */
 
 import { Router } from 'express';
-import express from 'express';
 import {
   DatabaseService,
   DiscoveryService,
   LoggerService,
   HttpAuthService,
   PermissionsService,
-  SchedulerService,
 } from '@backstage/backend-plugin-api';
 import { AuthorizeResult } from '@backstage/plugin-permission-common';
 import { Config } from '@backstage/config';
@@ -18,11 +16,10 @@ import { Config } from '@backstage/config';
 import { TaskStore } from '../database/TaskStore';
 import { resolveSharedTaskStore } from '../sharedStore';
 import { DefaultGithubCredentialsProvider, ScmIntegrations } from '@backstage/integration';
-import { TraineeActivityService } from './traineeActivity/TraineeActivityService';
+import { archiveRetentionDays, TraineeActivityService } from './traineeActivity/TraineeActivityService';
 import { CapstoneStore } from '../capstones/CapstoneStore';
 import { TaskType } from '../types';
-import { createCapstoneRoutes, LabOps, queueEnrollmentCheck } from '../capstones/capstoneRoutes';
-import { capstoneById } from '../capstones/definitions';
+import { createCapstoneRoutes, LabOps } from '../capstones/capstoneRoutes';
 import { createSeedReportRoute } from '../capstones/seedReportRoute';
 import {
   taskCreatePermission,
@@ -38,6 +35,8 @@ import { TaskQueueService } from './TaskQueueService';
 import { AgentService } from './AgentService';
 // import { CatalogService } from './CatalogService'; // Reserved for future use
 import { createAgentRoutes } from '../api/agentRoutes';
+import { createInstallRoute } from '../install/installRoute';
+import { jsonBody } from '../util/bodyLimits';
 import { createTaskRoutes } from '../api/taskRoutes';
 import { createHealthRoutes } from '../api/healthRoutes';
 import { extractEmailFromEntityRef } from '../util/identity';
@@ -54,8 +53,6 @@ export interface RouterOptions {
   config: Config;
   httpAuth: HttpAuthService;
   permissions: PermissionsService;
-  /** For scheduled capstone checks; optional so tests can build the router without it. */
-  scheduler?: SchedulerService;
 }
 
 /**
@@ -64,7 +61,10 @@ export interface RouterOptions {
  * Paths here are relative to the plugin mount (the middleware runs before `/tasks` prefixing,
  * so `req.path` includes it).
  */
-export function permissionForRequest(method: string, path: string) {
+export function permissionForRequest(method: string, rawPath: string) {
+  // Letter case never changes what a request needs (the routers are case-sensitive as well, so a differently spelled path matches no
+  // handler; this keeps the mapping safe even if one ever becomes case-insensitive again).
+  const path = rawPath.toLowerCase();
   if (path === '/capstones' || path.startsWith('/capstones/')) {
     // Self-enrollment (and linking your own repo) is open to signed-in users; every other
     // capstone route exposes seeds/credentials/answer keys, so it defaults to manage.
@@ -78,6 +78,8 @@ export function permissionForRequest(method: string, path: string) {
   // per-user task permissions below (a POST would otherwise need only task.create).
   if (method !== 'GET' && path.startsWith('/tasks/admin')) {
     if (method === 'POST' && path.replace(/\/+$/, '') === '/tasks/admin/trainees/remove') return traineesManagePermission;
+    // Reading GitHub activity for rows of the list is a read; it is a POST only because it carries up to 50 keys.
+    if (method === 'POST' && path.replace(/\/+$/, '') === '/tasks/admin/trainees/activity') return traineesReadPermission;
     return taskReadAllPermission;
   }
   switch (method) {
@@ -92,7 +94,8 @@ export function permissionForRequest(method: string, path: string) {
       // (own-tasks-only) taskReadPermission. Must be checked before the generic case.
       // Every /tasks/admin/* route is cross-user, so it defaults to the strict read-all
       // permission; a trailing slash must not fall through to taskReadPermission.
-      if (path.replace(/\/+$/, '') === '/tasks/admin/trainees') return traineesReadPermission;
+      if (path.replace(/\/+$/, '') === '/tasks/admin/trainees/list') return traineesReadPermission;
+      if (path.replace(/\/+$/, '') === '/tasks/admin/trainees/detail') return traineesReadPermission;
       if (path.startsWith('/tasks/admin')) return taskReadAllPermission;
       return taskReadPermission;
     default:
@@ -106,7 +109,7 @@ export function permissionForRequest(method: string, path: string) {
 export async function createRouter(
   options: RouterOptions,
 ): Promise<Router> {
-  const { logger, database, config, httpAuth, permissions, discovery, scheduler } = options;
+  const { logger, database, config, httpAuth, permissions, discovery } = options;
 
   logger.info('Initializing Local Provisioner plugin router');
 
@@ -143,6 +146,8 @@ export async function createRouter(
   // connection open waiting for an origin response (see AgentService.longPoll).
   const pollTimeoutSeconds = pluginConfig?.getOptionalNumber('pollTimeoutSeconds') ?? 25;
   const taskRetentionDays = pluginConfig?.getOptionalNumber('taskRetentionDays') ?? 30;
+  const trainingRetentionDays = pluginConfig?.getOptionalNumber('trainingRetentionDays');
+  const archiveDays = archiveRetentionDays(pluginConfig?.getOptionalNumber('archiveRetentionDays'));
   const resourceDocsUrls = readResourceDocsUrls(config);
 
   logger.info('Plugin configuration loaded', {
@@ -178,14 +183,17 @@ export async function createRouter(
     undefined,
     capstoneStore,
     config.getOptionalString('organization.githubOwner'),
+    (agentId, lastSeen) => agentService.isConnectedAt(agentId, lastSeen),
+    archiveDays,
   );
   // CatalogService will be used for future catalog integration
   // const catalogService = new CatalogService(logger, discovery);
 
   logger.info('Services initialized successfully');
 
-  // Create Express router
-  const router = Router();
+  // Create Express router. Case-SENSITIVE on purpose (Express routes are case-insensitive by default): the permission mapping below
+  // is keyed on the path, so `/Tasks/admin/all` used to reach the admin handler with no permission asked at all (audit 2026-11-07).
+  const router = Router({ caseSensitive: true });
 
   // Middleware
   // Default 100kb limit is too small for tasks carrying a base64-encoded source tree
@@ -193,7 +201,8 @@ export async function createRouter(
   // Public, token-authenticated seed reports: before the 10 MB parser below, with their own small
   // limit and the token checked before any body is read.
   router.use('/capstones/seed-report', createSeedReportRoute({ store: capstoneStore, logger, getGithubToken }));
-  router.use(express.json({ limit: '10mb' }));
+  // Per-route body limit (util/bodyLimits.ts): 10 MB only for POST /tasks, 1 MB for an agent's status report, 100 kb for everything else.
+  router.use(jsonBody);
 
   // Log all requests
   router.use((req, _res, next) => {
@@ -272,15 +281,15 @@ export async function createRouter(
   // Health endpoints are public (configured via httpRouter.addAuthPolicy in plugin.ts)
   router.use('/health', createHealthRoutes(db));
   // Agent and task endpoints require authentication (enforced by middleware above)
+  // The installer script: public (see util/publicPaths.ts), answers only GET /agent/install.sh and passes everything else on.
+  router.use('/agent', createInstallRoute({ portalUrl: config.getOptionalString('app.baseUrl') }));
   router.use('/agent', createAgentRoutes(agentService, logger, taskQueueService));
   router.use('/tasks', createTaskRoutes(taskQueueService, logger, agentService, resourceDocsUrls, traineeActivity));
-  // Instructor lab checks (run-check via the trainee's agent) — shared by the Trainees view's Run
-  // buttons and the scheduled checks below.
+  // Instructor lab checks (run-check via the trainee's agent), started by the Trainees view's Run buttons.
   const labs: LabOps = {
-    findLabTask: repoUrl => taskStore.findProvisionTaskByRepoUrl(repoUrl),
+    findLabTask: (repoUrl, traineeEmail) => taskStore.findProvisionTaskByRepoUrl(repoUrl, traineeEmail),
     resourceState: async (agentId, name) => (await taskStore.getResourceState(agentId, name))?.state,
     isAgentOnline: agentId => agentService.isAgentOnline(agentId),
-  hasPendingCheck: (agentId, name) => taskStore.hasOpenTask(agentId, name, TaskType.RUN_CHECK),
   fetchSourceFile: async (sourceRepo, branch, filePath) => {
     const token = await getGithubToken(`https://github.com/${sourceRepo}`);
     const res = await fetch(`https://api.github.com/repos/${sourceRepo}/contents/${filePath}?ref=${encodeURIComponent(branch)}`, {
@@ -306,32 +315,6 @@ export async function createRouter(
     },
   };
 
-  // Scheduled capstone checks: every `localProvisioner.capstoneChecks.intervalMinutes` (default 60,
-  // 0 disables) run each capstone's checks on every running lab whose agent supports them, so
-  // instructors see a hard fail without clicking. Same guards as the Run button; skips a lab that
-  // still has a check pending, so a slow or offline agent never piles up tasks.
-  const checkInterval = config.getOptionalNumber('localProvisioner.capstoneChecks.intervalMinutes') ?? 60;
-  if (scheduler && checkInterval > 0) {
-    await scheduler.scheduleTask({
-      id: 'local-provisioner-capstone-checks',
-      frequency: { minutes: checkInterval },
-      timeout: { minutes: 5 },
-      initialDelay: { minutes: 5 },
-      fn: async () => {
-        let queued = 0;
-        for (const e of await capstoneStore.list()) {
-          if (e.status !== 'active' || e.awaitingSeedReport) continue;
-          const checks = capstoneById(e.capstone)?.checks ?? {};
-          for (const name of Object.keys(checks).filter(n => checks[n].scheduled !== false)) {
-            const r = await queueEnrollmentCheck(capstoneStore, labs, e.id, name, { skipIfPending: true }).catch(err => ({ status: 500, error: String(err) }));
-            if (r.status === 202) queued++;
-          }
-        }
-        if (queued) logger.info(`Scheduled capstone checks: queued ${queued}`);
-      },
-    });
-  }
-
   router.use(
     '/capstones',
     createCapstoneRoutes({
@@ -340,6 +323,7 @@ export async function createRouter(
       getGithubToken,
       externalBaseUrl: () => discovery.getExternalBaseUrl('local-provisioner'),
       labs,
+      allowedOwner: config.getOptionalString('organization.githubOwner'),
     }),
   );
 
@@ -353,6 +337,16 @@ export async function createRouter(
       path: req.path,
     });
 
+    // Body-parser errors carry the right status: a body over the limit is 413, a body that is not JSON is 400.
+    if (err?.type === 'entity.too.large') {
+      res.status(413).json({ error: 'Request too large' });
+      return;
+    }
+    if (err?.type === 'entity.parse.failed') {
+      res.status(400).json({ error: 'The request body is not valid JSON' });
+      return;
+    }
+
     res.status(500).json({
       error: 'Internal server error',
       message: err.message,
@@ -364,8 +358,9 @@ export async function createRouter(
   setInterval(async () => {
     try {
       logger.info('Starting periodic task cleanup');
-      const deletedCount = await taskQueueService.cleanupOldTasks(taskRetentionDays);
+      const deletedCount = await taskQueueService.cleanupOldTasks(taskRetentionDays, trainingRetentionDays);
       logger.info(`Periodic cleanup completed: ${deletedCount} tasks deleted`);
+      await traineeActivity.purgeArchive(archiveDays);
     } catch (error: any) {
       logger.error('Periodic cleanup failed', error);
     }

@@ -33,7 +33,7 @@ import type { RootConfigService, LoggerService } from '@backstage/backend-plugin
 import type { RequestHandler } from 'express';
 import { CatalogClient } from '@backstage/catalog-client';
 import { HostDiscovery } from '@backstage/backend-defaults/discovery';
-import { RELATION_OWNED_BY, type Entity } from '@backstage/catalog-model';
+import { RELATION_OWNED_BY, parseEntityRef, stringifyEntityRef, type Entity } from '@backstage/catalog-model';
 import {
   isAdmin,
   isDevOps,
@@ -135,6 +135,69 @@ export function isTaskCreationAllowed(groups: string[], template: Entity): boole
   return false;
 }
 
+/**
+ * The token of an `Authorization: Bearer <token>` header, parsed the way the Backstage framework parses it (scheme case-insensitive,
+ * one or more spaces). The guard used to require the exact string "Bearer ", so `bearer <token>` skipped it (audit 2026-11-07).
+ */
+export function bearerToken(header: string | undefined): string | undefined {
+  return /^Bearer[ ]+(\S+)$/i.exec(header ?? '')?.[1];
+}
+
+/**
+ * The canonical `kind:namespace/name` of a template reference, parsed the way the scaffolder parses it (kind defaults to `template`,
+ * namespace to `default`). Undefined when it is not a string or does not parse. The guard used to look up the raw string and let
+ * anything it could not parse through, while the scaffolder accepted both.
+ */
+export function canonicalTemplateRef(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  try {
+    return stringifyEntityRef(parseEntityRef(raw, { defaultKind: 'template', defaultNamespace: 'default' }));
+  } catch {
+    return undefined;
+  }
+}
+
+export type GuardDecision = { allow: true } | { allow: false; status: number; error: string; message: string };
+
+/**
+ * The guard's whole decision for one POST /v2/tasks request, with its two lookups injected so it can be tested. Fails CLOSED for a
+ * user it can identify: a malformed template reference is a 400, and a catalog failure is a 503 (it used to let the request through).
+ * A token it cannot resolve to groups (the static external-access token, an invalid token) still defers to the framework's own auth
+ * downstream, as before.
+ */
+export async function decideTaskCreation(
+  input: { authorization?: string; body?: unknown },
+  deps: {
+    resolveGroups: (token: string) => Promise<string[] | undefined>;
+    getTemplate: (canonicalRef: string, token: string) => Promise<Entity | undefined>;
+  },
+): Promise<GuardDecision> {
+  const token = bearerToken(input.authorization);
+  if (!token) return { allow: true }; // no/malformed bearer token: the scaffolder's own httpAuth produces the 401
+  const groups = await deps.resolveGroups(token);
+  if (!groups) return { allow: true }; // not a user session: downstream auth decides
+  if (isAdmin(groups) || isDevOps(groups)) return { allow: true };
+
+  const rawRef = (input.body as { templateRef?: unknown } | undefined)?.templateRef;
+  const templateRef = canonicalTemplateRef(rawRef);
+  if (!templateRef) {
+    return { allow: false, status: 400, error: 'Bad Request', message: 'templateRef must be a template reference string such as template:default/name' };
+  }
+  let template: Entity | undefined;
+  try {
+    template = await deps.getTemplate(templateRef, token);
+  } catch {
+    return { allow: false, status: 503, error: 'Service Unavailable', message: 'The template could not be checked right now. Try again in a moment.' };
+  }
+  if (!template) {
+    return { allow: false, status: 403, error: 'Forbidden', message: `Template not found or not visible: ${templateRef}` };
+  }
+  if (!isTaskCreationAllowed(groups, template)) {
+    return { allow: false, status: 403, error: 'Forbidden', message: `You do not have permission to run template: ${templateRef}` };
+  }
+  return { allow: true };
+}
+
 export function createScaffolderTaskGuard({
   config,
   logger,
@@ -156,62 +219,25 @@ export function createScaffolderTaskGuard({
     }
 
     (async () => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
-        // No/malformed bearer token — not our job to reject; let the scaffolder plugin's
-        // own httpAuth.credentials() produce the normal 401.
-        next();
-        return;
-      }
-      const token = authHeader.slice('Bearer '.length);
-
       const authBaseUrl = await discovery.getBaseUrl('auth');
-      const groups = await resolveGroups(token, authBaseUrl);
-      if (!groups) {
-        log.warn('Could not resolve identity for scaffolder.task.create guard check; deferring to downstream auth');
+      const decision = await decideTaskCreation(
+        { authorization: req.headers.authorization, body: req.body },
+        {
+          resolveGroups: token => resolveGroups(token, authBaseUrl),
+          getTemplate: async (ref, token) => (await catalogClient.getEntityByRef(ref, { token })) ?? undefined,
+        },
+      );
+      if (decision.allow) {
         next();
         return;
       }
-
-      // Admins/devops never need a catalog round-trip.
-      if (isAdmin(groups) || isDevOps(groups)) {
-        next();
-        return;
-      }
-
-      const templateRef = req.body?.templateRef;
-      if (typeof templateRef !== 'string') {
-        // Malformed request body — let the scaffolder plugin's own validation reject it.
-        next();
-        return;
-      }
-
-      const template = await catalogClient.getEntityByRef(templateRef, { token });
-      if (!template) {
-        log.warn(`scaffolder.task.create denied: template not found: ${templateRef}`);
-        res.status(403).json({
-          error: 'Forbidden',
-          message: `Template not found or not visible: ${templateRef}`,
-        });
-        return;
-      }
-
-      if (!isTaskCreationAllowed(groups, template)) {
-        log.warn(`scaffolder.task.create denied for template ${templateRef}`, { groups });
-        res.status(403).json({
-          error: 'Forbidden',
-          message: `You do not have permission to run template: ${templateRef}`,
-        });
-        return;
-      }
-
-      next();
+      log.warn(`scaffolder.task.create refused (${decision.status}): ${decision.message}`);
+      res.status(decision.status).json({ error: decision.error, message: decision.message });
     })().catch(err => {
-      // Fail OPEN on unexpected internal errors (catalog unavailable, etc.) — this guard is
-      // an ADDITIONAL restriction layered on top of what already ships; a transient failure
-      // here should not take down provisioning entirely. Loud logging makes it actionable.
-      log.error(`scaffolderTaskGuard failed unexpectedly, allowing request through: ${err.message}`);
-      next();
+      // Fail CLOSED: this guard is the real enforcement for who may run which template (permission.ts cannot see the template), so an
+      // unexpected error must not wave a request through.
+      log.error(`scaffolderTaskGuard failed unexpectedly, refusing the request: ${err.message}`);
+      res.status(503).json({ error: 'Service Unavailable', message: 'The template could not be checked right now. Try again in a moment.' });
     });
   };
 }

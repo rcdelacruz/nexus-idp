@@ -23,6 +23,7 @@ const STEP_HINTS: Array<[RegExp, string]> = [
   [/^Setting up the server/, 'usually 10–20 min'],
   [/^Downloading images/, 'first time only; later labs reuse them'],
   [/^Building /, 'builds the app from source; a few minutes'],
+  [/^Waiting for access to your repo/, 'accept the GitHub invitation for your new repo; the lab continues on its own'],
 ];
 
 export function stepLabel(raw: string): string {
@@ -80,6 +81,18 @@ export function currentStep(task: ProvisioningTask, now: Date = new Date()): { l
     hint: stepHint(last.label),
     percent: Number.isFinite(percent) && percent >= 0 && percent <= 100 ? Math.round(percent) : undefined,
   };
+}
+
+/**
+ * A button the agent attached to the running step (e.g. "Accept the GitHub invitation"). Only
+ * https links to GitHub/GitLab are shown: the agent runs on a trainee's machine.
+ */
+export function stepAction(task: ProvisioningTask): { label: string; url: string } | undefined {
+  if (task.status !== 'in-progress') return undefined;
+  const a = task.metadata?.action as { label?: unknown; url?: unknown } | undefined;
+  if (!a || typeof a.label !== 'string' || typeof a.url !== 'string') return undefined;
+  if (!/^https:\/\/(github\.com|gitlab\.com)\//.test(a.url)) return undefined;
+  return { label: a.label.slice(0, 80), url: a.url };
 }
 
 /** "8 s", "6 min", "1 h 5 min". */

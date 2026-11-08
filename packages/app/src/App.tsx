@@ -9,7 +9,7 @@ import { catalogImportPlugin } from '@backstage/plugin-catalog-import';
 import { ScaffolderPage, scaffolderPlugin } from '@backstage/plugin-scaffolder';
 import { orgPlugin } from '@backstage/plugin-org';
 import { SearchPage } from '@backstage/plugin-search';
-import { UserSettingsPage, UserSettingsTab } from '@backstage/plugin-user-settings';
+import { UserSettingsPage } from '@backstage/plugin-user-settings';
 import { apis } from './apis';
 import { entityPage } from './components/catalog/EntityPage';
 import { CustomCatalogPage } from './components/catalog/CustomCatalogPage';
@@ -27,7 +27,8 @@ import {
 } from '@backstage/core-components';
 import { createApp } from '@backstage/app-defaults';
 import { UnifiedThemeProvider } from '@backstage/theme';
-import { nexusDarkTheme, nexusLightTheme } from './theme';
+import { PALETTES, THEME_IDS } from '@stratpoint/theme-utils';
+import { nexusThemes } from './theme';
 import { Moon, Sun } from 'lucide-react';
 import { AppRouter, FlatRoutes } from '@backstage/core-app-api';
 import { CustomCatalogGraphPage } from './components/catalogGraph/CustomCatalogGraphPage';
@@ -45,6 +46,8 @@ import { DatabasePicker } from './components/scaffolder/DatabasePicker';
 import { ValidatedTextField } from './components/scaffolder/ValidatedTextField';
 import { GitHubUsernameField, validateGitHubUsername } from './components/scaffolder/GitHubUsernameField';
 import { GitLabUsernameField, validateGitLabUsername } from './components/scaffolder/GitLabUsernameField';
+import { LocalAgentField, validateLocalAgent } from './components/scaffolder/LocalAgentField';
+import { TemplateOverviewField } from './components/scaffolder/TemplateOverviewField';
 import { SuggestedResourceNameField } from './components/scaffolder/SuggestedResourceNameField';
 import { TeardownEntityRefField } from './components/scaffolder/TeardownEntityRefField';
 import { ConfirmAppNameField, validateConfirmAppName } from './components/scaffolder/ConfirmAppNameField';
@@ -63,6 +66,8 @@ const CustomTemplateWizardPageWithExtensions = (props: TemplateWizardPageProps) 
       { name: 'ValidatedTextField', component: ValidatedTextField as any },
       { name: 'GitHubUsernameField', component: GitHubUsernameField as any, validation: validateGitHubUsername as any },
       { name: 'GitLabUsernameField', component: GitLabUsernameField as any, validation: validateGitLabUsername as any },
+      { name: 'LocalAgentField', component: LocalAgentField as any, validation: validateLocalAgent as any },
+      { name: 'TemplateOverview', component: TemplateOverviewField as any },
       { name: 'SuggestedResourceName', component: SuggestedResourceNameField as any },
       { name: 'TeardownEntityRefField', component: TeardownEntityRefField as any },
       { name: 'ConfirmAppNameField', component: ConfirmAppNameField as any, validation: validateConfirmAppName as any },
@@ -76,8 +81,7 @@ import { CustomTechRadarPage } from './components/techRadar/CustomTechRadarPage'
 import { LocalProvisionerPage, TraineesPage } from '@internal/plugin-local-provisioner';
 import { OnboardingPage } from '@internal/plugin-onboarding';
 import { UserManagementPage } from '@internal/plugin-user-management';
-import { ConnectDatabasesPage } from '@internal/plugin-dbaas';
-import { AboutTab } from './components/settings/AboutTab';
+import { settingsLayout } from './components/settings/settingsLayout';
 import { DeviceAuthPage } from './components/DeviceAuthPage';
 import { NotificationsPage } from '@backstage/plugin-notifications';
 import { GlobalStyleOverrides } from './components/GlobalStyleOverrides';
@@ -95,26 +99,16 @@ try {
 
 const app = createApp({
   apis,
-  themes: [
-    {
-      id: 'dark',
-      title: 'Dark',
-      variant: 'dark',
-      icon: <Moon size={16} strokeWidth={1.5} />,
-      Provider: ({ children }) => (
-        <UnifiedThemeProvider theme={nexusDarkTheme} children={children} />
-      ),
-    },
-    {
-      id: 'light',
-      title: 'Light',
-      variant: 'light',
-      icon: <Sun size={16} strokeWidth={1.5} />,
-      Provider: ({ children }) => (
-        <UnifiedThemeProvider theme={nexusLightTheme} children={children} />
-      ),
-    },
-  ],
+  // Every palette in packages/theme-utils/src/palettes.ts is a choice in Settings → Appearance.
+  themes: THEME_IDS.map(id => ({
+    id,
+    title: PALETTES[id].name,
+    variant: PALETTES[id].isDark ? ('dark' as const) : ('light' as const),
+    icon: PALETTES[id].isDark ? <Moon size={16} strokeWidth={1.5} /> : <Sun size={16} strokeWidth={1.5} />,
+    Provider: ({ children }: { children: React.ReactNode }) => (
+      <UnifiedThemeProvider theme={nexusThemes[id]} children={children} />
+    ),
+  })),
   bindRoutes({ bind }) {
     bind(catalogPlugin.externalRoutes, {
       createComponent: scaffolderPlugin.routes.root,
@@ -168,12 +162,7 @@ const routes = (
       {searchPage}
     </Route>
     <Route path="/settings" element={<UserSettingsPage />}>
-      <UserSettingsTab path="/connect-databases" title="Connect Databases">
-        <ConnectDatabasesPage />
-      </UserSettingsTab>
-      <UserSettingsTab path="/about" title="About">
-        <AboutTab />
-      </UserSettingsTab>
+      {settingsLayout}
     </Route>
     <Route path="/catalog-graph" element={<CustomCatalogGraphPage />} />
     <Route path="/project-registration" element={<ProjectRegistrationPage />} />

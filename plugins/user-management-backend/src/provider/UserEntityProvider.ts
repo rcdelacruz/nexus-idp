@@ -49,8 +49,10 @@ export class UserEntityProvider implements EntityProvider {
     // Skip ghost rows: users who linked GitHub before completing registration have
     // teams=[] and is_admin=false. Emitting catalog entities for these would conflict
     // with YAML-defined users and incorrectly override their group memberships.
+    // An instructor is always emitted: the role must reach the catalog even for a user whose
+    // only team is general-engineers (not in DEPT_TEAMS).
     const users = allUsers.filter(
-      u => u.teams.some(t => DEPT_TEAMS.includes(t)) || u.is_admin,
+      u => u.teams.some(t => DEPT_TEAMS.includes(t)) || u.is_admin || u.is_instructor,
     );
     const entities: UserEntity[] = users.map(user => this.toEntity(user));
 
@@ -65,7 +67,7 @@ export class UserEntityProvider implements EntityProvider {
     this.logger.info(`UserEntityProvider: applied ${entities.length} user entities`);
   }
 
-  private buildMemberOf(teams: string[], isLead: boolean, isAdmin: boolean): string[] {
+  private buildMemberOf(teams: string[], isLead: boolean, isAdmin: boolean, isInstructor = false): string[] {
     const groups = new Set<string>(['general-engineers']);
     for (const team of teams) {
       if (DEPT_TEAMS.includes(team)) {
@@ -78,6 +80,9 @@ export class UserEntityProvider implements EntityProvider {
     if (isAdmin) {
       groups.add('backstage-admins');
     }
+    if (isInstructor) {
+      groups.add('instructors');
+    }
     return Array.from(groups);
   }
 
@@ -88,9 +93,10 @@ export class UserEntityProvider implements EntityProvider {
     teams: string[];
     is_lead: boolean;
     is_admin: boolean;
+    is_instructor?: boolean;
     github_username: string | null;
   }): UserEntity {
-    const memberOf = this.buildMemberOf(user.teams, user.is_lead, user.is_admin);
+    const memberOf = this.buildMemberOf(user.teams, user.is_lead, user.is_admin, user.is_instructor ?? false);
 
     return {
       apiVersion: 'backstage.io/v1alpha1',

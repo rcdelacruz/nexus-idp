@@ -15,8 +15,8 @@ export function getConnectivity(agent: AgentRegistration): Connectivity {
   // explicitlyDisconnected is a standalone, permanent signal — true once a "Stop Agent"
   // shutdown has actually been delivered, and it does NOT decay back with elapsed time. It
   // must be checked before, and independently of, age: an age-windowed version of this check
-  // (e.g. "only while age <= 90s") looked right for the first minute and a half, then
-  // regressed back to 'degraded' once age crossed 90s — reporting a definitively-offline
+  // (e.g. "only while the age is within the online window") looked right for a while, then
+  // regressed back to 'degraded' once the age passed it — reporting a definitively-offline
   // agent as merely "slow" (found 2026-07-26, live in prod: chip flipped correctly to offline
   // immediately, then wrongly back to "degraded" ~4 minutes later with nothing having
   // changed). Only a real reconnect clears this flag server-side.
@@ -28,8 +28,12 @@ export function getConnectivity(agent: AgentRegistration): Connectivity {
       ? agent.lastSeenAgeSeconds
       : (Date.now() - new Date(agent.lastSeenAt).getTime()) / 1000;
 
-  // Heartbeat/poll interval is ~30s; tolerate a couple of missed beats (and brief backend restarts).
-  if (ageSec <= 90) return 'online';
-  if (ageSec <= 300) return 'degraded'; // 1.5–5 min: slow/intermittent
-  return 'offline'; // no heartbeat for 5+ min
+  // "Online" is the SERVER's verdict (AgentService.isConnectedAt: heard from within one poll + a
+  // little, and not known to have stopped), the same one the lab guardrail uses. Re-deriving a
+  // window here is how the chip said "online" for a minute and a half after an agent stopped.
+  if (agent.isConnected) return 'online';
+  // Not connected, but heard from recently: reconnecting (display only: the Provision button and
+  // the guardrail both need 'online').
+  if (ageSec <= 120) return 'degraded';
+  return 'offline';
 }

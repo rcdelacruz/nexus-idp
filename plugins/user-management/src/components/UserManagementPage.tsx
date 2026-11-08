@@ -6,15 +6,14 @@ import {
   FormControlLabel, FormGroup, IconButton, Tab, Tabs, Typography,
 } from '@material-ui/core';
 import {
-  AlertCircle, Activity, Check, Loader, RefreshCw, Shield, UserCheck, Users, UserX, X, Info, ShieldCheck, Trash2,
+  AlertCircle, Activity, Check, GraduationCap, Loader, RefreshCw, Shield, UserCheck, Users, UserX, X, Info, ShieldCheck, Trash2,
 } from 'lucide-react';
 import { useColors, semantic, badge } from '@stratpoint/theme-utils';
 import { userManagementApiRef } from '../api/refs';
 import { localProvisionerApiRef, ProvisioningTask, TaskDetailDrawer, taskTypeLabel } from '@internal/plugin-local-provisioner';
+import { DEPT_TEAMS, UserRecord, groupsOf, isListed, toUserRecord } from './userRecords';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const DEPT_TEAMS = ['general-engineers', 'web-team', 'mobile-team', 'data-team', 'cloud-team', 'ai-team', 'qa-team', 'pm-team', 'sa-team'];
 
 const TEAM_LABELS: Record<string, string> = {
   'general-engineers': 'Trainee',
@@ -29,22 +28,6 @@ const TEAM_LABELS: Record<string, string> = {
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface UserRecord {
-  entityRef: string;
-  name: string;
-  displayName: string;
-  email: string;
-  picture?: string;
-  currentGroups: string[];
-  deptTeams: string[];   // all assigned dept teams (multi-department supported)
-  isLead: boolean;
-  isAdmin: boolean;
-  isUnassigned: boolean;
-  githubLinked: boolean;
-  onboardingCatalogTour: boolean;
-  onboardingEngineeringDocs: boolean;
-}
 
 export interface AssignDialogProps {
   user: UserRecord;
@@ -340,6 +323,7 @@ export const UserManagementPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
   const [promoteTarget, setPromoteTarget] = useState<UserRecord | null>(null);
+  const [instructorTarget, setInstructorTarget] = useState<UserRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
 
   const [activeTab, setActiveTab] = useState<'users' | 'activity'>('users');
@@ -362,32 +346,10 @@ export const UserManagementPage = () => {
     setLoading(true);
     api.listUsers().then(rows => {
       const records: UserRecord[] = rows
-        // Show all users who have at least one team (including general-engineers) or are admin.
-        // Ghost rows (GitHub-only, no team, no admin) are artifacts and should not appear here.
-        .filter(row => row.teams.length > 0 || row.is_admin)
-        .map(row => {
-          const hasDeptTeam = row.teams.some(g => DEPT_TEAMS.includes(g));
-          const deptTeams = row.teams.filter((g: string) => DEPT_TEAMS.includes(g));
-          const groups = [
-            ...deptTeams,
-            ...(row.is_lead ? deptTeams.map((t: string) => t.replace('-team', '-lead')) : []),
-            ...(row.is_admin ? ['backstage-admins'] : []),
-          ];
-          return {
-            entityRef: `user:default/${row.name}`,
-            name: row.name,
-            displayName: row.display_name,
-            email: row.email,
-            currentGroups: groups,
-            deptTeams,
-            isLead: row.is_lead,
-            isAdmin: row.is_admin,
-            isUnassigned: !hasDeptTeam && !row.is_admin,
-            githubLinked: !!row.github_username,
-            onboardingCatalogTour: row.onboarding_catalog_tour ?? false,
-            onboardingEngineeringDocs: row.onboarding_engineering_docs ?? false,
-          };
-        });
+        // Show all users who have at least one team (including general-engineers), or are admin or
+        // instructor. Ghost rows (GitHub-only, no team, no role) are artifacts and should not appear here.
+        .filter(isListed)
+        .map(toUserRecord);
       records.sort((a, b) => {
         if (a.isUnassigned && !b.isUnassigned) return -1;
         if (!a.isUnassigned && b.isUnassigned) return 1;
@@ -512,7 +474,8 @@ export const UserManagementPage = () => {
             Users appear here after completing self-registration via the{' '}
             <strong style={{ color: c.textSecondary }}>Onboarding</strong> flow.
             Use <strong style={{ color: c.textSecondary }}>Assign team</strong> to move a user to a different department, or{' '}
-            <strong style={{ color: c.textSecondary }}>Make admin</strong> to grant platform admin access.
+            <strong style={{ color: c.textSecondary }}>Make admin</strong> to grant platform admin access, or{' '}
+            <strong style={{ color: c.textSecondary }}>Make instructor</strong> to let someone coach and grade trainees.
           </Typography>
         </Box>
 
@@ -571,19 +534,21 @@ export const UserManagementPage = () => {
             {
               title: 'Department',
               field: 'deptTeams',
-              render: (user: UserRecord) => {
-                if (user.isAdmin) return <span style={badge('purple')}>Admin</span>;
-                if (user.deptTeams.length > 0) {
-                  return (
-                    <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
-                      {user.deptTeams.map(t => (
-                        <span key={t} style={badge('blue-subtle')}>{TEAM_LABELS[t] || t}</span>
-                      ))}
-                    </Box>
-                  );
-                }
-                return <span style={badge('amber')}>New user</span>;
-              },
+              render: (user: UserRecord) => (
+                <Box display="flex" style={{ gap: 4, flexWrap: 'wrap' }}>
+                  {user.isAdmin && <span style={badge('purple')}>Admin</span>}
+                  {!user.isAdmin && user.deptTeams.map(t => (
+                    <span key={t} style={badge('blue-subtle')}>{TEAM_LABELS[t] || t}</span>
+                  ))}
+                  {!user.isAdmin && user.deptTeams.length === 0 && <span style={badge('amber')}>New user</span>}
+                  {user.isInstructor && (
+                    <span style={{ ...badge('teal'), gap: 4 }}>
+                      <GraduationCap size={14} strokeWidth={1.5} aria-hidden="true" />
+                      Instructor
+                    </span>
+                  )}
+                </Box>
+              ),
             },
             {
               title: 'Groups',
@@ -650,6 +615,14 @@ export const UserManagementPage = () => {
                       <ShieldCheck size={16} strokeWidth={1.5} />
                     </IconButton>
                   )}
+                  <IconButton
+                    size="small"
+                    title={user.isInstructor ? 'Revoke instructor' : 'Make instructor'}
+                    aria-label={user.isInstructor ? `Revoke instructor from ${user.displayName}` : `Make ${user.displayName} an instructor`}
+                    onClick={() => setInstructorTarget(user)}
+                  >
+                    <GraduationCap size={16} strokeWidth={1.5} />
+                  </IconButton>
                   {user.name !== currentUserName && (
                     <IconButton
                       size="small"
@@ -678,11 +651,7 @@ export const UserManagementPage = () => {
                       deptTeams: teams,
                       isLead: lead,
                       isUnassigned: teams.length === 0 && !u.isAdmin,
-                      currentGroups: [
-                        ...teams,
-                        ...(lead ? teams.map(t => t.replace('-team', '-lead')) : []),
-                        ...(u.isAdmin ? ['backstage-admins'] : []),
-                      ],
+                      currentGroups: groupsOf(teams, lead, u.isAdmin, u.isInstructor),
                     }
                   : u,
               ));
@@ -705,6 +674,27 @@ export const UserManagementPage = () => {
               setUsers(prev => prev.map(u => u.name === promoteTarget.name ? { ...u, isAdmin: !promoteTarget.isAdmin, isUnassigned: !promoteTarget.isAdmin ? false : u.isUnassigned } : u));
             }}
             onClose={() => setPromoteTarget(null)}
+          />
+        )}
+
+        {instructorTarget && (
+          <ConfirmDialog
+            title={instructorTarget.isInstructor ? `Revoke instructor — ${instructorTarget.displayName}` : `Make instructor — ${instructorTarget.displayName}`}
+            body={
+              instructorTarget.isInstructor
+                ? `${instructorTarget.displayName} will lose access to the Trainees page and to capstone management. Their department team does not change. This takes effect when their session next refreshes or they sign in again.`
+                : `${instructorTarget.displayName} will see every trainee's labs and repository activity on the Trainees page, run capstone checks and grading, see the instructor-only answer keys and credentials, and remove trainees together with their lab repository. Their department team does not change. This takes effect when their session next refreshes or they sign in again.`
+            }
+            confirmLabel={instructorTarget.isInstructor ? 'Revoke instructor' : 'Make instructor'}
+            danger={instructorTarget.isInstructor}
+            onConfirm={async () => {
+              const makeInstructor = !instructorTarget.isInstructor;
+              await api.setInstructor({ userName: instructorTarget.name, isInstructor: makeInstructor });
+              setUsers(prev => prev.map(u => u.name === instructorTarget.name
+                ? { ...u, isInstructor: makeInstructor, currentGroups: groupsOf(u.deptTeams, u.isLead, u.isAdmin, makeInstructor) }
+                : u));
+            }}
+            onClose={() => setInstructorTarget(null)}
           />
         )}
 

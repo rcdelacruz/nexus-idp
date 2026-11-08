@@ -56,14 +56,45 @@ one-time image pull) needs a connection. See the
 
 ## Prerequisites
 
-- Docker + Docker Compose installed and running (either `docker compose` v2 or the legacy
-  `docker-compose` binary — the agent detects whichever is present)
+- **Docker**, installed and running. **Docker Desktop is recommended** on macOS and Windows
+  ([get it](https://www.docker.com/products/docker-desktop/)); on Linux use
+  [Docker Engine](https://docs.docker.com/engine/install/). Open Docker Desktop and wait until it says
+  it is running before you start the agent. The agent **will not start without Docker**, and
+  `backstage-agent start` tells you what is missing. Either `docker compose` v2 or the legacy
+  `docker-compose` binary works; the agent detects whichever is present.
 - Node.js 20+
+- [Multipass](https://multipass.run/), only for the Linux server labs (your own Ubuntu VM). macOS:
+  `brew install --cask multipass`
 - Access to Nexus IDP (any authenticated user)
 
 ---
 
 ## Install the Agent
+
+On macOS and Linux, run the installer. The **My agents** section of the Local Provisioner page shows
+this command with your portal's address in it:
+
+```bash
+curl -fsSL https://<your-portal>/api/local-provisioner/agent/install.sh | sh
+```
+
+That is all: `backstage-agent` works at once, in the window you ran the installer in and in every other
+one, in any shell (zsh, bash, fish, sh). The installer puts the agent in `~/.backstage-agent/npm`, writes a
+launcher that always runs the agent with the Node that installed it, and links the launcher into a folder
+that is already on your PATH (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` or `~/bin`). If none of
+those can be written, it adds the launcher to your zsh, bash or fish startup file and prints the one line to
+run in the current window. Open the same address in a browser to read the script before you run it. To remove the agent again, whichever way you installed it (your login, logs and labs are kept):
+
+```bash
+backstage-agent --uninstall
+```
+
+It stops the running agent and removes it; if the installer put it there, it also removes the link and the lines
+it added to your shell startup files, and leaves the rest of those files as they were. Labs that are running keep
+running. Agents older than 0.1.32 do not have this command; for those run
+`curl -fsSL https://<your-portal>/api/local-provisioner/agent/install.sh | sh -s -- --uninstall`.
+
+On Windows, or if you prefer npm:
 
 ```bash
 npm install -g @stratpoint/backstage-agent
@@ -116,8 +147,16 @@ scaffolder templates and was never re-wired. Every resource today is provisioned
    `stratpoint:local-provision` scaffolder action)
 4. Your agent picks it up on its next long-poll response (instantly if it's already waiting, which
    it normally is) and starts the Docker Compose stack on your machine
-5. Status updates as it runs — go to **Local Provisioner** in the sidebar and click the task row
-   to see live logs and connection details
+5. When the run succeeds, the portal takes you to your lab in **Local Provisioner** and opens its
+   detail view (live setup steps, logs, connection details). If the run fails, you stay on the
+   run page, where the steps and the log show what went wrong. The lab is also in the sidebar's
+   **Local Provisioner** list at any time: click its row to open the same detail view.
+6. **Accept the GitHub invitation.** Your lab's repo is private and shared with you, so GitHub
+   sends you an invitation. A toast at the bottom of the page links straight to it
+   (**Accept the invitation**); the same **Accept the GitHub invitation** button stays in the
+   lab's detail view under *Get the code on your laptop* until the code is on your laptop. Labs
+   that mount your repo (the Node.js capstones) cannot start without it: they wait 30 minutes
+   for you to accept, then fail. Retry once you have accepted.
 
 Connection details (host, port, connection string) are shown in the task detail view once the
 resource is running, with a copy button. The resource also appears in the **catalog** as a
@@ -243,17 +282,89 @@ backstage-agent resource remove <name>           # tear down (deletes data)
 
 ---
 
+## For instructors: the Trainees page
+
+Instructors and admins see every trainee in **Trainees** (sidebar). The tabs **Active** and **Archive** (with their counts) switch
+between trainees at work and capstones marked done. The page is built like **User Management**: the same table, with its own search,
+column headers that sort, and paging, and the same badges.
+
+**The list.** It opens at once from the portal's own data. Each row shows the trainee (with the course and trainee number), a
+single **Attention** reason when there is one, the lab and its state, and then what comes from GitHub: progress, last commit, the
+14-day commit count and the CI result. Those show grey bars first and fill in row by row, the rows on screen first. Rows never move
+while GitHub data arrives. On a narrow screen the 14-day column and then the CI column drop out of the list (both are in the panel).
+
+- **Attention** names the most serious reason, in this order: *Lab failed* (the trainee's newest lab of that course failed; an old
+  failed attempt that they started over is not flagged), *Hard fail in last grade*, *Stuck for N min* (a task running over 45
+  minutes), *Agent offline for N h/d* (a running lab whose agent has been silent for a day or more; a laptop asleep overnight is
+  not flagged), *Last grade did not finish*. Two more appear when a row's GitHub data has loaded: *CI failing* and *No commits for
+  N d* (3 days or more). The title above the table says how many trainees there are and how many need attention (from the portal's
+  own data).
+- **Search** (the box above the table) looks at the trainee, the course and lab, and the lab's state as a word (type *failed* to see
+  the failed labs). It covers every trainee. The table pages 10, 25 or 50 at a time.
+- **Every column sorts** when you click its header (a second click turns it round, a third goes back to the default). The default
+  is *Needs attention first*, from the portal's own data only, so it stays put. Trainee, Attention and Lab sort at once. Progress,
+  Last commit, 14 days and CI need everyone's GitHub data: the page loads it first (a note says how many are left), keeps the list
+  as it is meanwhile, and then applies the order once. Rows with no data yet go last.
+- **Refresh** (at the right of the tabs) reloads the list and the GitHub data of the rows on screen. GitHub data is cached for 5
+  minutes, and a repository that was read less than 30 seconds ago is not read again. If GitHub says to slow down, the page says so,
+  waits and goes on.
+
+**One trainee.** Click a row (or its arrow) to open a panel on the right. At the top: who it is, then badges for the problem and
+the lab's state (badges are not buttons), then the buttons. Below that the tabs **Work**, **Checks**, **Capstone** and **History**,
+each a few separate boxes with labelled rows. **Remove trainee** sits apart in a **Danger zone** at the bottom. The list keeps its
+place behind the panel. The panel loads the trainee's timeline and checks from the portal, and the full GitHub summary separately,
+so a GitHub problem never slows it down. The address holds the open trainee, so a trainee can be linked to.
+
+Buttons in the panel:
+
+- **Report**: the lab report as it stands now. It lists the trainee, the lab and how long it ran, their work in the repository
+  (commits, tasks done, pull requests, CI), every check and grade result (a grade with its score, the item-by-item points,
+  hard fails and the items left to grade by hand) and the lab's history. **Download report (.html)** gives a single page you can
+  open anywhere or print to PDF from the browser; **Download data (.json)** gives the same content as data.
+- **Mark done** (a capstone that is active): you decide when a capstone is finished; the portal cannot tell. It stays off until
+  the repository summary has loaded (or is known to be absent: no repository, GitLab, not found), so a report is never kept with
+  "GitHub unavailable" in it; **Retry GitHub** appears if the read failed. Marking it done keeps
+  the report as it is at that moment, with your name and the date, and moves the capstone to the **Archive**. Nothing is stopped or
+  deleted by this: the trainee's lab and repository stay as they are. Checks and grades still run by hand.
+- **Archive** (the tab next to **Active**): every capstone marked done, with who marked it, when, and when
+  it will be deleted. It is **kept for 1 year after it was marked done**, then deleted by the nightly clean-up (the setting is
+  `localProvisioner.archiveRetentionDays`, default 365, never below 30). Delete earlier by ticking the ones you want and pressing
+  **Delete selected**. Deleting an archived capstone discards its kept report and takes the trainee off the list; their GitHub
+  repository and the lab on their laptop are not touched (the **Remove trainee** button inside a row can also delete the repository).
+  Open a row for its **Final report** and **Reopen**.
+- **Final report** (a capstone in the Archive): opens the report that was kept, not a new one, so it does not change when the lab is
+  removed or old results are cleaned up.
+- **Reopen**: undoes **Mark done** (for a click by mistake). The capstone leaves the Archive and is active again, and the kept
+  report is discarded; mark it done again to keep a new one (the year starts again).
+
+Each lab check (a grade, the seeded-resources check) shows its latest result in the capstone panel with a **Details** button:
+
+- A **grade that ran** opens with the score, the hard fails, and only the items that lost points with the grader's reason, then the
+  items left to grade by hand and the grader's notes.
+- A **check that failed** (for example `failed (exit 1)`) opens with what the agent reported and the end of the job's log, the
+  lines that say where it stopped, with **Copy log** and **Download log (.txt)**. Only the newest result of each check keeps its
+  log, and only the last 16 KB of it. The agent sends the log only when the job fails, so a result that ran fine shows its
+  result instead.
+
+A lab that is not a capstone has **Report** only. The report shows what the portal has at that moment: a result you want in it
+must have been run before you open it or mark the capstone done (run the grade check first, then **Mark done**).
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
 | `backstage-agent login` — browser doesn't open | Copy the URL printed in the terminal and open it manually |
 | Token expired (after 7 days) | Run `backstage-agent login` again |
-| Agent shows offline in the UI, but it's running | Check `backstage-agent status`; the backend considers an agent online for 90s after its last long-poll response — if it's been quiet longer than that, something's actually wrong with the poll loop |
+| Agent shows offline in the UI, but it's running | Check `backstage-agent status`; the portal shows an agent as online while it has polled within the last ~45 seconds and hasn't been seen stopping — if it's been quiet longer than that, something's actually wrong with the poll loop. A lab that is about to be created asks the agent to answer right then, so a stopped agent is refused within seconds |
 | **Task stuck at `pending`** | Make sure the agent is running and current: `backstage-agent status`, `backstage-agent --version`, then `backstage-agent update`. Or use the task's ⋮ menu → **Re-send to agent** |
 | `Poll error (offline?): <message>` in agent logs | Network issue reaching the portal (backend restart, connectivity blip). The agent retries automatically; running resources are unaffected |
 | `Poll failed: 502/503` in agent logs | Transient (backend restarting); recovers automatically on the next poll. Running resources are unaffected |
 | Task went to `failed` | Open the task → detail drawer for the error + logs, or `cd ~/.backstage-agent/tasks/<taskId>` and `docker compose logs` |
+| A VM lab (Linux capstones) fails with `Failed to connect: No route to host`, and Retry then says `instance … already exists` | The VM was created, but the agent could not connect to it. **First restart the agent: `backstage-agent stop && backstage-agent start`, then press Retry.** On one Mac the same lab failed at "Copying the lab files into the VM" every time, then passed on the first Retry after the agent was restarted. If it still fails, Multipass's [troubleshooting guide](https://documentation.ubuntu.com/multipass/latest/how-to-guides/troubleshoot/troubleshoot-networking/) lists VPN software and firewalls as causes. The failed attempt left its VM behind, which is what the second message is about. **Retry** in Local Provisioner now removes that unfinished VM first (it waits until it is gone, then retries), and only when the lab's latest provision is the failed one. By hand: `multipass list`, then `multipass delete --purge <name>` |
+| `zsh: command not found: backstage-agent` | You installed with `npm install -g` under one Node version and this terminal uses another (nvm and Homebrew each keep their own global commands). **Run the installer** (see "Install the Agent"): it makes the command available in every new terminal, whichever Node version is active. Then open a new terminal window. To see which copies exist: `which -a backstage-agent` |
+| `Docker is not ready, so the agent cannot start` | `backstage-agent start` checked Docker first. Not installed: install Docker Desktop (macOS, Windows) or Docker Engine (Linux). Installed but closed: open Docker Desktop and wait until it says it is running. Linux, "not allowed": `sudo usermod -aG docker $USER`, then open a new terminal. You stay signed in; run `backstage-agent start` again |
 | Docker Compose fails | Check Docker is running: `docker info` |
-| Port conflict | Find it (`lsof -i :9092`) and stop the conflicting service, or provision on a different port |
+| Port conflict with another lab of yours (for example two Terraform capstone labs, which both use port 4566) | Open **Local Provisioner**, open the failed task's ⋮ menu and press **Retry**. The portal checks which of your other running labs holds the port, names it, and asks once: after you tick the data-loss box and press **Remove and retry**, it removes that lab (`docker compose down -v`, so its containers and data volumes are deleted), waits until it is gone, and then retries. Cancel leaves everything as it was. If the port is held by something that is not one of your labs, find it (`lsof -i :9092`) and stop it, or provision on a different port |
 | Slow/no internet | Pre-pull images on a good connection: `backstage-agent prewarm <type>`. Once running, resources need no internet |

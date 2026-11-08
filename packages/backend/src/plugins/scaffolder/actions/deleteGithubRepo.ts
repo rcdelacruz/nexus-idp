@@ -1,5 +1,7 @@
 import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
 import * as https from 'https';
+import type { RootConfigService } from '@backstage/backend-plugin-api';
+import { allowedGithubOwners, assertRepoDeletable } from '../lib/teardownGuards';
 
 /**
  * Scaffolder action: github:repo:delete
@@ -8,7 +10,8 @@ import * as https from 'https';
  * success, not a failure. A 403 (token lacks delete_repo scope) fails loudly
  * with a clear message, since that's a config problem the caller must fix.
  */
-export function createDeleteGithubRepoAction() {
+export function createDeleteGithubRepoAction(options: { config: RootConfigService }) {
+  const { config } = options;
   return createTemplateAction({
     id: 'github:repo:delete',
     description: 'Delete a GitHub repository',
@@ -24,7 +27,12 @@ export function createDeleteGithubRepoAction() {
         }),
     },
     async handler(ctx) {
-      const { repoOwner, repoName } = ctx.input;
+      // Refuse anything that is not an app repository of an organization the portal manages: the target comes from a catalog annotation
+      // and a form field, and this deletes with the portal's own token.
+      const { repoOwner, repoName } = assertRepoDeletable(ctx.input.repoOwner, ctx.input.repoName, {
+        allowedOwners: allowedGithubOwners(config),
+        portalRepo: config.getOptionalString('organization.githubRepo'),
+      });
 
       const token = process.env.GITHUB_TOKEN;
       if (!token) {

@@ -7,6 +7,7 @@ import { createSeedReportRoute, sha256Hex, validateSeedReport } from './seedRepo
 import { isPublicAgentPath } from '../util/publicPaths';
 
 const migration = require('../database/migrations/006-create-capstone-enrollments.js');
+const completion = require('../database/migrations/010-capstone-completion.js');
 
 const TOKEN = 'A'.repeat(43);
 const report = { manifest: { trainee: '07', resources: {} }, credentials: 'rds pw', answerKey: '# answers', handover: '# handover' };
@@ -22,9 +23,10 @@ describe('POST /capstones/seed-report/:id', () => {
   beforeEach(async () => {
     db = knexFactory({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
     await migration.up(db);
+    await completion.up(db);
     now = new Date('2026-10-30T10:00:00Z');
     store = new CapstoneStore(db, () => now);
-    const { enrollment } = await store.enroll('terraform', 't@x.com', async () => ({
+    const { enrollment } = await store.enroll('terraform-b', 't@x.com', async () => ({
       seedTokenHash: sha256Hex(TOKEN),
       seedTokenExpiresAt: new Date(now.getTime() + 3600_000),
     }));
@@ -64,9 +66,9 @@ describe('POST /capstones/seed-report/:id', () => {
   });
 
   it('commits HANDOVER.md at the fixed path once the repo is linked', async () => {
-    await store.linkRepo(id, 't@x.com', 'https://github.com/stratpoint-engineering/tf');
+    await store.linkRepo(id, 't@x.com', 'https://github.com/example-org/tf');
     await post(`/capstones/seed-report/${id}`, report, TOKEN);
-    expect(commitFile).toHaveBeenCalledWith({ owner: 'stratpoint-engineering', repo: 'tf' }, 'HANDOVER.md', '# handover', expect.any(String), 'gh');
+    expect(commitFile).toHaveBeenCalledWith({ owner: 'example-org', repo: 'tf' }, 'HANDOVER.md', '# handover', expect.any(String), 'gh');
   });
 
   it('rejects malformed or unexpected report bodies', () => {

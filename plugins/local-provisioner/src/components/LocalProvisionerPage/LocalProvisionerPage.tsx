@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Content, Header, Page, InfoCard } from '@backstage/core-components';
 import {
   Grid,
@@ -13,13 +13,21 @@ import {
   DialogActions,
   FormControlLabel,
   Checkbox,
+  IconButton,
+  Portal,
+  Snackbar,
 } from '@material-ui/core';
+import { Alert } from '@material-ui/lab';
 import { useApi, alertApiRef } from '@backstage/core-plugin-api';
-import { useNavigate } from 'react-router-dom';
-import { GraduationCap, Plus, Trash2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ExternalLink, GraduationCap, Plus, Trash2, X } from 'lucide-react';
 import { localProvisionerApiRef } from '../../api/LocalProvisionerClient';
-import { ProvisioningTask, Resource } from '../../api/types';
+import { LabConflict, ProvisioningTask, Resource, RetryLeftover, isCheckTask } from '../../api/types';
+import { describeConflicts, removeConflictsThenRetry, removeLeftoverThenRetry } from '../../api/retryWithReplacement';
 import { getConnectivity } from '../../api/connectivity';
+import { LOCAL_PROVISIONER_PATH, parseLabTaskPath } from '../../api/labTaskPath';
+import { isJustCreated } from '../../api/labArrival';
+import { agentWorkspace, invitationUrl, repoReachedByMountedLab } from '../../api/cloneInfo';
 import { useProvisioningTasks } from '../../hooks/useProvisioningTasks';
 import { useAgents } from '../../hooks/useAgents';
 import { useResources } from '../../hooks/useResources';
@@ -36,13 +44,20 @@ type Confirm = {
   title: string;
   message: string;
   dataLoss?: boolean;
-  action: () => Promise<void>;
+  /** Replaces the default button text. */
+  confirmLabel?: string;
+  /** `report` shows what a long action is doing in the dialog. */
+  action: (report: (message: string) => void) => Promise<void>;
 };
 
 export const LocalProvisionerPage = () => {
   const api = useApi(localProvisionerApiRef);
   const alertApi = useApi(alertApiRef);
   const navigate = useNavigate();
+  const location = useLocation();
+  // The lab named in the URL (/local-provisioner/tasks/<id>): where the Create run page sends you
+  // when your lab has been queued. Its drawer is open for as long as the URL names it.
+  const urlTaskId = parseLabTaskPath(location.pathname);
   const [refreshKey, setRefreshKey] = useState(0);
   const { tasks, loading, error } = useProvisioningTasks(refreshKey);
   const { agents, loading: agentsLoading } = useAgents(refreshKey);
@@ -51,6 +66,8 @@ export const LocalProvisionerPage = () => {
   const [detailTask, setDetailTask] = useState<ProvisioningTask | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [ackChecked, setAckChecked] = useState(false);
+  /** What the confirmed action is doing right now; set while it runs. */
+  const [confirmBusy, setConfirmBusy] = useState<string | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Clear selection when the agent filter changes — otherwise "Delete N selected" could
@@ -102,7 +119,8 @@ export const LocalProvisionerPage = () => {
     ? `${filteredTasks.length} on selected agent`
     : `${tasks.length} across all agents`;
 
-  // Provisioning requires a currently-online agent (heartbeat within 90s). Gate the entry point
+  // Provisioning requires a currently-online agent (the server's verdict: polled within ~45s and
+  // not known to have stopped). Gate the entry point
   // so users can't start the flow offline only to have the scaffolder run fail at the end.
   const hasOnlineAgent = useMemo(
     () => agents.some(a => getConnectivity(a) === 'online'),
@@ -113,6 +131,82 @@ export const LocalProvisionerPage = () => {
   const liveDetailTask = detailTask
     ? tasks.find(t => t.id === detailTask.id) ?? detailTask
     : null;
+
+  // The lab named in the URL, from the full list (the agent filter must not hide it). It is read
+  // from the list on every render, so the drawer stays live like a row-opened one.
+  const urlTask = urlTaskId ? tasks.find(t => t.id === urlTaskId) : undefined;
+  const drawerTask = urlTask ?? liveDetailTask;
+
+  // A URL that names no lab of yours (a typo, a removed task, someone else's id, which the list
+  // never contains) is cleared. The message is posted once, and only when the lab was never found
+  // here: a lab that goes away while you look at it just closes. Nothing is decided while the list
+  // is loading or failed to load.
+  const foundLab = useRef<string | null>(null);
+  const missingLab = useRef<string | null>(null);
+  useEffect(() => {
+    if (!urlTaskId) {
+      foundLab.current = null;
+      missingLab.current = null;
+      return;
+    }
+    if (urlTask) {
+      foundLab.current = urlTaskId;
+      return;
+    }
+    if (loading || error || missingLab.current === urlTaskId) return;
+    missingLab.current = urlTaskId;
+    if (foundLab.current !== urlTaskId) {
+      alertApi.post({
+        message: 'That lab is not in your list. It may have been removed.',
+        severity: 'warning',
+        display: 'transient',
+      });
+    }
+    navigate(LOCAL_PROVISIONER_PATH, { replace: true });
+  }, [urlTaskId, urlTask, loading, error, alertApi, navigate]);
+
+  // Closing a drawer opened from the URL also leaves that URL, so a refresh or Back does not open it again.
+  const closeDrawer = useCallback(() => {
+    setDetailTask(null);
+    if (urlTaskId) navigate(LOCAL_PROVISIONER_PATH, { replace: true });
+  }, [urlTaskId, navigate]);
+
+  // You were just sent here by a successful Create run: greet the new lab once. A lab with a GitHub repo
+  // gets a toast with the link to accept the invitation (without it the lab cannot get your code, and a
+  // Node.js lab, which waits for the code, gives up after 30 minutes); any other lab just a short note.
+  // The mark is removed straight away, so a reload, Back or a shared link never repeats the greeting.
+  const [inviteToast, setInviteToast] = useState<{ taskId: string; url: string; waits: boolean } | null>(null);
+  const greeted = useRef<string | null>(null);
+  useEffect(() => {
+    if (!urlTask || !isJustCreated(location.state) || greeted.current === urlTask.id) return;
+    greeted.current = urlTask.id;
+    const url = invitationUrl((urlTask.config as { githubRepoUrl?: string } | undefined)?.githubRepoUrl);
+    if (url) {
+      setInviteToast({ taskId: urlTask.id, url, waits: (urlTask.config as { workspaceMount?: unknown } | undefined)?.workspaceMount === true });
+    } else {
+      alertApi.post({ message: 'Your lab is queued on your laptop.', severity: 'success', display: 'transient' });
+    }
+    navigate(location.pathname, { replace: true, state: null });
+  }, [urlTask, location.state, location.pathname, alertApi, navigate]);
+  // The toast goes away once its premise is gone: the lab has your code (reported at the end, or — for a lab
+  // that mounts the repo — a step past the wait is running), failed, or was removed.
+  const toastTask = inviteToast ? tasks.find(t => t.id === inviteToast.taskId) : undefined;
+  const codeArrived =
+    ['cloned', 'existing'].includes(agentWorkspace(toastTask?.metadata)?.status ?? '') || (toastTask ? repoReachedByMountedLab(toastTask) : false);
+  // Removed = its teardown (a deprovision task newer than the lab's own) has completed. A removed lab is not in
+  // the resources list at all (GET /tasks/resources leaves removed labs out), so the task list is where it shows.
+  const toastLabGone =
+    toastTask !== undefined &&
+    (toastTask.status === 'failed' ||
+      tasks.some(
+        t =>
+          t.taskType === 'deprovision' &&
+          t.status === 'completed' &&
+          t.agentId === toastTask.agentId &&
+          t.resourceName === toastTask.resourceName &&
+          Date.parse(t.createdAt) > Date.parse(toastTask.createdAt),
+      ));
+  const showInviteToast = Boolean(inviteToast && toastTask && !codeArrived && !toastLabGone);
 
   // ---- agent actions ----
   const handleDisconnect = useCallback(
@@ -143,14 +237,57 @@ export const LocalProvisionerPage = () => {
   );
 
   // ---- task actions ----
+  /** Task ids whose Retry is running (the plan is read, a leftover is removed and awaited first): a second click must not start another. */
+  const retrying = useRef<Set<string>>(new Set());
   const handleRetry = useCallback(
     async (task: ProvisioningTask) => {
+      if (retrying.current.has(task.id)) {
+        toast('This task is already being retried', 'info');
+        return;
+      }
+      retrying.current.add(task.id);
+      let leftover: RetryLeftover | null = null;
       try {
-        await api.retryTask(task);
+        // Another of the user's labs may hold a port this one needs (a port can be held by one
+        // container only), or a failed VM lab may have left its half-made VM. If that can't be
+        // checked, retry as before.
+        let conflicts: LabConflict[] = [];
+        try {
+          ({ conflicts, leftover } = await api.getRetryPlan(task.id));
+        } catch {
+          conflicts = [];
+          leftover = null;
+        }
+        if (conflicts.length > 0) {
+          setAckChecked(false);
+          setConfirm({
+            title:
+              conflicts.length === 1
+                ? `Remove "${conflicts[0].resourceName}" and retry?`
+                : `Remove ${conflicts.length} labs and retry?`,
+            message: describeConflicts(task, conflicts),
+            dataLoss: true,
+            confirmLabel: 'Remove and retry',
+            action: async report => {
+              await removeConflictsThenRetry(api, task, conflicts, report);
+              toast('Retrying task');
+              refresh();
+            },
+          });
+          return;
+        }
+        if (leftover) {
+          toast('Removing the unfinished VM from the failed attempt…', 'info');
+          await removeLeftoverThenRetry(api, task, leftover);
+        } else {
+          await api.retryTask(task);
+        }
         toast('Retrying task');
         refresh();
       } catch (err: any) {
-        toast(`Retry failed: ${err.message}`, 'error');
+        toast(leftover ? err.message : `Retry failed: ${err.message}`, 'error');
+      } finally {
+        retrying.current.delete(task.id);
       }
     },
     [api, toast, refresh],
@@ -194,12 +331,10 @@ export const LocalProvisionerPage = () => {
     });
   }, []);
 
+  // Instructor checks are not the trainee's to delete: "select all" never includes them.
   const toggleSelectAll = useCallback(() => {
-    setSelectedTaskIds(prev =>
-      prev.size === filteredTasks.length
-        ? new Set()
-        : new Set(filteredTasks.map(t => t.id)),
-    );
+    const selectable = filteredTasks.filter(t => !isCheckTask(t));
+    setSelectedTaskIds(prev => (prev.size === selectable.length ? new Set() : new Set(selectable.map(t => t.id))));
   }, [filteredTasks]);
 
   // Each delete is still guarded server-side (a task representing a resource's current,
@@ -266,12 +401,14 @@ export const LocalProvisionerPage = () => {
 
 
   const runConfirm = async () => {
-    if (!confirm) return;
+    if (!confirm || confirmBusy) return;
+    setConfirmBusy('Working…');
     try {
-      await confirm.action();
+      await confirm.action(setConfirmBusy);
     } catch (err: any) {
       toast(err.message, 'error');
     } finally {
+      setConfirmBusy(null);
       setConfirm(null);
     }
   };
@@ -376,12 +513,55 @@ export const LocalProvisionerPage = () => {
         </Grid>
       </Content>
 
-      <TaskDetailDrawer task={liveDetailTask} onClose={() => setDetailTask(null)} />
+      {showInviteToast && inviteToast && (
+        // In a portal on <body>, like the portal's other toasts: the open drawer is a modal, which hides
+        // everything inside the page from assistive technology, including a toast rendered here. At the
+        // bottom, because it stays up until dismissed and the stock toasts (errors from Retry, Remove...) are
+        // top-centre at the same height and would be covered by it.
+        <Portal>
+        <Snackbar open anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+          <Alert
+            severity="info"
+            action={
+              <>
+                <Button
+                  color="inherit"
+                  size="small"
+                  href={inviteToast.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  endIcon={<ExternalLink size={14} strokeWidth={1.5} />}
+                  onClick={() => setInviteToast(null)}
+                >
+                  Accept the invitation
+                </Button>
+                <IconButton color="inherit" size="small" aria-label="dismiss" onClick={() => setInviteToast(null)}>
+                  <X size={16} strokeWidth={1.5} />
+                </IconButton>
+              </>
+            }
+          >
+            <Typography component="span">
+              Your lab is queued on your laptop. Accept the GitHub invitation to your repo (if you haven't yet) so the lab can
+              get your code.
+              {inviteToast.waits ? ' This lab waits 30 minutes for it, then fails.' : ''}
+            </Typography>
+          </Alert>
+        </Snackbar>
+        </Portal>
+      )}
 
-      <Dialog open={Boolean(confirm)} onClose={() => setConfirm(null)} maxWidth="xs" fullWidth>
+      <TaskDetailDrawer task={drawerTask} onClose={closeDrawer} showInvitation />
+
+      <Dialog open={Boolean(confirm)} onClose={() => !confirmBusy && setConfirm(null)} maxWidth="xs" fullWidth>
         <DialogTitle>{confirm?.title}</DialogTitle>
         <DialogContent>
           <DialogContentText>{confirm?.message}</DialogContentText>
+          {confirmBusy && (
+            <DialogContentText role="status" style={{ fontWeight: 500 }}>
+              {confirmBusy}
+            </DialogContentText>
+          )}
           {confirm?.dataLoss && (
             <FormControlLabel
               control={
@@ -396,13 +576,15 @@ export const LocalProvisionerPage = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirm(null)}>Cancel</Button>
+          <Button onClick={() => setConfirm(null)} disabled={Boolean(confirmBusy)}>
+            Cancel
+          </Button>
           <Button
             onClick={runConfirm}
-            disabled={confirm?.dataLoss && !ackChecked}
+            disabled={Boolean(confirmBusy) || (confirm?.dataLoss && !ackChecked)}
             data-destructive
           >
-            {confirm?.dataLoss ? 'Delete' : 'Confirm'}
+            {confirm?.confirmLabel ?? (confirm?.dataLoss ? 'Delete' : 'Confirm')}
           </Button>
         </DialogActions>
       </Dialog>

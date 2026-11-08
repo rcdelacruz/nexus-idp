@@ -48,7 +48,7 @@ export function createSeedReportRoute(deps: {
 }): Router {
   const { store, logger, getGithubToken } = deps;
   const commitFile = deps.commitFile ?? commitRepoFile;
-  const router = Router();
+  const router = Router({ caseSensitive: true }); // see service/router.ts
 
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,

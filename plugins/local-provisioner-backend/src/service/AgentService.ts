@@ -14,7 +14,13 @@ import {
   ProvisioningTask,
   AgentCapabilities,
 } from '../types';
-import { extractEmailFromEntityRef as sharedExtractEmail } from '../util/identity';
+import { extractEmailFromEntityRef as sharedExtractEmail, sameUser } from '../util/identity';
+import { heardRecently } from './agentLiveness';
+
+/** How long confirmAlive() waits for a woken agent to poll again before calling it gone. */
+const CONFIRM_TIMEOUT_MS = 8_000;
+/** A re-poll later than this after an answer is worth a log line (tunnel / network health). */
+const SLOW_REPOLL_LOG_MS = 5_000;
 
 /**
  * Device code authorization (OAuth 2.0 Device Authorization Grant - RFC 8628)
@@ -53,7 +59,7 @@ export class AgentService {
   private pendingShutdowns: Set<string> = new Set();
   // agentIds that have actually received a shouldShutdown:true response and haven't polled
   // since. Overrides the last_seen-freshness check so "offline" is instant instead of waiting
-  // up to 90s for last_seen to go stale. See isExplicitlyDisconnected().
+  // for last_seen to go stale (~45 s). See isExplicitlyDisconnected().
   private explicitlyDisconnected: Set<string> = new Set();
   // Parked long-poll requests per agentId, woken by notifyAgent() when a task is queued or a
   // shutdown is requested — this is what makes long-polling event-driven rather than a fixed
@@ -64,6 +70,12 @@ export class AgentService {
   // ceiling on how long it holds a connection open waiting for an origin response), so there is
   // no long-lived connection state to silently lose.
   private pollWaiters: Map<string, PollWaiter[]> = new Map();
+  // Probes (confirmAlive) waiting for an agent to prove it is alive by parking a poll. Sets of
+  // resolvers, not an EventEmitter: one entry per concurrent probe, always removed in settle().
+  private aliveProbes: Map<string, Set<(alive: boolean) => void>> = new Map();
+  private confirmInFlight: Map<string, Promise<boolean>> = new Map();
+  // When each agent's last poll was answered (to log slow re-polls).
+  private lastAnsweredAt: Map<string, number> = new Map();
   private readonly POLL_TIMEOUT_MS: number;
   private readonly DEVICE_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
   // Single source of truth for the service-token lifetime — the signed `exp` and the `expiresAt`
@@ -76,6 +88,8 @@ export class AgentService {
     private readonly taskQueueService: TaskQueueService,
     private readonly config: Config,
     pollTimeoutSeconds: number = 25,
+    /** How long confirmAlive() waits for a woken agent to poll again (tests shorten it). */
+    private readonly confirmTimeoutMs: number = CONFIRM_TIMEOUT_MS,
   ) {
     this.POLL_TIMEOUT_MS = pollTimeoutSeconds * 1000;
   }
@@ -228,6 +242,12 @@ export class AgentService {
 
       agentId = result.agent.agent_id;
       reconnected = result.reconnected;
+      if (result.separatedFromUser) {
+        // Another user's agent id was presented at login. The row stays theirs; this user got one of their own.
+        this.logger.warn(
+          `Login by ${userEmail} presented agent id ${machineAgentId}, which is registered to ${result.separatedFromUser}: registered ${agentId} for ${userEmail} instead of moving the agent`,
+        );
+      }
 
       this.logger.info(
         reconnected ? `Reconnected to existing agent: ${agentId}` : `Created new agent: ${agentId}`,
@@ -313,29 +333,55 @@ export class AgentService {
     }
 
     await this.taskStore.updateAgentLastSeen(agentId, agentVersion, capabilities);
+    // The route aborts the signal when the connection closes. A client that vanished while we were
+    // in the awaits above has nobody to answer: it must not clear the "connection lost" flag its
+    // own close just set, and must not park a waiter nothing will ever read (which would make a
+    // probe call a gone agent alive).
+    if (signal?.aborted) return { tasks: [], shouldShutdown: false };
     // Any live poll proves the agent is up right now — clears a stale flag from a previous
     // shutdown if this is a freshly-restarted agent reusing the same ID.
     this.explicitlyDisconnected.delete(agentId);
+
+    const answeredAt = this.lastAnsweredAt.get(agentId);
+    if (answeredAt !== undefined && Date.now() - answeredAt > SLOW_REPOLL_LOG_MS) {
+      this.logger.info(
+        `Agent ${agentId} polled again ${Math.round((Date.now() - answeredAt) / 1000)}s after its last answer (a healthy agent takes about 1s)`,
+      );
+    }
 
     const collect = async () => {
       const shouldShutdown = this.consumeShutdownPending(agentId);
       if (shouldShutdown) {
         // Delivered — the agent will self-terminate within milliseconds of receiving this.
-        // Mark offline now rather than waiting for last_seen to go stale.
+        // Mark offline now rather than waiting for last_seen to go stale; a probe waiting on
+        // this agent has its answer too.
         this.explicitlyDisconnected.add(agentId);
+        this.settleProbes(agentId, false);
       }
+      // Only the polling user's own tasks. An agent id can be vacated (the hostname+user fallback renames an agent and leaves its old
+      // tasks on the old id) and then registered by someone else, who must not be handed the previous owner's pending tasks.
+      const pending = await this.taskQueueService.getPendingTasksForAgent(agentId);
       return {
-        tasks: await this.taskQueueService.getPendingTasksForAgent(agentId),
+        tasks: pending.filter(t => sameUser(t.user_id, userId)),
         shouldShutdown,
       };
     };
 
     const immediate = await collect();
     if (immediate.tasks.length > 0 || immediate.shouldShutdown) {
+      this.lastAnsweredAt.set(agentId, Date.now());
+      // A poll answered at once is as good a sign of life as a parked one (not after a shutdown:
+      // that agent is leaving).
+      if (!immediate.shouldShutdown) this.settleProbes(agentId, true);
       return immediate;
     }
 
     await new Promise<void>(resolve => {
+      // Aborted during collect() above: don't park.
+      if (signal?.aborted) {
+        resolve();
+        return;
+      }
       let done = false;
       const box: { timer?: ReturnType<typeof setTimeout> } = {};
       const wake = () => {
@@ -356,9 +402,29 @@ export class AgentService {
       const list = this.pollWaiters.get(agentId) ?? [];
       list.push({ wake });
       this.pollWaiters.set(agentId, list);
+      // A parked poll is a live agent. This also clears a flag that arrived late: the previous
+      // process's connection-closed notice can reach us after the restarted agent has already
+      // started (and cleared the flag at) its new poll, which would otherwise refuse a healthy
+      // agent until that poll times out.
+      this.explicitlyDisconnected.delete(agentId);
+      // Signalled only once the poll can actually be woken: a probe that sees "alive" can queue
+      // work and notifyAgent() without it landing in the gap before the waiter exists.
+      this.settleProbes(agentId, true);
     });
 
+    // Gone while parked: nobody to answer. Leave any pending shutdown for the agent's next poll
+    // instead of consuming it into a response that is never read.
+    if (signal?.aborted) return { tasks: [], shouldShutdown: false };
+    this.lastAnsweredAt.set(agentId, Date.now());
     return collect();
+  }
+
+  /** Resolve every probe waiting on this agent. */
+  private settleProbes(agentId: string, alive: boolean): void {
+    const probes = this.aliveProbes.get(agentId);
+    if (!probes) return;
+    // Copy: each resolver removes itself from the set.
+    for (const settle of [...probes]) settle(alive);
   }
 
   /** Wake any long-poll(s) currently parked for this agent — called when new work exists. */
@@ -389,16 +455,7 @@ export class AgentService {
       throw new Error(`Agent ${agentId} does not belong to user ${userId}`);
     }
 
-    // "Connected" now means "actively long-polling" — approximated by recent liveness, since
-    // there's no persistent connection object to check anymore (see longPoll's doc comment).
-    // explicitlyDisconnected overrides this the instant a shutdown is actually delivered,
-    // rather than waiting for last_seen to go stale (see isExplicitlyDisconnected()).
-    const ageSec = (Date.now() - new Date(agent.last_seen).getTime()) / 1000;
-
-    return {
-      agent,
-      isConnected: !this.explicitlyDisconnected.has(agentId) && ageSec <= 90,
-    };
+    return { agent, isConnected: this.isConnectedAt(agentId, agent.last_seen) };
   }
 
   /**
@@ -561,6 +618,25 @@ export class AgentService {
   }
 
   /**
+   * Whether `taskId` is a task of an agent that belongs to `ownerEmail`: the same relation that decides who may receive the task
+   * (`longPoll`). A status report for any other task is refused. A task whose agent row is gone (the hostname+user fallback in
+   * `upsertAgent` renames an agent's id and leaves its old tasks on the old one) is the queuing user's alone, so the "interrupted"
+   * reports of such tasks still land. Database errors propagate on purpose: the agent retries a 5xx, and a swallowed
+   * error would silently drop the update.
+   */
+  async isTaskOfAgentOwner(taskId: string, ownerEmail: string): Promise<boolean> {
+    // `task_id` is a uuid column: any other shape is not a task (and would be a 500 from Postgres, which the agent retries forever).
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId)) return false;
+    const task = await this.taskQueueService.getTask(taskId);
+    if (!task) return false;
+    // Both relations must hold: the task was queued by this user (a task on a vacated agent id that someone else later registered is
+    // not theirs), and its agent, when it still exists, is theirs.
+    if (!sameUser(task.user_id, ownerEmail)) return false;
+    const agent = await this.taskStore.getAgentById(task.agent_id);
+    return agent ? sameUser(agent.user_id, ownerEmail) : true;
+  }
+
+  /**
    * Update task status
    */
   async updateTaskStatus(
@@ -585,31 +661,110 @@ export class AgentService {
   }
 
   /**
-   * Whether an agent is currently online: a long-poll (any) within the last 90s. Used to
-   * refuse queuing tasks (provision or lifecycle) to a dead agent — which would otherwise sit
-   * "pending" forever. Single freshness check now that there's no separate SSE-connection
-   * state to fast-path on — every long-poll call updates last_seen, so this is already as
-   * accurate as a live-connection check without the extra state to keep in sync.
+   * THE liveness rule (list, status, trainee view, guards all use it): not known to have stopped,
+   * and a poll started within one poll length + a little (agentLiveness.ts). `last_seen` is only
+   * written at the START of a poll, so this lags by up to that long when the server never saw
+   * the agent leave (laptop asleep, wifi gone, a proxy that hides the disconnect). Where a wrong
+   * "online" is dangerous, use confirmAgentOnline() instead.
    */
-  async isAgentOnline(agentId: string): Promise<boolean> {
+  isConnectedAt(agentId: string, lastSeen: Date | string | null | undefined): boolean {
     if (this.explicitlyDisconnected.has(agentId)) return false;
+    return heardRecently(lastSeen, this.POLL_TIMEOUT_MS);
+  }
+
+  /** Inferred online state (see isConnectedAt). */
+  async isAgentOnline(agentId: string): Promise<boolean> {
     const agent = await this.taskStore.getAgentById(agentId);
-    if (!agent?.last_seen) return false;
-    const ageMs = Date.now() - new Date(agent.last_seen).getTime();
-    return ageMs <= 90_000;
+    return this.isConnectedAt(agentId, agent?.last_seen);
+  }
+
+  /**
+   * Proof, not inference: wake the agent's parked poll and require a fresh poll from it. A live
+   * agent re-polls within about a second; one that has stopped — however it stopped, and whether
+   * or not the server ever saw the connection drop — cannot. Used where acting on a wrong
+   * "online" does damage: the lab's first step, queueing a task, the lab form's Next.
+   *
+   * Fails safe: any doubt (no answer within CONFIRM_TIMEOUT_MS, shutdown being delivered, agent
+   * unknown) is "not alive", and the agent is then marked offline for every other view until its
+   * next poll. Concurrent callers share one probe; nothing is cached, because a proof that
+   * outlives the moment it was made is the very staleness this exists to remove.
+   *
+   * In-memory, like the rest of the connection state: it relies on this process holding the
+   * agent's poll (one backend replica; during a rolling deploy a probe on the other pod fails
+   * safe).
+   */
+  confirmAlive(agentId: string): Promise<boolean> {
+    const inFlight = this.confirmInFlight.get(agentId);
+    if (inFlight) return inFlight;
+    const probe = this.probe(agentId).finally(() => this.confirmInFlight.delete(agentId));
+    this.confirmInFlight.set(agentId, probe);
+    return probe;
+  }
+
+  /** Inferred online AND confirmed alive: the check to gate a decision on. */
+  async confirmAgentOnline(agentId: string): Promise<boolean> {
+    if (!(await this.isAgentOnline(agentId))) return false; // already gone: no need to wait
+    return this.confirmAlive(agentId);
+  }
+
+  private async probe(agentId: string): Promise<boolean> {
+    if (this.explicitlyDisconnected.has(agentId)) return false;
+    if (!(await this.taskStore.getAgentById(agentId))) return false;
+    const started = Date.now();
+
+    const alive = await new Promise<boolean>(resolve => {
+      const box: { timer?: ReturnType<typeof setTimeout> } = {};
+      const settle = (ok: boolean) => {
+        clearTimeout(box.timer);
+        const probes = this.aliveProbes.get(agentId);
+        probes?.delete(settle);
+        if (probes?.size === 0) this.aliveProbes.delete(agentId);
+        resolve(ok);
+      };
+      box.timer = setTimeout(() => settle(false), this.confirmTimeoutMs);
+      const probes = this.aliveProbes.get(agentId) ?? new Set();
+      probes.add(settle);
+      this.aliveProbes.set(agentId, probes);
+      // Registered first, then woken: a poll that parks right after this can't be missed.
+      this.notifyAgent(agentId);
+    });
+
+    if (alive) {
+      this.logger.debug(`Agent ${agentId} confirmed alive in ${Date.now() - started}ms`);
+    } else {
+      this.logger.warn(
+        `Agent ${agentId} did not poll again within ${this.confirmTimeoutMs / 1000}s of being woken: treating it as offline`,
+      );
+      // Same as a dropped connection: every view agrees until the agent's next poll clears it.
+      this.markConnectionLost(agentId);
+    }
+    return alive;
   }
 
   /**
    * True once a shutdown has actually been delivered to the agent (i.e. it received
    * shouldShutdown:true in a poll response) and it hasn't polled again since. `last_seen`
    * alone can't answer this: it's only updated at the *start* of a poll, so it stays "fresh"
-   * for up to 90s after an agent has genuinely exited, which is exactly the "still shows
+   * for ~45 s (it was 90 s) after an agent has genuinely exited, which is exactly the "still shows
    * online right after I stopped it" gap. This gives instant, authoritative offline status
    * instead of waiting on last_seen staleness. Cleared the moment the agent (or a
    * newly-started one with the same ID) polls again.
    */
   isExplicitlyDisconnected(agentId: string): boolean {
     return this.explicitlyDisconnected.has(agentId);
+  }
+
+  /**
+   * The agent's parked long-poll closed before we answered it: its process stopped (Ctrl+C,
+   * `backstage-agent stop`, a crash, laptop shutdown). A running agent always has a poll parked
+   * or re-polls within milliseconds, so this is the earliest reliable "gone" signal — without it
+   * a stopped agent read as online for up to 90 s (last_seen), long enough to start a lab
+   * (2026-10-31). Marked like an explicit stop, unless another poll from it is still parked;
+   * cleared by its next poll, so a network blip costs seconds.
+   */
+  markConnectionLost(agentId: string): void {
+    if ((this.pollWaiters.get(agentId)?.length ?? 0) > 0) return;
+    this.explicitlyDisconnected.add(agentId);
   }
 
   /**
@@ -643,6 +798,7 @@ export class AgentService {
    */
   async deleteAgent(agentId: string): Promise<void> {
     await this.taskStore.deleteAgent(agentId);
+    this.lastAnsweredAt.delete(agentId);
     this.logger.info(`Agent ${agentId} deleted from database`);
   }
 
@@ -655,6 +811,9 @@ export class AgentService {
   async shutdown(): Promise<void> {
     this.logger.info('Shutting down AgentService');
 
+    for (const agentId of [...this.aliveProbes.keys()]) {
+      this.settleProbes(agentId, false);
+    }
     for (const agentId of this.pollWaiters.keys()) {
       this.notifyAgent(agentId);
     }

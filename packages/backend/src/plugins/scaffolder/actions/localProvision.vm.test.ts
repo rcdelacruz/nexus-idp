@@ -18,7 +18,7 @@ describe('stratpoint:local-provision — VM labs', () => {
     const calls: any[] = [];
     global.fetch = jest.fn(async (url: any, init: any) => {
       calls.push({ url: String(url), init });
-      if (String(url).endsWith('/agent')) {
+      if (String(url).endsWith('/agent?verify=1')) {
         return new Response(JSON.stringify({ agents: [{ agent_id: 'a1', is_connected: true }] }), { status: 200 });
       }
       return new Response(JSON.stringify({ task_id: 't1', task: { task_id: 't1' } }), { status: 201 });

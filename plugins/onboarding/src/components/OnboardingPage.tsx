@@ -15,7 +15,8 @@ import { DEPT_TEAM_IDS_JWT } from '../constants';
 
 export { DEPT_TEAM_IDS, DEPT_TEAM_IDS_JWT } from '../constants';
 
-// TEMPORARILY restricted to general-engineers only (revert: restore all teams below).
+// TEMPORARILY restricted to general-engineers only (revert: restore all teams below AND SELF_REGISTER_TEAMS in
+// plugins/user-management-backend/src/service/router.ts: the server enforces the list, restoring only this dropdown gives 400s).
 // Full list: general-engineers, web-team, mobile-team, data-team, cloud-team, ai-team, qa-team, pm-team, sa-team
 const DEPT_TEAMS: Record<string, string> = {
   'general-engineers': 'General Engineers',

@@ -1,0 +1,50 @@
+import { makeStyles } from '@material-ui/core';
+
+/** Shared by the Trainees page and its parts. */
+export const useStyles = makeStyles(theme => ({
+  muted: { color: theme.palette.text.secondary, fontSize: '0.8125rem' },
+  mono: { fontFamily: 'monospace', fontSize: '0.75rem' },
+  sectionLabel: {
+    fontSize: '0.6875rem',
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    color: theme.palette.text.secondary,
+    margin: theme.spacing(1.5, 0, 0.75),
+  },
+  // The answer key is markdown: shown as formatted text, in a box like the plain-text ones.
+  markdown: {
+    fontSize: '0.8125rem',
+    background: theme.palette.action.hover,
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: 6,
+    padding: theme.spacing(1, 1.5),
+    margin: theme.spacing(0.5, 0, 1.5),
+    maxHeight: 360,
+    overflow: 'auto',
+    wordBreak: 'break-word',
+    '& h1, & h2, & h3, & h4': { margin: theme.spacing(1.5, 0, 0.75), lineHeight: 1.3 },
+    '& h1:first-child, & h2:first-child, & h3:first-child': { marginTop: 0 },
+    '& h1': { fontSize: '1.125rem' },
+    '& h2': { fontSize: '1rem' },
+    '& h3, & h4': { fontSize: '0.9375rem' },
+    '& p, & ul, & ol': { margin: theme.spacing(0.5, 0) },
+    '& pre': { overflow: 'auto', background: theme.palette.background.paper, padding: theme.spacing(1), borderRadius: 4 },
+    '& code': { fontFamily: 'monospace', fontSize: '0.75rem' },
+    '& table': { borderCollapse: 'collapse' },
+    '& th, & td': { border: `1px solid ${theme.palette.divider}`, padding: theme.spacing(0.5, 1) },
+  },
+  pre: {
+    fontFamily: 'monospace',
+    fontSize: '0.75rem',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    background: theme.palette.action.hover,
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: 6,
+    padding: theme.spacing(1, 1.25),
+    margin: theme.spacing(0.5, 0, 1.5),
+    maxHeight: 260,
+    overflow: 'auto',
+  },
+}));

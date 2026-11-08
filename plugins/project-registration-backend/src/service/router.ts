@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { LoggerService, HttpAuthService, UserInfoService } from '@backstage/backend-plugin-api';
 import { ProjectStore } from './ProjectStore';
+import { teamNameError } from './teams';
 
 export function createRouter(options: {
   logger: LoggerService;
@@ -67,7 +68,7 @@ export function createRouter(options: {
       const ownershipRefs = info.ownershipEntityRefs ?? [];
 
       const isAdmin = ownershipRefs.some(
-        r => r === 'group:default/backstage-admins' || r === 'group:default/admins',
+        r => r === 'group:default/backstage-admins',
       );
       const isPM = ownershipRefs.some(
         r => r === 'group:default/pm-team',
@@ -85,6 +86,8 @@ export function createRouter(options: {
       if (!name || !client_name) {
         return res.status(400).json({ error: 'name and client_name are required' });
       }
+      const teamError = teamNameError(team_name);
+      if (teamError) return res.status(400).json({ error: teamError });
 
       const project = await projectStore.createProject({
         name,
@@ -124,13 +127,15 @@ export function createRouter(options: {
       const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
       const info = await userInfo.getUserInfo(credentials);
       const ownershipRefs = info.ownershipEntityRefs ?? [];
-      const isAdmin = ownershipRefs.some(r => r === 'group:default/backstage-admins' || r === 'group:default/admins');
+      const isAdmin = ownershipRefs.some(r => r === 'group:default/backstage-admins');
       const isPM = ownershipRefs.some(r => r === 'group:default/pm-team');
       if (!isAdmin && !isPM) {
         return res.status(403).json({ error: 'Only project managers and admins can update projects' });
       }
 
       const { name, description, client_name, start_date, end_date, pm_tool, jira_key, jira_template, team_name, team_members } = req.body;
+      const teamError = teamNameError(team_name);
+      if (teamError) return res.status(400).json({ error: teamError });
       const project = await projectStore.updateProject(req.params.id, {
         name, description, client_name, start_date, end_date, pm_tool, jira_key, jira_template, team_name, team_members,
       });
@@ -155,7 +160,7 @@ export function createRouter(options: {
       const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
       const info = await userInfo.getUserInfo(credentials);
       const ownershipRefs = info.ownershipEntityRefs ?? [];
-      const isAdmin = ownershipRefs.some(r => r === 'group:default/backstage-admins' || r === 'group:default/admins');
+      const isAdmin = ownershipRefs.some(r => r === 'group:default/backstage-admins');
       const isPM = ownershipRefs.some(r => r === 'group:default/pm-team');
       if (!isAdmin && !isPM) {
         return res.status(403).json({ error: 'Only project managers and admins can unarchive projects' });
@@ -182,7 +187,7 @@ export function createRouter(options: {
       const credentials = await httpAuth.credentials(req as any, { allow: ['user'] });
       const info = await userInfo.getUserInfo(credentials);
       const ownershipRefs = info.ownershipEntityRefs ?? [];
-      const isAdmin = ownershipRefs.some(r => r === 'group:default/backstage-admins' || r === 'group:default/admins');
+      const isAdmin = ownershipRefs.some(r => r === 'group:default/backstage-admins');
       if (!isAdmin) {
         return res.status(403).json({ error: 'Only admins can delete projects' });
       }
@@ -212,7 +217,7 @@ export function createRouter(options: {
       const ownershipRefs = info.ownershipEntityRefs ?? [];
 
       const isAdmin = ownershipRefs.some(
-        r => r === 'group:default/backstage-admins' || r === 'group:default/admins',
+        r => r === 'group:default/backstage-admins',
       );
       const isPM = ownershipRefs.some(
         r => r === 'group:default/pm-team',

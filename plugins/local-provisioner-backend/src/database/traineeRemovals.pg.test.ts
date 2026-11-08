@@ -20,8 +20,11 @@ maybe('trainee removals on real Postgres', () => {
   const migrations = fs.readdirSync(dir).filter(f => /^\d{3}-.*\.js$/.test(f)).sort();
 
   beforeAll(async () => {
-    db = knexFactory({ client: 'pg', connection: url });
-    await db.raw('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
+    // Its own schema: Jest runs test files in parallel, and files that reset `public` wipe each other.
+    const admin = knexFactory({ client: 'pg', connection: url });
+    await admin.raw('DROP SCHEMA IF EXISTS lp_trainee_removals_test CASCADE; CREATE SCHEMA lp_trainee_removals_test');
+    await admin.destroy();
+    db = knexFactory({ client: 'pg', connection: url, searchPath: ['lp_trainee_removals_test'] });
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     for (const f of migrations) await require(path.join(dir, f)).up(db);
   });
@@ -30,7 +33,7 @@ maybe('trainee removals on real Postgres', () => {
   });
 
   it('applies every migration including 008', () => {
-    expect(migrations[migrations.length - 1]).toBe('008-create-trainee-removals.js');
+    expect(migrations).toContain('008-create-trainee-removals.js');
   });
 
   it('hides exactly the removed lab and keeps the audit record', async () => {
@@ -44,7 +47,7 @@ maybe('trainee removals on real Postgres', () => {
       });
       await db('provisioning_tasks').where({ task_id: t.task_id }).update({ status: TaskStatus.COMPLETED, completed_at: new Date() });
     }
-    expect((await store.getTrainingResourceHistories()).map(h => h.resource.resource_name).sort()).toEqual(['lab-a', 'lab-b']);
+    expect((await store.getTrainingListData()).map(h => h.resource.resource_name).sort()).toEqual(['lab-a', 'lab-b']);
 
     await store.recordTraineeRemoval({
       agentId: 'agent-1',

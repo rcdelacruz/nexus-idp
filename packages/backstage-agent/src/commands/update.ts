@@ -6,13 +6,10 @@
  */
 
 import { Command } from 'commander';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { checkForUpdate, PACKAGE_NAME } from '../utils/versionCheck';
 import { globalPrefixOf, installedVersion, PACKAGE_ROOT } from '../utils/installLocation';
+import { installVersion, shownInstallCommand } from '../utils/selfUpdate';
 import logger from '../utils/logger';
-
-const execAsync = promisify(exec);
 
 import { AGENT_VERSION as currentVersion } from '../utils/version';
 import { displayError, displayInfo, displaySuccess, displayWarning } from '../utils/logo';
@@ -45,10 +42,11 @@ export const updateCommand = new Command('update')
     // Install the exact version into the folder THIS agent runs from (not wherever the shell's npm
     // points), then check the files on disk really changed before saying so.
     const prefix = globalPrefixOf(PACKAGE_ROOT);
-    const install = `npm install -g ${prefix ? `--prefix "${prefix}" ` : ''}${PACKAGE_NAME}@${info.latest}`;
+    const spec = `${PACKAGE_NAME}@${info.latest}`;
+    const install = shownInstallCommand(prefix, spec);
     displayInfo(`Updating ${info.current} → ${info.latest}...`);
     try {
-      const { stdout, stderr } = await execAsync(install, { timeout: 5 * 60 * 1000 });
+      const { stdout, stderr } = await installVersion(prefix, spec);
       if (stdout) logger.debug(stdout);
       if (stderr) logger.debug(stderr);
     } catch (error: any) {

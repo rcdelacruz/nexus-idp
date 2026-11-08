@@ -134,6 +134,7 @@ backend.add(import('./plugins/scaffolderTargetsApi'));
 
 // release info — Settings → About asks which release includes the running build's commit
 backend.add(import('./plugins/releaseInfo'));
+backend.add(import('./plugins/githubActionsApi'));
 
 // user management
 backend.add(

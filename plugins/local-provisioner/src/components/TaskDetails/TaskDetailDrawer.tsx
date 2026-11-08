@@ -1,5 +1,7 @@
+import { getColors } from '@stratpoint/theme-utils';
 import React, { useState } from 'react';
 import {
+  Button,
   Drawer,
   Typography,
   IconButton,
@@ -11,8 +13,11 @@ import { X, Copy, Check, Terminal, Plug, Info, Github, Gitlab, ExternalLink, Lay
 import { parseEntityRef } from '@backstage/catalog-model';
 import { ProvisioningTask } from '../../api/types';
 import { taskTypeLabel } from '../../api/transformers';
-import { currentStep, formatDuration, timeline } from '../../api/activity';
-import { agentWorkspace, cloneInfo, vscodeOpenFolderHref } from '../../api/cloneInfo';
+import { currentStep, formatDuration, stepAction, timeline } from '../../api/activity';
+import { agentWorkspace, cloneInfo, invitationUrl, repoReachedByMountedLab, vscodeOpenFolderHref } from '../../api/cloneInfo';
+
+// Terminal-style blocks are dark in every theme.
+const TERMINAL = getColors(true);
 
 const useStyles = makeStyles(theme => ({
   drawer: { width: 480, maxWidth: '100vw' },
@@ -50,8 +55,8 @@ const useStyles = makeStyles(theme => ({
   },
   connValue: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   logsBox: {
-    background: '#0a0a0a',
-    color: '#ededed',
+    background: TERMINAL.surface,
+    color: TERMINAL.text,
     fontFamily: 'monospace',
     fontSize: '0.75rem',
     lineHeight: 1.6,
@@ -86,6 +91,7 @@ function ActivitySection({ task }: { task: ProvisioningTask }) {
   const steps = timeline(task);
   const now = currentStep(task);
   const output = typeof task.metadata?.output === 'string' ? (task.metadata.output as string) : undefined;
+  const action = stepAction(task);
   if (!steps.length && !now) return null;
   const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   return (
@@ -114,6 +120,20 @@ function ActivitySection({ task }: { task: ProvisioningTask }) {
               <span className={classes.stepTime}>{st.durationMs ? formatDuration(st.durationMs) : ''}</span>
             </div>
             {st.running && now?.hint && <div className={classes.stepHint}>{now.hint}</div>}
+            {st.running && action && (
+              <div className={classes.stepHint}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  href={action.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  endIcon={<ExternalLink size={14} strokeWidth={1.5} />}
+                >
+                  {action.label}
+                </Button>
+              </div>
+            )}
             {st.running && now?.percent !== undefined && (
               <div className={classes.bar} aria-label={`${now.percent}%`}>
                 <div className={classes.barFill} style={{ width: `${now.percent}%` }} />
@@ -195,9 +215,14 @@ function LinkRow({ value }: { value: string }) {
 interface Props {
   task: ProvisioningTask | null;
   onClose: () => void;
+  /**
+   * Offer "Accept the GitHub invitation" while the code is not on the laptop. Only for the lab's owner:
+   * the invitation is addressed to them, so a view of someone else's lab (the admin Activity tab) leaves it off.
+   */
+  showInvitation?: boolean;
 }
 
-export const TaskDetailDrawer = ({ task, onClose }: Props) => {
+export const TaskDetailDrawer = ({ task, onClose, showInvitation = false }: Props) => {
   const classes = useStyles();
   if (!task) return null;
 
@@ -210,6 +235,11 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
   const githubRepoUrl = (task.config as any)?.githubRepoUrl as string | undefined;
   const gitlabRepoUrl = (task.config as any)?.gitlabRepoUrl as string | undefined;
   const clone = cloneInfo(githubRepoUrl || gitlabRepoUrl);
+  // Until the code is on the laptop, a GitHub repo can still be waiting for the trainee to accept the
+  // invitation to it: give every lab that button. A Node.js lab whose agent is waiting for repo access
+  // already shows the very same button in Activity, so it is not shown twice.
+  const invite = showInvitation && !repoReachedByMountedLab(task) ? invitationUrl(githubRepoUrl) : undefined;
+  const inviteShownInActivity = invite !== undefined && stepAction(task)?.url === invite;
   // Set by agents with auto-clone: where the trainee's repo was cloned on their machine.
   const workspace = agentWorkspace(task.metadata);
 
@@ -328,6 +358,20 @@ export const TaskDetailDrawer = ({ task, onClose }: Props) => {
               <Typography variant="body2" style={{ color: '#d97706', marginBottom: 8 }}>
                 Automatic clone didn't work: {workspace.hint}
               </Typography>
+            )}
+            {invite && !inviteShownInActivity && (
+              <div style={{ marginBottom: 8 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  href={invite}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  endIcon={<ExternalLink size={14} strokeWidth={1.5} />}
+                >
+                  Accept the GitHub invitation
+                </Button>
+              </div>
             )}
             <a
               href={clone.vscodeHref}

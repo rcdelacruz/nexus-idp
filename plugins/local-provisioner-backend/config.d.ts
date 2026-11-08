@@ -24,6 +24,21 @@ export interface Config {
     taskRetentionDays?: number;
 
     /**
+     * How many days the rows of a REMOVED training lab (and its grade results) are kept before the nightly clean-up deletes them.
+     * A lab that still exists is never deleted, whatever its age.
+     * @default 365
+     */
+    trainingRetentionDays?: number;
+
+    /**
+     * How many days a capstone that an instructor marked done (it sits in the Archive of the Trainees view) is kept. After that the
+     * nightly clean-up removes it the way "Remove trainee" does: its kept report is discarded and it leaves the list. The trainee's
+     * GitHub repository and their lab are not touched. Values under 30 are raised to 30.
+     * @default 365
+     */
+    archiveRetentionDays?: number;
+
+    /**
      * List of supported resource types
      * @default ['kafka', 'postgres', 'redis', 'mongodb']
      */

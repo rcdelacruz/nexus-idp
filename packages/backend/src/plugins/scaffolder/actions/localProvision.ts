@@ -11,6 +11,7 @@ import { AuthService, DiscoveryService, RootConfigService } from '@backstage/bac
 import fs from 'fs-extra';
 import path from 'path';
 import Mustache from 'mustache';
+import { requireReadyAgent } from './localAgent';
 
 /**
  * Recursively reads every file under `dir` (relative to the workspace) and returns a
@@ -53,34 +54,7 @@ function deriveEmailFromRef(ref: string | undefined, domain: string): string | u
   return username.includes('@') ? username : `${username}@${domain}`;
 }
 
-/**
- * Why the trainee's machine can't run a lab, or undefined. Unknown capabilities (older agents)
- * never block. Exported for tests.
- */
-export function machineRequirementProblem(
-  req: { minDockerMemoryGb?: number; architectures?: string[] } | undefined,
-  caps: { arch?: string; dockerMemoryBytes?: number } | undefined,
-): string | undefined {
-  if (!req || !caps) return undefined;
-  if (req.architectures?.length && caps.arch && !req.architectures.includes(caps.arch)) {
-    return `This lab doesn't run on your machine's CPU (${caps.arch}). Supported: ${req.architectures.join(', ')}.`;
-  }
-  if (req.minDockerMemoryGb && caps.dockerMemoryBytes) {
-    const have = caps.dockerMemoryBytes / 1024 ** 3;
-    // Docker reports slightly less than the configured limit (e.g. 3.8 GiB for "4 GB"), so allow 10%.
-    if (have < req.minDockerMemoryGb * 0.9) {
-      return (
-        `This lab needs about ${req.minDockerMemoryGb} GB of memory for Docker; yours has ${have.toFixed(1)} GB.\n\n` +
-        'Raise it, then run the template again:\n' +
-        '  • Docker Desktop (Mac/Windows): Settings → Resources → Memory\n' +
-        '  • Windows with WSL2: set memory= in %UserProfile%\\.wslconfig, then `wsl --shutdown`\n' +
-        '  • Colima: colima start --memory <GB>\n' +
-        '  • OrbStack: Settings → System → Memory limit'
-      );
-    }
-  }
-  return undefined;
-}
+export { machineRequirementProblem } from './localAgent';
 
 export interface LocalProvisionActionOptions {
   discovery: DiscoveryService;
@@ -211,90 +185,14 @@ export const createLocalProvisionAction = (options: LocalProvisionActionOptions)
         throw new InputError('User email not found. Please ensure you are logged in with a valid user.');
       }
 
-      // Mint an on-behalf-of token for the user who initiated the scaffolder run, so the
-      // local-provisioner API resolves req.user to that user and returns *their* agent and
-      // creates the task under their identity. Sibling actions target catalog/dbaas with
-      // service credentials, but local-provisioner scopes every endpoint by user email and
-      // its middleware only accepts user principals — so we delegate the initiator's identity
-      // rather than using getOwnServiceCredentials().
-      const { token } = await auth.getPluginRequestToken({
-        onBehalfOf: await ctx.getInitiatorCredentials(),
-        targetPluginId: 'local-provisioner',
-      });
-
-      // Get base URL for local-provisioner plugin using injected discovery service
-      const baseUrl = await discovery.getBaseUrl('local-provisioner');
-
-      // Query agents via HTTP API (each plugin has isolated database schemas)
-      ctx.logger.info(`Querying agents from: ${baseUrl}/agent`);
-      ctx.logger.debug(`Token type: ${typeof token}, length: ${token?.length}`);
-
-      const agentResponse = await fetch(
-        `${baseUrl}/agent`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      // The same readiness check the template's first step (stratpoint:local-agent-check) ran, again
+      // here: the agent may have stopped since. Delegates the initiator's identity — the
+      // local-provisioner API scopes every endpoint by the user (see localAgent.ts).
+      const { agent: activeAgent, token, baseUrl } = await requireReadyAgent(
+        { discovery, auth, config: rootConfig },
+        ctx,
+        { requirements: ctx.input.requirements },
       );
-
-      ctx.logger.info(`Agent API response status: ${agentResponse.status}`);
-
-      if (!agentResponse.ok) {
-        const errorText = await agentResponse.text();
-        ctx.logger.error(`Agent API error response: ${errorText}`);
-        throw new Error(`Failed to query agent status: ${agentResponse.status} - ${errorText}`);
-      }
-
-      const response = await agentResponse.json() as any;
-      ctx.logger.info(`Received agents response: ${JSON.stringify(response)}`);
-
-      // API returns {agents: [...], total: number}
-      const agents = response.agents || [];
-
-      if (!Array.isArray(agents) || agents.length === 0) {
-        throw new InputError(
-          'No agent found for your user. Please install and start the Backstage agent:\n\n' +
-          '  1. Install: npm install -g @stratpoint/backstage-agent\n' +
-          '  2. Login: backstage-agent login --url <your-backstage-url>\n' +
-          '  3. Start: backstage-agent start\n\n' +
-          'Then try running this template again.'
-        );
-      }
-
-      // Do NOT queue to an offline agent — the task would sit "pending" forever. Require a
-      // currently-online agent (connected, or a fresh heartbeat within the last 90s).
-      const ONLINE_MAX_AGE_SECONDS = 90;
-      const isOnline = (a: any): boolean => {
-        if (a.is_connected) return true;
-        const age = a.last_seen_age_seconds;
-        return typeof age === 'number' && age <= ONLINE_MAX_AGE_SECONDS;
-      };
-
-      const onlineAgents = agents.filter(isOnline);
-      if (onlineAgents.length === 0) {
-        const mostRecent = agents[0];
-        const lastSeen =
-          typeof mostRecent?.last_seen_age_seconds === 'number'
-            ? `last seen ${mostRecent.last_seen_age_seconds}s ago`
-            : 'never seen';
-        throw new InputError(
-          `Your Backstage agent is offline (${lastSeen}), so this resource cannot be provisioned.\n\n` +
-          'Start it on the machine where you want the resource, then try again:\n' +
-          '  backstage-agent start\n\n' +
-          '(If your session expired: backstage-agent login)',
-        );
-      }
-
-      // Use the most recently active ONLINE agent.
-      const activeAgent = onlineAgents[0];
-
-      // Stop early, with the fix, when the trainee's machine can't run this lab (agents ≥ 0.1.23
-      // report their capabilities; unknown values never block).
-      const problem = machineRequirementProblem(ctx.input.requirements, activeAgent.capabilities);
-      if (problem) throw new InputError(problem);
-
-      ctx.logger.info(`Using agent: ${activeAgent.agent_id} (last seen: ${activeAgent.last_seen})`);
 
       // Create provisioning task
       const createTaskResponse = await fetch(

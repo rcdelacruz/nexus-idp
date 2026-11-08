@@ -1,3 +1,4 @@
+import { getColors } from '@stratpoint/theme-utils';
 import React from 'react';
 import { SignInPage, UserIdentity } from '@backstage/core-components';
 import { googleAuthApiRef, useApi, configApiRef } from '@backstage/core-plugin-api';
@@ -28,6 +29,7 @@ const FEATURES = [
 ] as const;
 
 export const CustomSignInPage = (props: any) => {
+  const c = getColors(true); // a dark page whatever the saved theme (nothing has loaded the theme yet)
   const googleAuthApi = useApi(googleAuthApiRef);
   const configApi = useApi(configApiRef);
   const githubOwner = configApi.getOptionalString('organization.githubOwner') ?? 'your-github-org';
@@ -77,19 +79,19 @@ export const CustomSignInPage = (props: any) => {
 
   let buttonBackground = 'transparent';
   if (loading) {
-    buttonBackground = '#0a0a0a';
+    buttonBackground = c.surface;
   } else if (hovering) {
-    buttonBackground = '#1a1a1a';
+    buttonBackground = c.avatarBg;
   }
 
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#000',
-      backgroundImage: 'radial-gradient(circle, #2e2e2e 1px, transparent 1px)',
+      background: c.bg,
+      backgroundImage: `radial-gradient(circle, ${c.border} 1px, transparent 1px)`,
       backgroundSize: '24px 24px',
       fontFamily: FONT,
-      color: '#ededed',
+      color: c.text,
       display: 'flex',
       flexDirection: 'column',
     }}>
@@ -100,7 +102,7 @@ export const CustomSignInPage = (props: any) => {
         justifyContent: 'space-between',
         padding: '0 32px',
         height: 64,
-        borderBottom: '1px solid #2e2e2e',
+        borderBottom: `1px solid ${c.border}`,
       }}>
         <NexusLogoHorizontal />
         <div style={{
@@ -120,9 +122,9 @@ export const CustomSignInPage = (props: any) => {
               height: 36,
               padding: '0 16px',
               borderRadius: 6,
-              border: `1px solid ${hovering && !loading ? '#454545' : '#2e2e2e'}`,
+              border: `1px solid ${hovering && !loading ? c.borderHover : c.border}`,
               background: buttonBackground,
-              color: loading ? '#454545' : '#ededed',
+              color: loading ? c.textDisabled : c.text,
               fontSize: '0.875rem',
               fontWeight: 500,
               letterSpacing: '-0.006em',
@@ -153,7 +155,7 @@ export const CustomSignInPage = (props: any) => {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 10,
-          background: '#000',
+          background: c.bg,
         }}>
           <style>{`
             @keyframes logo-breathe {
@@ -162,7 +164,7 @@ export const CustomSignInPage = (props: any) => {
             }
           `}</style>
           <div style={{ width: 240, animation: 'logo-breathe 1.8s ease-in-out infinite' }}>
-            <NexusLogoFull color="#ededed" />
+            <NexusLogoFull color={c.text} />
           </div>
         </div>
       )}
@@ -188,9 +190,9 @@ export const CustomSignInPage = (props: any) => {
             gap: 6,
             padding: '4px 12px',
             borderRadius: 100,
-            border: '1px solid #2e2e2e',
+            border: `1px solid ${c.border}`,
             fontSize: '0.75rem',
-            color: '#878787',
+            color: c.textMuted,
             marginBottom: 24,
           }}>
             <Zap size={12} strokeWidth={1.5} aria-hidden="true" />
@@ -203,15 +205,15 @@ export const CustomSignInPage = (props: any) => {
             letterSpacing: '-0.06em',
             lineHeight: 1.05,
             margin: '0 0 16px',
-            color: '#ededed',
+            color: c.text,
           }}>
             Build, Ship &amp; Operate<br />
-            <span style={{ color: '#878787' }}>with Confidence</span>
+            <span style={{ color: c.textMuted }}>with Confidence</span>
           </h1>
 
           <p style={{
             fontSize: '1.125rem',
-            color: '#878787',
+            color: c.textMuted,
             lineHeight: 1.6,
             letterSpacing: '-0.01em',
             margin: '0 0 32px',
@@ -234,8 +236,8 @@ export const CustomSignInPage = (props: any) => {
               padding: '0 24px',
               borderRadius: 8,
               border: 'none',
-              background: '#ededed',
-              color: '#000',
+              background: c.text,
+              color: c.bg,
               fontSize: '0.9375rem',
               fontWeight: 600,
               letterSpacing: '-0.01em',
@@ -244,7 +246,7 @@ export const CustomSignInPage = (props: any) => {
               transition: 'background 0.15s',
             }}
             onMouseEnter={e => { if (!loading) (e.target as HTMLElement).style.background = '#d4d4d4'; }}
-            onMouseLeave={e => { (e.target as HTMLElement).style.background = '#ededed'; }}
+            onMouseLeave={e => { (e.target as HTMLElement).style.background = c.text; }}
           >
             {loading ? 'Signing in\u2026' : (
               <>
@@ -270,8 +272,8 @@ export const CustomSignInPage = (props: any) => {
               style={{
                 padding: '16px 18px',
                 borderRadius: 8,
-                border: '1px solid #2e2e2e',
-                background: '#0a0a0a',
+                border: `1px solid ${c.border}`,
+                background: c.surface,
                 textAlign: 'left',
               }}
             >
@@ -279,19 +281,19 @@ export const CustomSignInPage = (props: any) => {
                 width: 28,
                 height: 28,
                 borderRadius: 6,
-                background: '#1a1a1a',
-                border: '1px solid #2e2e2e',
+                background: c.avatarBg,
+                border: `1px solid ${c.border}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: 10,
               }}>
-                <Icon size={14} strokeWidth={1.5} color="#878787" aria-hidden="true" />
+                <Icon size={14} strokeWidth={1.5} color={c.textMuted} aria-hidden="true" />
               </div>
               <div style={{
                 fontSize: '0.8125rem',
                 fontWeight: 600,
-                color: '#ededed',
+                color: c.text,
                 letterSpacing: '-0.01em',
                 marginBottom: 4,
               }}>
@@ -299,7 +301,7 @@ export const CustomSignInPage = (props: any) => {
               </div>
               <div style={{
                 fontSize: '0.75rem',
-                color: '#878787',
+                color: c.textMuted,
                 lineHeight: 1.5,
               }}>
                 {desc}
@@ -312,7 +314,7 @@ export const CustomSignInPage = (props: any) => {
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer style={{
-        borderTop: '1px solid #2e2e2e',
+        borderTop: `1px solid ${c.border}`,
         padding: '24px 32px',
         display: 'flex',
         alignItems: 'center',
@@ -321,11 +323,11 @@ export const CustomSignInPage = (props: any) => {
         gap: 12,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontSize: '0.75rem', color: '#454545' }}>
+          <span style={{ fontSize: '0.75rem', color: c.textDisabled }}>
             &copy; {new Date().getFullYear()} {orgName}
           </span>
-          <span style={{ fontSize: '0.75rem', color: '#2e2e2e' }}>&middot;</span>
-          <span style={{ fontSize: '0.75rem', color: '#454545' }}>
+          <span style={{ fontSize: '0.75rem', color: c.border }}>&middot;</span>
+          <span style={{ fontSize: '0.75rem', color: c.textDisabled }}>
             Powered by Nexus IDP
           </span>
         </div>
@@ -334,7 +336,7 @@ export const CustomSignInPage = (props: any) => {
             href={`https://github.com/${githubOwner}`}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ fontSize: '0.75rem', color: '#878787', textDecoration: 'none' }}
+            style={{ fontSize: '0.75rem', color: c.textMuted, textDecoration: 'none' }}
           >
             GitHub
           </a>
@@ -342,7 +344,7 @@ export const CustomSignInPage = (props: any) => {
             href={`https://${orgDomain}`}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ fontSize: '0.75rem', color: '#878787', textDecoration: 'none' }}
+            style={{ fontSize: '0.75rem', color: c.textMuted, textDecoration: 'none' }}
           >
             {orgDomain}
           </a>

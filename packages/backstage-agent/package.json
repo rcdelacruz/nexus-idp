@@ -1,6 +1,6 @@
 {
   "name": "@stratpoint/backstage-agent",
-  "version": "0.1.28",
+  "version": "0.1.32",
   "description": "Backstage Local Provisioner Agent - Provisions local development resources",
   "main": "dist/index.js",
   "bin": "./bin/backstage-agent.js",

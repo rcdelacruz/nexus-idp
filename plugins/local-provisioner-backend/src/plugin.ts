@@ -31,7 +31,6 @@ export const localProvisionerPlugin = createBackendPlugin({
         discovery: coreServices.discovery,
         httpAuth: coreServices.httpAuth,
         permissions: coreServices.permissions,
-        scheduler: coreServices.scheduler,
       },
       async init({
         logger,
@@ -41,7 +40,6 @@ export const localProvisionerPlugin = createBackendPlugin({
         discovery,
         httpAuth,
         permissions,
-        scheduler,
       }) {
         logger.info('Initializing Local Provisioner backend plugin');
 
@@ -62,7 +60,6 @@ export const localProvisionerPlugin = createBackendPlugin({
           config,
           httpAuth,
           permissions,
-          scheduler,
         });
 
         // Framework credentials barrier (layer 1). Deny-by-default: every route requires a

@@ -3,7 +3,7 @@
  */
 
 import { Knex } from 'knex';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
   ProvisioningTask,
   AgentRegistration,
@@ -17,7 +17,18 @@ import {
   isCheckTask,
   isTrainingTask,
   resourceTypeForTask,
+  TRAINING_TASK_TYPES,
+  PROVISION_TASK_TYPES,
 } from '../types';
+import { sameUser } from '../util/identity';
+
+/**
+ * The agent id a second user gets on a machine whose machine-derived id is already registered to someone else:
+ * `<machine id>-<8 hex of sha256(user)>`. Stable per (machine, user), so a re-login finds the same row.
+ */
+export function derivedAgentId(agentId: string, userId: string): string {
+  return `${agentId}-${createHash('sha256').update(userId.trim().toLowerCase()).digest('hex').slice(0, 8)}`;
+}
 
 /** Most steps one task keeps in its activity timeline, and the most live output it stores. */
 const MAX_ACTIVITY = 200;
@@ -64,12 +75,14 @@ export function mergeTaskMetadata(
   let newStep: string | undefined;
   if (status === TaskStatus.IN_PROGRESS && phase && phase !== last) {
     newStep = phase;
-    // Progress and output belong to a step; a new step starts without the last one's.
+    // Progress, output and the step's button belong to a step; a new step starts without them.
     if (!('progress' in fields)) delete merged.progress;
     if (!('output' in fields)) delete merged.output;
+    if (!('action' in fields)) delete merged.action;
   } else if ((status === TaskStatus.COMPLETED || status === TaskStatus.FAILED) && last !== status) {
     newStep = status;
     delete merged.progress;
+    delete merged.action;
   }
   if (newStep) {
     activity.push({ at: when, step: newStep });
@@ -78,6 +91,47 @@ export function mergeTaskMetadata(
   merged.activity = activity.slice(-MAX_ACTIVITY);
   if (typeof merged.output === 'string') merged.output = merged.output.slice(-MAX_OUTPUT_CHARS);
   return { metadata: merged, newStep: newStep && newStep !== status ? newStep : undefined };
+}
+
+/** A removed training lab stays in the instructor's Trainees view this long (a trainee's repo work outlives their environment). */
+export const DEFAULT_TRAINING_RETENTION_DAYS = 365;
+/** How much of a failed check's job log the Trainees view carries (the tail: the end of a log is where it stops). */
+export const CHECK_LOG_TAIL_BYTES = 16 * 1024;
+
+/**
+ * The exit code of a failed check, read from the agent's own error text ("Job exited with 1", "Check exited with 2"). The agent
+ * sends the result of a failed check as an error and a log, not as a result, so this is the only place the code survives.
+ */
+export function exitCodeFromError(message?: string | null): number | undefined {
+  const m = /^(?:Job|Check) exited with (-?\d+)$/.exec((message ?? '').trim());
+  return m ? Number(m[1]) : undefined;
+}
+
+/** Per lab and per check name, this many of the newest results are never pruned (the hourly checks would otherwise grow without end). */
+const KEEP_LATEST_CHECKS = 5;
+
+export interface CleanupOptions {
+  trainingRetentionDays?: number;
+  keepLatestChecks?: number;
+  /** For tests: the date the clean-up behaves as if it were. */
+  now?: Date;
+}
+
+/** One event of a training lab's timeline; a check event also carries its result. */
+export interface TrainingHistoryEvent {
+  type: string;
+  status: string;
+  at: Date;
+  check?: { name?: string; exitCode?: number; output?: string; error?: string; logs?: string };
+}
+
+/** A training lab with its provisioning task, lifecycle/check timeline and what its agent is doing right now. */
+export interface TrainingHistory {
+  resource: Resource;
+  provision: ProvisioningTask;
+  events: TrainingHistoryEvent[];
+  /** The lab's task still pending or running (provision or lifecycle), with its current step. */
+  current?: { type: string; status: string; step?: string; since: Date };
 }
 
 /**
@@ -318,75 +372,176 @@ export class TaskStore {
   }
 
   /**
-   * Every training resource across all users, removed ones included (a trainee's repo work
-   * outlives their environment), with the provisioning task (its `config` carries the
-   * template-forwarded repo URL) and the lifecycle history. Same grouping and fold as
-   * `getActiveProvisionedResources`. Feeds the instructor Trainees view.
+   * Every lab on one agent that has not been torn down, each with its folded resource, the latest
+   * provision task (the one lifecycle tasks target) and all its provision attempts. Feeds the
+   * "which of my other labs hold the ports this one needs" check before a retry.
    */
-  async getTrainingResourceHistories(): Promise<
-    {
-      resource: Resource;
-      provision: ProvisioningTask;
-      events: { type: string; status: string; at: Date; check?: { name?: string; exitCode?: number; output?: string } }[];
-      /** The lab's task still pending or running (provision or lifecycle), with its current step. */
-      current?: { type: string; status: string; step?: string; since: Date };
-    }[]
-  > {
-    const rows = await this.db('provisioning_tasks').orderBy('created_at', 'asc');
+  async getLabsForAgent(agentId: string): Promise<{ resource: Resource; provision: ProvisioningTask; provisions: ProvisioningTask[] }[]> {
+    const rows = await this.db('provisioning_tasks').where({ agent_id: agentId }).orderBy('created_at', 'asc');
     const byResource = new Map<string, ProvisioningTask[]>();
     for (const t of rows.map(r => this.mapTaskFromDb(r))) {
+      const group = byResource.get(t.resource_name);
+      if (group) group.push(t);
+      else byResource.set(t.resource_name, [t]);
+    }
+    const out: { resource: Resource; provision: ProvisioningTask; provisions: ProvisioningTask[] }[] = [];
+    for (const group of byResource.values()) {
+      const resource = foldTasksToResource(group);
+      if (!resource || resource.state === ResourceState.REMOVED) continue;
+      const provisions = group.filter(t => isProvisionTask(t.task_type));
+      const provision = provisions[provisions.length - 1];
+      if (provision) out.push({ resource, provision, provisions });
+    }
+    return out;
+  }
+
+  /**
+   * The training labs for the instructor list: the same histories as `getTrainingResourceHistory`, but read the cheap way, because this
+   * runs for every trainee on every page load. It never reads `logs` or `connection_details`, reads only the groups that have a training
+   * provision task, keeps just the few `config` fields the list needs (a provision's config holds compose files and source trees, a
+   * check's holds the grader and the answer key), and loads `metadata` only for tasks still open (their activity timeline) and for each
+   * lab's newest completed grade (its result decides the hard-fail reason). Check results in these rows carry no log.
+   */
+  async getTrainingListData(): Promise<TrainingHistory[]> {
+    const pg = /pg|postgres/i.test(String((this.db as any).client?.config?.client ?? ''));
+    // One small `config` field as text: ->> on Postgres, json_extract on sqlite (the unit tests). Postgres has to decompress a whole
+    // stored `config` (compose files, source trees, grader jobs: tens of KB) for every field it reads, so each field is read only for
+    // the task types that use it: the lab id and repo URLs from provisions, the check name from checks, nothing from the rest.
+    const types = (list: string[]) => list.map(() => '?').join(', ');
+    const field = (key: string, alias: string, onlyFor: string[]) =>
+      pg
+        ? this.db.raw(`CASE WHEN ?? IN (${types(onlyFor)}) THEN ?? ->> ? END as ??`, ['t.task_type', ...onlyFor, 't.config', key, alias])
+        : this.db.raw(`CASE WHEN ?? IN (${types(onlyFor)}) THEN json_extract(??, ?) END as ??`, ['t.task_type', ...onlyFor, 't.config', `$.${key}`, alias]);
+    const pairs = this.db('provisioning_tasks').whereIn('task_type', TRAINING_TASK_TYPES).distinct('agent_id', 'resource_name').as('k');
+    const rows = await this.db('provisioning_tasks as t')
+      .join(pairs, function join() {
+        this.on('k.agent_id', 't.agent_id').andOn('k.resource_name', 't.resource_name');
+      })
+      .select(
+        't.task_id',
+        't.agent_id',
+        't.user_id',
+        't.task_type',
+        't.resource_name',
+        't.status',
+        't.catalog_entity_ref',
+        't.error_message',
+        't.created_at',
+        't.updated_at',
+        't.started_at',
+        't.completed_at',
+        field('labId', 'cfg_lab_id', PROVISION_TASK_TYPES),
+        field('githubRepoUrl', 'cfg_github', PROVISION_TASK_TYPES),
+        field('gitlabRepoUrl', 'cfg_gitlab', PROVISION_TASK_TYPES),
+        field('checkName', 'cfg_check', [TaskType.RUN_CHECK]),
+        this.db.raw('CASE WHEN t.status IN (?, ?) THEN t.metadata END as metadata', [TaskStatus.PENDING, TaskStatus.IN_PROGRESS]),
+      )
+      .orderBy('t.created_at', 'asc');
+
+    const tasks = rows.map((r: any) => {
+      const config: Record<string, unknown> = {};
+      for (const [key, col] of [['labId', 'cfg_lab_id'], ['githubRepoUrl', 'cfg_github'], ['gitlabRepoUrl', 'cfg_gitlab'], ['checkName', 'cfg_check']] as const) {
+        if (r[col] !== null && r[col] !== undefined) config[key] = r[col];
+      }
+      return this.mapTaskFromDb({ ...r, config });
+    });
+
+    // The newest completed grade of each lab: only these results are read, in one more small query.
+    const newestGrade = new Map<string, ProvisioningTask>();
+    for (const t of tasks) {
+      if (!isCheckTask(t.task_type) || t.status !== TaskStatus.COMPLETED || !String(t.config?.checkName ?? '').startsWith('grade')) continue;
+      const key = `${t.agent_id}::${t.resource_name}`;
+      const prev = newestGrade.get(key);
+      if (!prev || (t.completed_at ?? t.created_at) >= (prev.completed_at ?? prev.created_at)) newestGrade.set(key, t);
+    }
+    const byId = new Map([...newestGrade.values()].map(t => [t.task_id, t]));
+    const ids = [...byId.keys()];
+    for (let i = 0; i < ids.length; i += 400) {
+      for (const r of await this.db('provisioning_tasks').whereIn('task_id', ids.slice(i, i + 400)).select('task_id', 'metadata')) {
+        const t = byId.get(r.task_id);
+        if (t) t.metadata = this.mapTaskFromDb({ ...r, config: {} }).metadata;
+      }
+    }
+    return this.groupTrainingHistories(tasks);
+  }
+
+  /**
+   * One training lab with everything the detail needs (all columns, failed-check logs included); undefined when the group is not a
+   * training lab. The caller still applies the "removed from the Trainees view" rule, as for the list.
+   */
+  async getTrainingResourceHistory(agentId: string, resourceName: string): Promise<TrainingHistory | undefined> {
+    const rows = await this.db('provisioning_tasks').where({ agent_id: agentId, resource_name: resourceName }).orderBy('created_at', 'asc');
+    return this.buildTrainingHistory(rows.map((r: any) => this.mapTaskFromDb(r)));
+  }
+
+  /** Agents by id in one query per 400 (instead of one per lab). */
+  async getAgentsByIds(agentIds: string[]): Promise<Map<string, AgentRegistration>> {
+    const out = new Map<string, AgentRegistration>();
+    const ids = [...new Set(agentIds)];
+    for (let i = 0; i < ids.length; i += 400) {
+      for (const r of await this.db('agent_registrations').whereIn('agent_id', ids.slice(i, i + 400))) {
+        const agent = this.mapAgentFromDb(r);
+        out.set(agent.agent_id, agent);
+      }
+    }
+    return out;
+  }
+
+  private groupTrainingHistories(tasks: ProvisioningTask[]): TrainingHistory[] {
+    const byResource = new Map<string, ProvisioningTask[]>();
+    for (const t of tasks) {
       const key = `${t.agent_id}::${t.resource_name}`;
       const group = byResource.get(key);
       if (group) group.push(t);
       else byResource.set(key, [t]);
     }
-
-    const out: {
-      resource: Resource;
-      provision: ProvisioningTask;
-      events: { type: string; status: string; at: Date; check?: { name?: string; exitCode?: number; output?: string } }[];
-      current?: { type: string; status: string; step?: string; since: Date };
-    }[] = [];
+    const out: TrainingHistory[] = [];
     for (const group of byResource.values()) {
-      const resource = foldTasksToResource(group);
-      if (!resource?.is_training) continue;
-      const provision = [...group].reverse().find(t => isProvisionTask(t.task_type))!;
-      const open = [...group]
-        .reverse()
-        .find(t => !isCheckTask(t.task_type) && (t.status === TaskStatus.PENDING || t.status === TaskStatus.IN_PROGRESS));
-      const activity = Array.isArray(open?.metadata?.activity) ? open!.metadata!.activity : [];
-      const lastStep = activity[activity.length - 1];
-      out.push({
-        resource,
-        provision,
-        current: open
-          ? {
-              type: open.task_type,
-              status: open.status,
-              step: typeof open.metadata?.phase === 'string' ? open.metadata.phase : undefined,
-              since: lastStep?.at ? new Date(lastStep.at) : open.started_at ?? open.created_at,
-            }
-          : undefined,
-        events: group.map(t => ({
-          type: t.task_type,
-          status: t.status,
-          at: t.completed_at ?? t.created_at,
-          ...(isCheckTask(t.task_type)
-            ? { check: { name: t.config?.checkName, exitCode: t.metadata?.check?.exitCode, output: t.metadata?.check?.output ?? t.error_message } }
-            : {}),
-        })),
-      });
+      const history = this.buildTrainingHistory(group);
+      if (history) out.push(history);
     }
     return out;
   }
 
-  /** Whether a task of this type is still pending or running for this resource. */
-  async hasOpenTask(agentId: string, resourceName: string, taskType: string): Promise<boolean> {
-    const row = await this.db('provisioning_tasks')
-      .where({ agent_id: agentId, resource_name: resourceName, task_type: taskType })
-      .whereIn('status', [TaskStatus.PENDING, TaskStatus.IN_PROGRESS])
-      .first('task_id');
-    return Boolean(row);
+  /** The lab fold plus its timeline and check results, for one resource's tasks in creation order; undefined when not a training lab. */
+  private buildTrainingHistory(group: ProvisioningTask[]): TrainingHistory | undefined {
+    const resource = foldTasksToResource(group);
+    if (!resource?.is_training) return undefined;
+    const provision = [...group].reverse().find(t => isProvisionTask(t.task_type))!;
+    const open = [...group]
+      .reverse()
+      .find(t => !isCheckTask(t.task_type) && (t.status === TaskStatus.PENDING || t.status === TaskStatus.IN_PROGRESS));
+    const activity = Array.isArray(open?.metadata?.activity) ? open!.metadata!.activity : [];
+    const lastStep = activity[activity.length - 1];
+    return {
+      resource,
+      provision,
+      current: open
+        ? {
+            type: open.task_type,
+            status: open.status,
+            step: typeof open.metadata?.phase === 'string' ? open.metadata.phase : undefined,
+            since: lastStep?.at ? new Date(lastStep.at) : open.started_at ?? open.created_at,
+          }
+        : undefined,
+      events: group.map(t => ({
+        type: t.task_type,
+        status: t.status,
+        at: t.completed_at ?? t.created_at,
+        ...(isCheckTask(t.task_type)
+          ? {
+              check: {
+                name: t.config?.checkName,
+                exitCode: t.metadata?.check?.exitCode ?? exitCodeFromError(t.error_message),
+                output: t.metadata?.check?.output ?? t.error_message ?? undefined,
+                error: t.error_message ?? undefined,
+                // Only a failed check needs its log (a finished one carries its result as `output`).
+                logs: t.status === TaskStatus.FAILED && t.logs ? String(t.logs).slice(-CHECK_LOG_TAIL_BYTES) : undefined,
+              },
+            }
+          : {}),
+      })),
+    };
   }
 
   /** Instructor "Remove trainee": hides the lab from the Trainees view; the row is the audit record. */
@@ -418,10 +573,14 @@ export class TaskStore {
     return new Set(rows.map(r => `${r.agent_id}::${r.resource_name}`));
   }
 
-  /** The latest provision task (any state) whose template-forwarded repo URL matches — the lab of a capstone repo. */
-  async findProvisionTaskByRepoUrl(repoUrl: string): Promise<ProvisioningTask | undefined> {
+  /**
+   * The latest provision task (any state) of `ownerEmail` whose template-forwarded repo URL matches — the lab of a capstone repo.
+   * The owner is part of the lookup: `POST /tasks` stores `config.githubRepoUrl` as given, so a task of any other user can name the
+   * same repo, and the instructor's checks (manifest, grader, answer key) must only ever go to the enrolled trainee's own lab.
+   */
+  async findProvisionTaskByRepoUrl(repoUrl: string, ownerEmail: string): Promise<ProvisioningTask | undefined> {
     const norm = (u: unknown) => String(u ?? '').replace(/\.git$/, '').replace(/\/+$/, '').toLowerCase();
-    const rows = await this.db('provisioning_tasks').orderBy('created_at', 'desc');
+    const rows = await this.db('provisioning_tasks').whereRaw('lower(user_id) = ?', [String(ownerEmail ?? '').trim().toLowerCase()]).orderBy('created_at', 'desc');
     return rows
       .map(r => this.mapTaskFromDb(r))
       .find(t => isProvisionTask(t.task_type) && norm(t.config?.githubRepoUrl ?? t.config?.gitlabRepoUrl) === norm(repoUrl));
@@ -479,6 +638,13 @@ export class TaskStore {
   /**
    * Upsert agent with machine-based ID
    * If agent exists (by agent_id), update it. Otherwise, insert new agent.
+   *
+   * An agent row is NEVER handed to a different user. The id comes from the caller's request body (`/agent/device/code` is
+   * unauthenticated), the login only proves who the CALLER is, and the row's owner decides who receives the agent's tasks, so
+   * moving the row to whoever authorizes a login for that id gave them the agent (audit 2026-11-07: anyone who knew or computed a
+   * laptop's id could take over its agent and receive its pending tasks). When the row for this id belongs to someone else (an
+   * account switch, a laptop handed off) the new user gets a registration of their own under a derived id; the CLI saves whatever
+   * id the portal returns, so nothing else changes for them.
    */
   async upsertAgent(
     agentId: string,
@@ -488,57 +654,64 @@ export class TaskStore {
     platformVersion: string,
     machineName?: string,
     agentVersion?: string,
-  ): Promise<{ agent: AgentRegistration; reconnected: boolean }> {
-    // Check if agent already exists — by agent_id first, then by (hostname, user_id), the
-    // actual DB uniqueness constraint. agentId is a hash of hostname + primary network MAC
-    // (see packages/backstage-agent/src/utils/machineId.ts) and is meant to be stable per
-    // machine, but interface enumeration order isn't guaranteed stable across process runs
-    // on a machine with multiple interfaces (VPN/Tailscale attaching/detaching, etc.) — a
-    // different MAC gets picked, producing a different agentId for the same physical machine.
-    // Falling through to the INSERT below with a "new" agentId then violates
-    // idx_agent_hostname_user_unique (500 on every device-code poll) since a row for this
-    // hostname+user already exists under the old agentId. Checking (hostname, user_id) too
-    // catches that case and updates the existing row in place instead of colliding.
+  ): Promise<{ agent: AgentRegistration; reconnected: boolean; separatedFromUser?: string }> {
+    // agentId is a hash of hostname + primary network MAC (see packages/backstage-agent/src/utils/machineId.ts) and is meant to be
+    // stable per machine, but interface enumeration order isn't guaranteed stable across process runs on a machine with several
+    // interfaces (VPN/Tailscale attaching/detaching) — a different MAC gets picked, producing a different agentId for the same
+    // physical machine. Falling through to the INSERT below with a "new" agentId then violates idx_agent_hostname_user_unique
+    // (500 on every device-code poll) since a row for this hostname+user already exists under the old agentId. So the lookup is
+    // by agent_id first, then by (hostname, user_id), the actual DB uniqueness constraint, and the row found is updated in place.
+    const byId = await this.getAgentById(agentId);
+    const foreign = byId !== null && !sameUser(byId.user_id, userId);
+    let wantedId = foreign ? derivedAgentId(agentId, userId) : agentId;
+    if (foreign) {
+      // The derived id is computable by anyone (it is a hash of public facts), so someone could register it first. That must not
+      // block this user's login: take another id instead of failing on the collision.
+      const atDerived = await this.getAgentById(wantedId);
+      if (atDerived && !sameUser(atDerived.user_id, userId)) wantedId = `${wantedId}-${randomUUID().slice(0, 6)}`;
+    }
     const existing =
-      (await this.getAgentById(agentId)) ??
+      (foreign ? await this.getAgentById(wantedId) : byId) ??
       (await this.db('agent_registrations').where({ hostname, user_id: userId }).first().then(
         row => (row ? this.mapAgentFromDb(row) : null),
       ));
+    if (existing && !sameUser(existing.user_id, userId)) {
+      // Cannot happen with the derived id (it embeds the user), but never move a row to another user whatever the cause.
+      throw new Error(`Agent ${existing.agent_id} belongs to another user`);
+    }
 
     if (existing) {
-      // Update existing agent. Also reassign user_id: agent_id is machine-derived, so
-      // re-authorizing the CLI on a laptop previously owned by a different Backstage user
-      // (e.g. account switch, laptop handed off) must transfer ownership to whoever just
-      // authorized it — otherwise getAgentsByUser() for the new owner returns nothing,
-      // which silently breaks the Agent List UI and every heartbeat/SSE call afterward
-      // (found 2026-07-26: a new user's heartbeats 500'd with "Agent not found for user").
-      // Key the update on the row we actually found (existing.agent_id) — it may differ
-      // from the incoming agentId if this row was matched via the (hostname, user_id)
-      // fallback above, in which case agent_id needs renaming to the freshly-computed one.
+      // Key the update on the row we actually found (existing.agent_id). When it was matched through the (hostname, user_id)
+      // fallback its id may differ from the incoming one: a plain reconnect renames it to the freshly-computed id, but when the
+      // computed id belongs to someone else (`foreign`) the row keeps the id it has.
+      const keepId = foreign ? existing.agent_id : agentId;
       await this.db('agent_registrations')
         .where({ agent_id: existing.agent_id })
         .update({
-          agent_id: agentId,
+          agent_id: keepId,
           user_id: userId,
           hostname,
           os_platform: platform,
           platform_version: platformVersion,
           machine_name: machineName,
           agent_version: agentVersion,
-          last_seen: this.db.fn.now(),
+          // The backend's own clock: liveness is judged against Date.now() (agentLiveness.ts),
+          // so stamping with the database's clock would add its drift to a 45 s window.
+          last_seen: new Date(),
         });
 
-      const updated = await this.getAgentById(agentId);
+      const updated = await this.getAgentById(keepId);
       return {
         agent: updated!,
         reconnected: true,
+        separatedFromUser: foreign ? byId!.user_id : undefined,
       };
     }
 
     // Insert new agent with custom agent_id
     const [agent] = await this.db('agent_registrations')
       .insert({
-        agent_id: agentId, // Custom machine-based ID from CLI
+        agent_id: wantedId, // machine-based ID from the CLI, or the derived one when that id belongs to another user
         user_id: userId,
         hostname,
         os_platform: platform,
@@ -551,6 +724,7 @@ export class TaskStore {
     return {
       agent: this.mapAgentFromDb(agent),
       reconnected: false,
+      separatedFromUser: foreign ? byId!.user_id : undefined,
     };
   }
 
@@ -583,7 +757,7 @@ export class TaskStore {
     await this.db('agent_registrations')
       .where({ agent_id: agentId })
       .update({
-        last_seen: this.db.fn.now(),
+        last_seen: new Date(), // backend clock, same one the age is measured with
         // Agents ≥ 0.1.23 report their real version on every poll, so an `update` is picked up
         // without re-login (registration alone used to record a hard-coded 0.1.0).
         ...(agentVersion ? { agent_version: agentVersion } : {}),
@@ -601,17 +775,73 @@ export class TaskStore {
   }
 
   /**
-   * Delete old completed/failed tasks based on retention period
+   * Nightly clean-up of finished task rows.
+   *
+   * It used to delete EVERY completed/failed row older than the retention (30 days). A lab's state is folded from its rows, so that
+   * made a lab that was still running vanish from the portal and the catalog, a stopped lab fold back to "running" (only its stop
+   * row was gone), a removed training lab disappear from the instructor's Trainees view (a trainee's repo work outlives their
+   * environment) and every grade result vanish after a month.
+   *
+   * Now it works per lab (agent + resource name):
+   *  - a lab that still exists keeps every row that says what it is; only old routine check results go, and the newest few of each
+   *    check (grades included) always stay;
+   *  - a lab that is gone (removed, or a failed attempt that never produced a lab) goes completely, all rows at once, once its
+   *    newest row is older than the retention: a year for training labs, `retentionDays` for the rest;
+   *  - a lab with something still pending or running is left alone.
    */
-  async cleanupOldTasks(retentionDays: number): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+  async cleanupOldTasks(retentionDays: number, options: CleanupOptions = {}): Promise<number> {
+    const now = (options.now ?? new Date()).getTime();
+    const trainingDays = Math.max(options.trainingRetentionDays ?? DEFAULT_TRAINING_RETENTION_DAYS, retentionDays);
+    const keepChecks = options.keepLatestChecks ?? KEEP_LATEST_CHECKS;
+    const olderThan = (at: number, days: number) => at < now - days * 86_400_000;
 
-    const deleted = await this.db('provisioning_tasks')
-      .whereIn('status', [TaskStatus.COMPLETED, TaskStatus.FAILED])
-      .where('completed_at', '<', cutoffDate)
-      .delete();
+    const rows = await this.db('provisioning_tasks').orderBy('created_at', 'asc');
+    const groups = new Map<string, ProvisioningTask[]>();
+    for (const t of rows.map(r => this.mapTaskFromDb(r))) {
+      const key = `${t.agent_id}::${t.resource_name}`;
+      const group = groups.get(key);
+      if (group) group.push(t);
+      else groups.set(key, [t]);
+    }
 
+    const terminal = (t: ProvisioningTask) => t.status === TaskStatus.COMPLETED || t.status === TaskStatus.FAILED;
+    const endedAt = (t: ProvisioningTask) => (t.completed_at ?? t.updated_at).getTime();
+    const doomed: string[] = [];
+
+    for (const group of groups.values()) {
+      const resource = foldTasksToResource(group);
+      const hadLab = group.some(t => isProvisionTask(t.task_type) && t.status === TaskStatus.COMPLETED);
+      const gone = !resource || resource.state === ResourceState.REMOVED || (resource.state === ResourceState.ERROR && !hadLab);
+
+      if (gone) {
+        if (!group.every(terminal)) continue;
+        const days = resource?.is_training ? trainingDays : retentionDays;
+        if (olderThan(Math.max(...group.map(endedAt)), days)) doomed.push(...group.map(t => t.task_id));
+        continue;
+      }
+
+      // The lab exists: only old routine check results are pruned, the newest few of each check stay.
+      const byCheck = new Map<string, ProvisioningTask[]>();
+      for (const t of group.filter(g => isCheckTask(g.task_type) && terminal(g))) {
+        const name = String(t.config?.checkName ?? '');
+        const list = byCheck.get(name);
+        if (list) list.push(t);
+        else byCheck.set(name, [t]);
+      }
+      for (const list of byCheck.values()) {
+        const newestFirst = [...list].sort((a, b) => endedAt(b) - endedAt(a));
+        for (const t of newestFirst.slice(keepChecks)) {
+          if (olderThan(endedAt(t), retentionDays)) doomed.push(t.task_id);
+        }
+      }
+    }
+
+    let deleted = 0;
+    for (let i = 0; i < doomed.length; i += 500) {
+      deleted += await this.db('provisioning_tasks')
+        .whereIn('task_id', doomed.slice(i, i + 500))
+        .delete();
+    }
     return deleted;
   }
 

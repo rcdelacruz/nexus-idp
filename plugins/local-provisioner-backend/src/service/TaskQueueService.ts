@@ -11,7 +11,20 @@ import {
   ResourceState,
   TaskStatus,
   CreateTaskRequest,
+  isCheckTask,
 } from '../types';
+
+/**
+ * Thrown when the owner of a lab tries to delete an instructor check (a grade). Check rows are queued on the trainee's lab so they
+ * sit in the trainee's own task list, but they are the instructor's record: only the retention cleanup removes them.
+ */
+export class CheckRowProtectedError extends Error {
+  readonly code = 'CHECK_ROW_PROTECTED';
+  constructor(taskId: string) {
+    super(`Task ${taskId} is an instructor check`);
+    this.name = 'CheckRowProtectedError';
+  }
+}
 
 /**
  * TaskQueueService manages the provisioning task queue
@@ -147,6 +160,11 @@ export class TaskQueueService {
     return resources.filter(r => r.user_id === userId);
   }
 
+  /** Labs on an agent that are not torn down, with the provision task each one runs. */
+  async getLabsForAgent(agentId: string) {
+    return this.taskStore.getLabsForAgent(agentId);
+  }
+
   /**
    * Delete a task
    */
@@ -160,6 +178,11 @@ export class TaskQueueService {
 
     if (task.user_id !== userId) {
       throw new Error(`Task ${taskId} does not belong to user ${userId}`);
+    }
+
+    // An instructor's check is not the trainee's to delete (it is the grade history the Trainees view reads).
+    if (isCheckTask(task.task_type)) {
+      throw new CheckRowProtectedError(taskId);
     }
 
     // Block deleting the task that represents a resource's current, non-removed state —
@@ -186,10 +209,10 @@ export class TaskQueueService {
   /**
    * Clean up old completed/failed tasks
    */
-  async cleanupOldTasks(retentionDays: number): Promise<number> {
-    this.logger.info(`Starting task cleanup (retention: ${retentionDays} days)`);
+  async cleanupOldTasks(retentionDays: number, trainingRetentionDays?: number): Promise<number> {
+    this.logger.info(`Starting task cleanup (retention: ${retentionDays} days, training labs: ${trainingRetentionDays ?? 'default'})`);
 
-    const deletedCount = await this.taskStore.cleanupOldTasks(retentionDays);
+    const deletedCount = await this.taskStore.cleanupOldTasks(retentionDays, { trainingRetentionDays });
 
     this.logger.info(`Cleaned up ${deletedCount} old tasks`, {
       deletedCount,

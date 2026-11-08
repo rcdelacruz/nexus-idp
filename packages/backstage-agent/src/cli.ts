@@ -11,6 +11,7 @@ import { statusCommand } from './commands/status';
 import { resourcesCommand, resourceCommand } from './commands/resources';
 import { prewarmCommand } from './commands/prewarm';
 import { updateCommand } from './commands/update';
+import { uninstallCommand } from './commands/uninstall';
 import { displayLogo, logoText } from './utils/logo';
 
 // Read version from package.json
@@ -41,6 +42,12 @@ program.addCommand(resourcesCommand);
 program.addCommand(resourceCommand);
 program.addCommand(prewarmCommand);
 program.addCommand(updateCommand);
+program.addCommand(uninstallCommand);
+
+// `backstage-agent --uninstall` is the same as `backstage-agent uninstall`: listed under Options for people who look for the flag, and
+// rewritten to the command (the only thing it can mean) before parsing.
+program.option('--uninstall', 'Remove the agent from this machine (same as: backstage-agent uninstall)');
+if (process.argv.length === 3 && process.argv[2] === '--uninstall') process.argv[2] = 'uninstall';
 
 // Parse arguments
 program.parse();

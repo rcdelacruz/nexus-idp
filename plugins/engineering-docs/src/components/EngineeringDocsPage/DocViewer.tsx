@@ -3,8 +3,10 @@ import * as ReactDOMClient from 'react-dom/client';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import { rehypeSafeHtml } from './safeHtml';
 import { makeStyles } from '@material-ui/core';
 import { useColors, getColors, DesignTokens } from '@stratpoint/theme-utils';
+import type { ThemeId } from '@stratpoint/theme-utils';
 import { atomOneDark, atomOneLight } from 'react-syntax-highlighter/dist/cjs/styles/hljs';
 import { Copy, Check } from 'lucide-react';
 
@@ -15,12 +17,14 @@ const SyntaxHighlighter: any = require('react-syntax-highlighter').default ?? re
 
 // ─── Mermaid ────────────────────────────────────────────────────────────────
 
-// Track the last theme Mermaid was initialized with — only re-initialize on theme change,
+// Track the last theme Mermaid was initialized with (the exact theme id, since there are several dark and light
+// themes) — only re-initialize on theme change,
 // not on every render. Re-initializing every render destabilizes Mermaid v11's internal state.
 let _mermaidTheme: string | null = null;
 
-const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
-  const c = useColors();
+const MermaidDiagram = ({ code, dark, themeId }: { code: string; dark: boolean; themeId?: ThemeId }) => {
+  // Not useColors(): code blocks are rendered into their own React roots, which have no theme provider.
+  const c = getColors(dark, themeId);
   const ref = useRef<HTMLDivElement>(null);
   const [zoomed, setZoomed] = useState(false);
   const [svg, setSvg] = useState('');
@@ -29,9 +33,8 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
     let cancelled = false;
     import('mermaid').then(({ default: mermaid }) => {
       if (cancelled) return;
-      const theme = dark ? 'dark' : 'light';
-      if (_mermaidTheme !== theme) {
-        _mermaidTheme = theme;
+      if (_mermaidTheme !== c.themeId) {
+        _mermaidTheme = c.themeId;
         mermaid.initialize({
           startOnLoad: false,
           theme: 'base',
@@ -41,13 +44,13 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
           themeVariables: dark ? {
             background: c.surfaceSubtle,
             mainBkg: c.hoverBg,
-            nodeBorder: '#333333',
-            lineColor: '#666666',
+            nodeBorder: c.border,
+            lineColor: c.textMuted,
             primaryColor: c.hoverBg,
             primaryTextColor: c.text,
-            primaryBorderColor: '#333333',
-            secondaryColor: '#141414',
-            tertiaryColor: '#0d0d0d',
+            primaryBorderColor: c.border,
+            secondaryColor: c.avatarBg,
+            tertiaryColor: c.surfaceSubtle,
             clusterBkg: c.surface,
             titleColor: c.text,
             edgeLabelBackground: c.inputBg,
@@ -87,7 +90,7 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
     });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, dark]);
+  }, [code, dark, c.themeId]);
 
   return (
     <>
@@ -116,7 +119,7 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
           <div
             role="presentation"
             onClick={e => e.stopPropagation()}
-            style={{ width: '85vw', maxHeight: '85vh', overflow: 'auto', background: dark ? '#111' : '#fff', borderRadius: 12, padding: 32 }}
+            style={{ width: '85vw', maxHeight: '85vh', overflow: 'auto', background: dark ? c.surface : c.inputBg, borderRadius: 12, padding: 32 }}
             // eslint-disable-next-line react/no-danger
             dangerouslySetInnerHTML={{
               __html: svg
@@ -131,15 +134,15 @@ const MermaidDiagram = ({ code, dark }: { code: string; dark: boolean }) => {
 
 // ─── Code block ─────────────────────────────────────────────────────────────
 
-export const CodeBlock = ({ code, language, dark, title }: { code: string; language: string; dark: boolean; title?: string }) => {
-  const c = getColors(dark);
+export const CodeBlock = ({ code, language, dark, themeId, title }: { code: string; language: string; dark: boolean; themeId?: ThemeId; title?: string }) => {
+  const c = getColors(dark, themeId);
   const [copied, setCopied] = useState(false);
   const copy = () => navigator.clipboard.writeText(code).then(() => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   });
 
-  if (language === 'mermaid') return <MermaidDiagram code={code} dark={dark} />;
+  if (language === 'mermaid') return <MermaidDiagram code={code} dark={dark} themeId={themeId} />;
 
   const headerBg = dark ? c.surface : c.avatarBg;
   const borderColor = dark ? c.borderSubtle : c.border;
@@ -530,7 +533,7 @@ export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocVi
     // Always re-render CodeBlocks (into existing roots) with current dark value.
     // On html change: roots were just created above. On dark change: roots already exist — just re-render.
     blockDataRef.current.forEach(({ root, code, language, title }) => {
-      root.render(React.createElement(CodeBlock, { code, language, dark, title }));
+      root.render(React.createElement(CodeBlock, { code, language, dark, themeId: c.themeId, title }));
     });
 
     // Always apply card styles — runs on every effect so HMR/state preservation doesn't skip it
@@ -579,7 +582,8 @@ export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocVi
     <div className={classes.root}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw]}
+        // rehypeSafeHtml must stay AFTER rehypeRaw: this path shows any doc whose MDX compile failed, raw HTML included.
+        rehypePlugins={[rehypeRaw, rehypeSafeHtml]}
         components={{
           h1: makeHeading(1),
           h2: makeHeading(2),
@@ -598,7 +602,7 @@ export const DocViewer = ({ content, html, currentPath = '', onNavigate }: DocVi
             // react-markdown v8: use className presence to distinguish fenced vs inline
             const match = /language-(\w+)/.exec(className || '');
             if (!match) return <code className={className}>{children}</code>;
-            return <CodeBlock code={String(children).replace(/\n$/, '')} language={match[1]} dark={dark} />;
+            return <CodeBlock code={String(children).replace(/\n$/, '')} language={match[1]} dark={dark} themeId={c.themeId} />;
           },
         }}
       >

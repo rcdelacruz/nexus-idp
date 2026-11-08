@@ -5,7 +5,7 @@
  * resource in the catalog).
  */
 
-import { foldTasksToResource, mergeTaskMetadata, TaskStore } from './TaskStore';
+import { exitCodeFromError, foldTasksToResource, mergeTaskMetadata, TaskStore } from './TaskStore';
 import { ProvisioningTask, TaskStatus, TaskType, ResourceState } from '../types';
 
 let seq = 0;
@@ -142,59 +142,18 @@ describe('foldTasksToResource', () => {
   });
 });
 
-describe('TaskStore.getTrainingResourceHistories', () => {
-  // Rows as the DB returns them (config as a JSON string), already in created_at order.
-  const row = (p: Record<string, unknown>) => ({
-    agent_id: 'agent-1',
-    user_id: 'trainee@example.com',
-    status: 'completed',
-    config: '{}',
-    created_at: '2026-10-30T09:00:00Z',
-    updated_at: '2026-10-30T09:00:00Z',
-    ...p,
-  });
-  const rows = [
-    row({ task_id: 'p1', task_type: 'provision-training', resource_name: 'lab-a', config: JSON.stringify({ labId: 'ministack', githubRepoUrl: 'https://github.com/o/training-lab-a' }), completed_at: '2026-10-30T09:01:00Z' }),
-    row({ task_id: 's1', task_type: 'stop', resource_name: 'lab-a', config: '{"targetTaskId":"p1"}', created_at: '2026-10-30T10:00:00Z' }),
-    row({ task_id: 'k1', task_type: 'provision-kafka', resource_name: 'my-kafka' }), // not training
-    row({ task_id: 'p2', task_type: 'provision-kafka-training', resource_name: 'lab-b', user_id: 'other@example.com' }),
-    row({ task_id: 'd2', task_type: 'deprovision', resource_name: 'lab-b', user_id: 'other@example.com', created_at: '2026-10-30T11:00:00Z' }),
-  ];
-  const db = ((table: string) => {
-    expect(table).toBe('provisioning_tasks');
-    return { orderBy: async () => rows };
-  }) as any;
+describe('exitCodeFromError', () => {
+  it.each([
+    ['Job exited with 1', 1],
+    ['Check exited with 2', 2],
+    ['Job exited with -1', -1],
+    ['  Job exited with 137 ', 137],
+  ])('%s -> %s', (text, code) => expect(exitCodeFromError(text)).toBe(code));
 
-  it('returns training resources only, removed ones included, with their provisioning task and history', async () => {
-    const out = await new TaskStore(db).getTrainingResourceHistories();
-    expect(out.map(o => [o.resource.resource_name, o.resource.state, o.provision.task_id])).toEqual([
-      ['lab-a', ResourceState.STOPPED, 'p1'],
-      ['lab-b', ResourceState.REMOVED, 'p2'],
-    ]);
-    expect(out[0].provision.config.githubRepoUrl).toBe('https://github.com/o/training-lab-a');
-    expect(out[0].resource.resource_type).toBe('ministack');
-    expect(out[0].events.map(e => e.type)).toEqual(['provision-training', 'stop']);
-  });
-});
-
-describe('TaskStore.hasOpenTask', () => {
-  it('is true only for a pending or in-progress task of that type on that resource', async () => {
-    const knexFactory = require('knex');
-    const db = knexFactory({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
-    await db.schema.createTable('provisioning_tasks', (t: any) => {
-      t.string('task_id'); t.string('agent_id'); t.string('resource_name'); t.string('task_type'); t.string('status');
-    });
-    await db('provisioning_tasks').insert([
-      { task_id: '1', agent_id: 'a', resource_name: 'lab', task_type: 'run-check', status: 'completed' },
-      { task_id: '2', agent_id: 'a', resource_name: 'lab', task_type: 'stop', status: 'pending' },
-    ]);
-    const store = new TaskStore(db);
-    expect(await store.hasOpenTask('a', 'lab', 'run-check')).toBe(false);
-    await db('provisioning_tasks').insert({ task_id: '3', agent_id: 'a', resource_name: 'lab', task_type: 'run-check', status: 'in-progress' });
-    expect(await store.hasOpenTask('a', 'lab', 'run-check')).toBe(true);
-    expect(await store.hasOpenTask('a', 'other', 'run-check')).toBe(false);
-    await db.destroy();
-  });
+  it.each([[undefined], [null], [''], ['Could not clone the trainee repo'], ['Job exited with 1 and then something'], ['The job exited with 1'], ['Job exited with one']])(
+    'no code from %p',
+    text => expect(exitCodeFromError(text as any)).toBeUndefined(),
+  );
 });
 
 describe('mergeTaskMetadata — the activity timeline', () => {
@@ -221,11 +180,12 @@ describe('mergeTaskMetadata — the activity timeline', () => {
     expect(b.metadata.progress).toEqual({ percent: 55 });
   });
 
-  it("a new step drops the previous step's progress and output", () => {
-    const a = mergeTaskMetadata(undefined, { phase: 'pulling-images', progress: { percent: 80 }, output: 'x' }, IN, t(1)).metadata;
-    const b = mergeTaskMetadata(a, { phase: 'starting' }, IN, t(5)).metadata;
+  it("a new step drops the previous step's progress, output and button", () => {
+    const a = mergeTaskMetadata(undefined, { phase: 'Waiting for access to your repo', progress: { percent: 80 }, output: 'x', action: { label: 'Accept', url: 'https://github.com/o/r/invitations' } }, IN, t(1)).metadata;
+    const b = mergeTaskMetadata(a, { phase: 'Starting the containers' }, IN, t(5)).metadata;
     expect(b.progress).toBeUndefined();
     expect(b.output).toBeUndefined();
+    expect(b.action).toBeUndefined();
   });
 
   it('closes the timeline on completion and keeps the result fields', () => {

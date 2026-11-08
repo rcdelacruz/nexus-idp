@@ -1,5 +1,7 @@
 import { createTemplateAction } from '@backstage/plugin-scaffolder-node';
 import * as https from 'https';
+import type { RootConfigService } from '@backstage/backend-plugin-api';
+import { allowedGithubOwners, assertRepoDeletable } from '../lib/teardownGuards';
 
 /**
  * Scaffolder action: infra:destroy-aws-repos
@@ -12,7 +14,8 @@ import * as https from 'https';
  * actually finish, and only delete the repo afterward — deleting it first
  * would cancel the workflow before it destroys anything.
  */
-export function createDestroyAwsInfraAction() {
+export function createDestroyAwsInfraAction(options: { config: RootConfigService }) {
+  const { config } = options;
   return createTemplateAction({
     id: 'infra:destroy-aws-repos',
     description: 'Dispatch the destroy job on each AWS infra repo\'s tofu workflow, wait for completion, then optionally delete the repo',
@@ -35,7 +38,14 @@ export function createDestroyAwsInfraAction() {
         }),
     },
     async handler(ctx) {
-      const { repos } = ctx.input;
+      // Every target is checked BEFORE anything is dispatched: this runs `tofu destroy` and then deletes repositories with the portal's token,
+      // on names that come from catalog annotations and a GitHub topic search (all-or-nothing, so one bad name stops the whole run).
+      const allowedOwners = allowedGithubOwners(config);
+      const portalRepo = config.getOptionalString('organization.githubRepo');
+      const repos = ctx.input.repos.map(r => ({ ...r, ...assertRepoDeletable(r.repoOwner, r.repoName, { allowedOwners, portalRepo }) }));
+      if (ctx.input.workflowFile !== undefined && !/^[A-Za-z0-9_.-]+\.ya?ml$/.test(ctx.input.workflowFile)) {
+        throw new Error('Refusing to dispatch: workflowFile is not a workflow file name');
+      }
       // zod's schema-level .default() is a type/UI contract only — Backstage
       // does not apply it to ctx.input for unpassed fields at runtime (same
       // bug confirmed live in deleteArgocdApp.ts).

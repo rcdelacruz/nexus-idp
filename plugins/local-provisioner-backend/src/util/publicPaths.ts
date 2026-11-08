@@ -27,6 +27,8 @@ export const PUBLIC_AGENT_PATHS = [
   '/agent/device/token',
   '/agent/register',
   '/agent/poll',
+  // The installer script people pipe into sh (api/installRoute.ts): static text, no data, nothing to authenticate.
+  '/agent/install.sh',
   '/agent/tasks/:taskId/status',
   // Laptop seed container → seed outputs, authenticated by its single-use token in the handler
   // (capstones/seedReportRoute.ts). The only public capstone path; nothing else under /capstones.

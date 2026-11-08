@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import logger from '../utils/logger';
+import { ensurePrivateDir, writePrivateFile } from '../utils/safeFiles';
 
 export interface OutboxEntry {
   taskId: string;
@@ -22,7 +23,7 @@ export class OutboxQueue {
 
   constructor() {
     const dir = path.join(os.homedir(), '.backstage-agent');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    ensurePrivateDir(dir);
     this.filePath = path.join(dir, 'outbox.json');
   }
 
@@ -37,7 +38,7 @@ export class OutboxQueue {
   }
 
   private write(entries: OutboxEntry[]): void {
-    fs.writeFileSync(this.filePath, JSON.stringify(entries, null, 2), 'utf-8');
+    writePrivateFile(this.filePath, JSON.stringify(entries, null, 2));
   }
 
   enqueue(taskId: string, body: Record<string, any>): void {

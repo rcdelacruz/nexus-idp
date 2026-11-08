@@ -7,6 +7,7 @@ import { seedCapstone } from './seeder';
 import { createRunnerRegistrationToken, openHandoutPr } from './handout';
 import { commitPendingHandover, sha256Hex } from './seedReportRoute';
 import { parseGithubRepoUrl } from '../service/traineeActivity/parsers';
+import { capstoneRepoPrefixes, checkTraineeRepo, JsonFetch } from '../service/traineeActivity/traineeRepo';
 
 export interface CapstoneRouteDeps {
   store: CapstoneStore;
@@ -21,16 +22,24 @@ export interface CapstoneRouteDeps {
   commitHandover?: typeof commitPendingHandover;
   /** Lab access for instructor checks (wired to TaskStore/TaskQueueService/AgentService in router.ts). */
   labs?: LabOps;
+  /** The organization trainee repos are created in (organization.githubOwner). Unset: no repo can be linked. */
+  allowedOwner?: string;
+  /** Overridable for tests: the proof that a repo is the trainee's own lab repo, and the GitHub fetch it uses. */
+  checkRepo?: typeof checkTraineeRepo;
+  repoFetch?: JsonFetch;
 }
 
 /** First agent release with run-check (and auto-clone). */
 export const MIN_CHECK_AGENT = '0.1.23';
 
+/** First agent release that clones the trainee's repo before a lab starts and mounts it (Node.js capstone). */
+export const MIN_WORKSPACE_MOUNT_AGENT = '0.1.29';
+
 /** True when a reported agent version is at least MIN_CHECK_AGENT (plain x.y.z; anything else → false). */
-export function supportsChecks(version: string | undefined): boolean {
+export function supportsChecks(version: string | undefined, min: string = MIN_CHECK_AGENT): boolean {
   const parse = (v: string) => /^(\d+)\.(\d+)\.(\d+)/.exec(v)?.slice(1).map(Number);
   const have = version ? parse(version) : undefined;
-  const need = parse(MIN_CHECK_AGENT)!;
+  const need = parse(min)!;
   if (!have) return false;
   for (let i = 0; i < 3; i++) {
     if (have[i] !== need[i]) return have[i] > need[i];
@@ -40,28 +49,26 @@ export function supportsChecks(version: string | undefined): boolean {
 
 export interface LabOps {
   /** The trainee's lab: latest provision task whose forwarded repo URL matches the enrollment's. */
-  findLabTask(repoUrl: string): Promise<{ task_id: string; agent_id: string; user_id: string; resource_name: string } | undefined>;
+  /** The newest provision task of `traineeEmail` whose forwarded repo URL is `repoUrl`. The owner is part of the question: any signed-in user can create a task carrying any repo URL. */
+  findLabTask(repoUrl: string, traineeEmail: string): Promise<{ task_id: string; agent_id: string; user_id: string; resource_name: string } | undefined>;
   resourceState(agentId: string, resourceName: string): Promise<string | undefined>;
   isAgentOnline(agentId: string): Promise<boolean>;
   /** The agent's reported version (agents before 0.1.23 don't know run-check and must never get one). */
   agentVersion(agentId: string): Promise<string | undefined>;
   queueCheck(task: { userId: string; agentId: string; resourceName: string; config: Record<string, unknown> }): Promise<{ task_id: string }>;
-  /** A check already waiting for (or running on) this lab — the scheduler doesn't pile up behind it. */
-  hasPendingCheck(agentId: string, resourceName: string): Promise<boolean>;
   /** Read a file from the private capstone repo (server-side, integration token) → base64. */
   fetchSourceFile?(sourceRepo: string, branch: string, filePath: string): Promise<string>;
 }
 
 /**
- * Queue one capstone check against a trainee's lab, with every guard; shared by the instructor
- * button and the scheduler. Returns an HTTP-ish status so the route can pass it through.
+ * Queue one capstone check against a trainee's lab, with every guard (the instructor's Run button).
+ * Returns an HTTP-ish status so the route can pass it through.
  */
 export async function queueEnrollmentCheck(
   store: CapstoneStore,
   labs: LabOps,
   enrollmentId: string,
   checkName: string,
-  opts: { skipIfPending?: boolean } = {},
 ): Promise<{ status: number; taskId?: string; error?: string }> {
   const enrollment = await store.get(enrollmentId);
   if (!enrollment) return { status: 404, error: 'Enrollment not found' };
@@ -71,7 +78,9 @@ export async function queueEnrollmentCheck(
   const secrets = await store.getSecrets(enrollment.id);
   if (!secrets) return { status: 409, error: 'The lab has not reported its seed yet' };
   if (!enrollment.repoUrl) return { status: 409, error: 'The enrollment has no repository yet' };
-  const lab = await labs.findLabTask(enrollment.repoUrl);
+  // Only a lab the enrolled trainee owns: a task of someone else that merely names this repo URL must never receive the instructor's check
+  // (it carries the trainee's manifest and, for a grade, the grader and the answer key).
+  const lab = await labs.findLabTask(enrollment.repoUrl, enrollment.traineeEmail);
   if (!lab) return { status: 409, error: 'No lab found for this trainee' };
   const state = await labs.resourceState(lab.agent_id, lab.resource_name);
   if (state !== 'running') return { status: 409, error: `The lab is ${state ?? 'unknown'}, not running` };
@@ -81,9 +90,6 @@ export async function queueEnrollmentCheck(
   const version = await labs.agentVersion(lab.agent_id);
   if (!supportsChecks(version)) {
     return { status: 409, error: `The trainee's agent (${version ?? 'unknown version'}) is too old for lab checks — they need backstage-agent ${MIN_CHECK_AGENT}+ (\`backstage-agent update\`)` };
-  }
-  if (opts.skipIfPending && (await labs.hasPendingCheck(lab.agent_id, lab.resource_name))) {
-    return { status: 409, error: 'A check is already pending on this lab' };
   }
   let config: Record<string, unknown>;
   if ('job' in check) {
@@ -110,11 +116,26 @@ const userEmail = (req: Request): string | undefined => (req as any).user?.email
 /** Lab states that mean the trainee still has a working lab (error/removed/never provisioned don't). */
 const LIVE_LAB_STATES = new Set(['provisioning', 'running', 'stopped']);
 
-async function hasLiveLab(labs: LabOps | undefined, repoUrl: string | undefined): Promise<boolean> {
+async function hasLiveLab(labs: LabOps | undefined, repoUrl: string | undefined, traineeEmail: string): Promise<boolean> {
   if (!labs || !repoUrl) return false;
-  const lab = await labs.findLabTask(repoUrl);
+  const lab = await labs.findLabTask(repoUrl, traineeEmail);
   if (!lab) return false;
   return LIVE_LAB_STATES.has((await labs.resourceState(lab.agent_id, lab.resource_name)) ?? '');
+}
+
+/**
+ * What a completion report must look like to be kept: the lab report the portal's own page builds (api/labReport.ts, version 1).
+ * It is the instructor's own data, shown later as text only, so this checks the shape and that it is about the enrolled trainee,
+ * not every field.
+ */
+export function reportProblem(report: unknown, traineeEmail: string): string | undefined {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return 'report must be the lab report object';
+  const r = report as Record<string, unknown>;
+  if (r.version !== 1) return 'report has an unknown version';
+  if (typeof r.trainee !== 'string' || r.trainee.toLowerCase() !== traineeEmail.toLowerCase()) return 'the report is about a different trainee';
+  if (typeof r.lab !== 'string' || typeof r.course !== 'string') return 'report is missing the lab or the course';
+  if (!Array.isArray(r.summary) || !Array.isArray(r.checks) || !Array.isArray(r.history)) return 'report is missing its summary, checks or history';
+  return undefined;
 }
 
 /**
@@ -130,7 +151,49 @@ export function createCapstoneRoutes(deps: CapstoneRouteDeps): Router {
   const handout = deps.handout ?? openHandoutPr;
   const runnerToken = deps.runnerToken ?? createRunnerRegistrationToken;
   const commitHandover = deps.commitHandover ?? commitPendingHandover;
-  const router = Router();
+  const checkRepo = deps.checkRepo ?? checkTraineeRepo;
+  const router = Router({ caseSensitive: true }); // see service/router.ts: the capstones.manage mapping is keyed on the exact path
+
+  /**
+   * The repo URL on an enrollment is what the portal's GitHub token later acts on: a runner registration token,
+   * a HANDOVER.md commit, the instructor's handout PR. A trainee supplies it, so it is proven before it is used:
+   * in the trainee organization, named after this capstone, private, not a fork, created together with this
+   * enrollment (every company repo is older), and not already some other enrollment's repo.
+   */
+  async function proveRepo(
+    enrollment: { id: string; capstone: string; createdAt: string; traineeEmail: string },
+    repoUrl: string,
+  ): Promise<{ ok: true } | { ok: false; status: number; error: string; reason: string }> {
+    const token = await getGithubToken(repoUrl);
+    if (!token) return { ok: false, status: 502, error: 'The portal could not check the repository (no GitHub integration token)', reason: 'no token' };
+    const r = await checkRepo(
+      {
+        repoUrl,
+        prefixes: capstoneRepoPrefixes(enrollment.capstone),
+        recordCreatedAt: new Date(enrollment.createdAt),
+        allowedOwner: deps.allowedOwner,
+        // The scaffolder names the repo after the signed-in user: someone else's fresh repo cannot be linked to this enrollment.
+        traineeEmail: enrollment.traineeEmail,
+      },
+      token,
+      deps.repoFetch,
+    );
+    if (!r.ok) {
+      // A GitHub outage is not "not your repository": the scaffolder run fails and can be retried.
+      const upstream = /^GitHub returned/.test(r.reason);
+      return {
+        ok: false,
+        status: upstream ? 502 : 400,
+        error: upstream ? 'GitHub could not be reached to check the repository' : 'That repository is not the lab repository of this capstone enrollment',
+        reason: r.reason,
+      };
+    }
+    if (r.gone) return { ok: false, status: 400, error: 'That repository is not the lab repository of this capstone enrollment', reason: 'repository not found' };
+    if (await store.repoLinkedElsewhere(repoUrl, enrollment.id)) {
+      return { ok: false, status: 409, error: 'That repository already belongs to another capstone enrollment', reason: 'already linked' };
+    }
+    return { ok: true };
+  }
 
   /** Enroll the caller: reserve a trainee number and seed their copy server-side. Returns only the trainee files. */
   router.post('/enrollments', async (req, res) => {
@@ -140,9 +203,10 @@ export function createCapstoneRoutes(deps: CapstoneRouteDeps): Router {
     if (!def) return res.status(400).json({ error: `Unknown capstone: ${String(req.body?.capstone)}` });
     // One enrollment per trainee per capstone. An earlier one with a working lab blocks a second;
     // one without (a failed scaffolder run, a removed lab) is replaced, so the trainee keeps their number.
-    const previous = await store.listForTrainee(def.id, email);
+    // A capstone an instructor marked done is a finished record: re-running the template starts a NEW enrollment beside it.
+    const previous = (await store.listForTrainee(def.id, email)).filter(p => p.status !== 'completed');
     for (const p of previous) {
-      if (await hasLiveLab(deps.labs, p.repoUrl)) {
+      if (await hasLiveLab(deps.labs, p.repoUrl, email)) {
         return res.status(409).json({
           error: `You are already enrolled in this capstone (trainee #${p.traineeNo}) and your lab is still there. Keep using it, or remove the lab from your Local Provisioner page first to start over.`,
         });
@@ -186,10 +250,22 @@ export function createCapstoneRoutes(deps: CapstoneRouteDeps): Router {
     if (!email) return res.status(401).json({ error: 'Could not resolve authenticated user' });
     const repoUrl = req.body?.repoUrl;
     if (!parseGithubRepoUrl(repoUrl)) return res.status(400).json({ error: 'repoUrl must be https://github.com/<owner>/<repo>' });
+    const current = await store.get(req.params.id);
+    if (!current || current.traineeEmail !== email || current.status !== 'seeded') {
+      return res.status(404).json({ error: 'No seeded enrollment of yours with that id' });
+    }
+    const proof = await proveRepo(current, repoUrl);
+    if (!proof.ok) {
+      logger.warn(`Capstone repo link refused for ${email} (enrollment ${current.id}, ${repoUrl}): ${proof.reason}`);
+      return res.status(proof.status).json({ error: proof.error });
+    }
     const linked = await store.linkRepo(req.params.id, email, repoUrl);
     if (!linked) return res.status(404).json({ error: 'No seeded enrollment of yours with that id' });
     const linkedDef = capstoneById(linked.capstone);
-    if (linkedDef?.seedMode !== 'laptop') return res.status(200).json({ enrollment: linked });
+    // Nothing more to do unless the lab needs the trainee repo's CI runner (selfHostedRunner, whatever
+    // the seed mode: Terraform Capstone A has nothing to seed but its pipeline still runs on the laptop)
+    // or a laptop seed is waiting to commit its handover note.
+    if (!linkedDef || (!linkedDef.selfHostedRunner && linkedDef.seedMode !== 'laptop')) return res.status(200).json({ enrollment: linked });
     if (!linkedDef.selfHostedRunner) {
       // Laptop-seeded without CI on the laptop (Linux): only the handover, if already reported.
       await commitHandover(store, linked.id, getGithubToken).catch(e => logger.warn(`Could not commit HANDOVER.md for ${linked.id}: ${e.message}`));
@@ -203,9 +279,11 @@ export function createCapstoneRoutes(deps: CapstoneRouteDeps): Router {
       const gh = await getGithubToken(repoUrl);
       if (!gh) throw new Error('No GitHub integration token configured');
       const runner = await runnerToken(target, gh);
-      await commitHandover(store, linked.id, getGithubToken).catch(e =>
-        logger.warn(`Could not commit HANDOVER.md for ${linked.id}: ${e.message}`),
-      );
+      if (linkedDef.seedMode === 'laptop') {
+        await commitHandover(store, linked.id, getGithubToken).catch(e =>
+          logger.warn(`Could not commit HANDOVER.md for ${linked.id}: ${e.message}`),
+        );
+      }
       return res.status(200).json({ enrollment: linked, runner });
     } catch (e: any) {
       logger.error(`Runner registration token failed for ${linked.id}`, e);
@@ -240,6 +318,51 @@ export function createCapstoneRoutes(deps: CapstoneRouteDeps): Router {
     return res.status(200).json({ enrollment: removed });
   });
 
+  /**
+   * Instructor-only: mark an active capstone done. The instructor's browser builds the lab report from the Trainees row and sends it;
+   * the server stamps who and when and keeps that snapshot, so the report outlives the lab, its task rows and the clean-up.
+   */
+  router.post('/enrollments/:id/complete', async (req, res) => {
+    const email = userEmail(req);
+    if (!email) return res.status(401).json({ error: 'Could not resolve authenticated user' });
+    const enrollment = await store.get(req.params.id);
+    if (!enrollment || enrollment.status === 'withdrawn') return res.status(404).json({ error: 'Enrollment not found' });
+    if (enrollment.status === 'completed') return res.status(409).json({ error: 'This capstone is already marked done' });
+    if (enrollment.status !== 'active') return res.status(409).json({ error: 'Only a capstone whose repository is linked can be marked done' });
+    const problem = reportProblem(req.body?.report, enrollment.traineeEmail);
+    if (problem) return res.status(400).json({ error: problem });
+    let done;
+    try {
+      done = await store.complete(enrollment.id, email, req.body.report);
+    } catch (e: any) {
+      return res.status(413).json({ error: e.message });
+    }
+    if (!done) return res.status(409).json({ error: 'This capstone changed while you were marking it done: reload and try again' });
+    logger.info(`Capstone marked done by ${email}: ${enrollment.traineeEmail} (${enrollment.capstone} #${enrollment.traineeNo})`, {
+      enrollmentId: enrollment.id,
+      audit: true,
+    });
+    return res.status(200).json({ enrollment: done });
+  });
+
+  /** Instructor-only: the report kept when the capstone was marked done. */
+  router.get('/enrollments/:id/report', async (req, res) => {
+    const kept = await store.getReport(req.params.id);
+    if (!kept) return res.status(404).json({ error: 'No report: this capstone is not marked done' });
+    return res.status(200).json(kept);
+  });
+
+  /** Instructor-only: undo a completion that was a mistake (the kept report is discarded). */
+  router.post('/enrollments/:id/reopen', async (req, res) => {
+    const reopened = await store.reopen(req.params.id);
+    if (!reopened) return res.status(409).json({ error: 'This capstone is not marked done' });
+    logger.info(`Capstone reopened by ${userEmail(req)}: ${reopened.traineeEmail} (${reopened.capstone} #${reopened.traineeNo})`, {
+      enrollmentId: reopened.id,
+      audit: true,
+    });
+    return res.status(200).json({ enrollment: reopened });
+  });
+
   /** Instructor-only: open the Day-4 sabotaged PR on the trainee repo. Idempotent. */
   router.post('/enrollments/:id/handout', async (req, res) => {
     const enrollment = await store.get(req.params.id);
@@ -247,6 +370,12 @@ export function createCapstoneRoutes(deps: CapstoneRouteDeps): Router {
     const def = capstoneById(enrollment.capstone);
     const target = parseGithubRepoUrl(enrollment.repoUrl);
     if (!def || !target) return res.status(409).json({ error: 'The enrollment has no GitHub repository yet' });
+    // Enrollments linked before the repo was proven are checked here too, before the portal opens a PR on the URL.
+    const proof = await proveRepo(enrollment, enrollment.repoUrl!);
+    if (!proof.ok) {
+      logger.warn(`Capstone handout refused for enrollment ${enrollment.id} (${enrollment.repoUrl}): ${proof.reason}`);
+      return res.status(proof.status).json({ error: proof.error });
+    }
     try {
       const token = await getGithubToken(`https://github.com/${target.owner}/${target.repo}`);
       if (!token) return res.status(500).json({ error: 'No GitHub integration token configured' });

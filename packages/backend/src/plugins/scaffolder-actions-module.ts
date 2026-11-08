@@ -7,6 +7,7 @@ import { coreServices, createBackendModule } from '@backstage/backend-plugin-api
 import { scaffolderActionsExtensionPoint } from '@backstage/plugin-scaffolder-node';
 import { notificationService } from '@backstage/plugin-notifications-node';
 import { createLocalProvisionAction } from './scaffolder/actions/localProvision';
+import { createLocalAgentCheckAction } from './scaffolder/actions/localAgent';
 import { createCapstoneEnrollAction, createCapstoneLinkRepoAction } from './scaffolder/actions/capstoneEnroll';
 import { createKubernetesApplyAction } from './scaffolder/actions/kubernetesApply';
 import { createPullSecretAction } from './scaffolder/actions/createPullSecret';
@@ -41,11 +42,13 @@ export const scaffolderActionsModule = createBackendModule({
         config: coreServices.rootConfig,
         discovery: coreServices.discovery,
         auth: coreServices.auth,
+        userInfo: coreServices.userInfo,
         notification: notificationService,
       },
-      async init({ scaffolder, config, discovery, auth, notification }) {
+      async init({ scaffolder, config, discovery, auth, userInfo, notification }) {
         scaffolder.addActions(
           createLocalProvisionAction({ discovery, auth, config }),
+          createLocalAgentCheckAction({ discovery, auth, config }),
           createCapstoneEnrollAction({ discovery, auth }),
           createCapstoneLinkRepoAction({ discovery, auth }),
           createKubernetesApplyAction(),
@@ -56,7 +59,7 @@ export const scaffolderActionsModule = createBackendModule({
           createResolveSkeletonUrlAction({ config }),
           createGetTargetsAction({ config }),
           createGetTargetConfigAction({ config, discovery, auth }),
-          createFetchEntityInfoAction({ discovery, auth }),
+          createFetchEntityInfoAction({ discovery, auth, userInfo }),
           createTofuApplyAction(),
           createDispatchWorkflowAction(),
           createSetupRepoForPromotionAction(),
@@ -65,10 +68,10 @@ export const scaffolderActionsModule = createBackendModule({
           createTeardownDiscoverResourcesAction({ discovery, auth }),
           createDeleteArgocdAppAction(),
           createDeleteNamespaceAction(),
-          createDeleteGithubRepoAction(),
+          createDeleteGithubRepoAction({ config }),
           createUnregisterCatalogEntityAction({ discovery, auth }),
           createNotifySendAction({ notification }),
-          createDestroyAwsInfraAction(),
+          createDestroyAwsInfraAction({ config }),
           createDeleteS3BackupsAction(),
         );
       },

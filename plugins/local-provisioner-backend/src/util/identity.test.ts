@@ -60,3 +60,20 @@ describe('identity domain resolution', () => {
     );
   });
 });
+
+describe('sameUser', () => {
+  const { sameUser } = jest.requireActual('./identity');
+  it('is true for the same email whatever its case or padding', () => {
+    expect(sameUser('Jane.Doe@Example.com', 'jane.doe@example.com')).toBe(true);
+    expect(sameUser(' jane@example.com ', 'jane@example.com')).toBe(true);
+  });
+  it('is false for different people and never true when either side is missing', () => {
+    expect(sameUser('jane@example.com', 'john@example.com')).toBe(false);
+    expect(sameUser('jane@example.com', 'jane@example.com.evil')).toBe(false);
+    for (const missing of [undefined, null, '']) {
+      expect(sameUser(missing, missing)).toBe(false);
+      expect(sameUser('jane@example.com', missing)).toBe(false);
+      expect(sameUser(missing, 'jane@example.com')).toBe(false);
+    }
+  });
+});

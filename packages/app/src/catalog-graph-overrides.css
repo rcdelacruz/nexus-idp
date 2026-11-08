@@ -8,13 +8,13 @@
  */
 
 /* ── Graph nodes ── */
-#dependency-graph rect { fill: #292929; stroke: #454545; stroke-width: 1; }
+#dependency-graph rect { fill: var(--ds-gray-300); stroke: var(--border-hover); stroke-width: 1; }
 #dependency-graph rect.primary { fill: #0060df; stroke: #3291ff; }
-#dependency-graph rect.secondary { fill: #454545; stroke: #454545; }
-#dependency-graph text { fill: #ededed; font-size: 13px; }
+#dependency-graph rect.secondary { fill: var(--border-hover); stroke: var(--border-hover); }
+#dependency-graph text { fill: var(--fg-primary); font-size: 13px; }
 #dependency-graph text.primary { fill: #ffffff; }
-#dependency-graph path[marker-end] { stroke: #454545; }
-#dependency-graph marker path { fill: #454545; stroke: #454545; }
+#dependency-graph path[marker-end] { stroke: var(--border-hover); }
+#dependency-graph marker path { fill: var(--border-hover); stroke: var(--border-hover); }
 
 /* ── Toggle button ── */
 .MuiToggleButton-root {
@@ -23,21 +23,21 @@
   text-transform: none !important;
   border-radius: 6px !important;
   border: none !important;
-  box-shadow: 0 0 0 1px #2e2e2e inset !important;
-  color: #878787 !important;
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+  color: var(--fg-tertiary) !important;
   background: transparent !important;
   height: 40px !important;
   padding: 0 16px !important;
 }
-.MuiToggleButton-root:hover { background: #ffffff17 !important; color: #ededed !important; }
+.MuiToggleButton-root:hover { background: var(--ds-gray-alpha-200) !important; color: var(--fg-primary) !important; }
 .MuiToggleButton-root.Mui-selected {
-  background: #1f1f1f !important;
-  color: #ededed !important;
-  box-shadow: 0 0 0 1px #454545 inset !important;
+  background: var(--ds-gray-200) !important;
+  color: var(--fg-primary) !important;
+  box-shadow: 0 0 0 1px var(--border-hover) inset !important;
 }
 
 /* ── Switch ── */
-.MuiSwitch-track { background-color: #454545 !important; opacity: 1 !important; }
+.MuiSwitch-track { background-color: var(--border-hover) !important; opacity: 1 !important; }
 .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track { background-color: #0070f3 !important; opacity: 1 !important; }
 .MuiSwitch-switchBase.Mui-checked .MuiSwitch-thumb { color: #ffffff !important; }
 
@@ -90,8 +90,8 @@
 
 /* ── Popup paper ── */
 .MuiAutocomplete-paper {
-  background: #1a1a1a !important;
-  border: 1px solid #2e2e2e !important;
+  background: var(--ds-gray-100) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 8px !important;
   overflow: hidden !important;
   max-width: 300px !important;
@@ -134,10 +134,10 @@
   white-space: nowrap !important;
   min-width: 0 !important;
   font-size: 0.8125rem !important;
-  color: #ededed !important;
+  color: var(--fg-primary) !important;
 }
 
-.MuiAutocomplete-option[data-focus="true"] { background: #ffffff17 !important; }
+.MuiAutocomplete-option[data-focus="true"] { background: var(--ds-gray-alpha-200) !important; }
 
 /* ── MUI Select menu items ── */
 .MuiMenuItem-root {

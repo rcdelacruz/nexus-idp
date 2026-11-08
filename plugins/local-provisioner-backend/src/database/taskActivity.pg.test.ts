@@ -16,8 +16,11 @@ maybe('task activity timeline on real Postgres', () => {
   let db: Knex;
   const dir = path.join(__dirname, 'migrations');
   beforeAll(async () => {
-    db = knexFactory({ client: 'pg', connection: url, pool: { min: 2, max: 10 } });
-    await db.raw('DROP SCHEMA public CASCADE; CREATE SCHEMA public');
+    // Its own schema: Jest runs test files in parallel, and files that reset `public` wipe each other.
+    const admin = knexFactory({ client: 'pg', connection: url });
+    await admin.raw('DROP SCHEMA IF EXISTS lp_task_activity_test CASCADE; CREATE SCHEMA lp_task_activity_test');
+    await admin.destroy();
+    db = knexFactory({ client: 'pg', connection: url, searchPath: ['lp_task_activity_test'], pool: { min: 2, max: 10 } });
     for (const f of fs.readdirSync(dir).filter(n => /^\d{3}-.*\.js$/.test(n)).sort()) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       await require(path.join(dir, f)).up(db);
@@ -56,7 +59,7 @@ maybe('task activity timeline on real Postgres', () => {
     expect(after.status).toBe(TaskStatus.COMPLETED);
     expect(after.metadata!.activity).toEqual(saved.metadata!.activity);
 
-    const [history] = await store.getTrainingResourceHistories();
+    const [history] = await store.getTrainingListData();
     expect(history.current).toBeUndefined(); // nothing running any more
   });
 
@@ -69,7 +72,7 @@ maybe('task activity timeline on real Postgres', () => {
       config: { labId: 'ministack', dockerCompose: 'services: {}' },
     });
     await store.updateTaskStatus(t.task_id, TaskStatus.IN_PROGRESS, { phase: 'pulling-images' });
-    const h = (await store.getTrainingResourceHistories()).find(x => x.resource.resource_name === 'ministack-bob')!;
+    const h = (await store.getTrainingListData()).find(x => x.resource.resource_name === 'ministack-bob')!;
     expect(h.current).toMatchObject({ status: TaskStatus.IN_PROGRESS, step: 'pulling-images' });
   });
 
@@ -94,7 +97,7 @@ maybe('task activity timeline on real Postgres', () => {
     const closed = (await store.getTaskById(stuck.task_id))!;
     expect(closed.status).toBe(TaskStatus.FAILED);
     expect(closed.error_message).toBe('Cancelled: the lab was removed');
-    const h = (await store.getTrainingResourceHistories()).find(x => x.resource.resource_name === 'linux-capstone-ron')!;
+    const h = (await store.getTrainingListData()).find(x => x.resource.resource_name === 'linux-capstone-ron')!;
     expect(h.resource.state).toBe('removed');
     expect(h.current).toBeUndefined();
   });

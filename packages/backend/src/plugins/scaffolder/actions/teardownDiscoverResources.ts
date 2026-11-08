@@ -3,6 +3,7 @@ import { CatalogClient } from '@backstage/catalog-client';
 import { AuthService, DiscoveryService } from '@backstage/backend-plugin-api';
 import * as https from 'https';
 import { getClusterConfig, buildApiPath, k8sRequest } from '../lib/k8sClient';
+import { isProtectedNamespace, nameBelongsToApp } from '../lib/teardownGuards';
 
 const CNPG_API_VERSION = 'postgresql.cnpg.io/v1';
 const ARGOCD_API_VERSION = 'argoproj.io/v1alpha1';
@@ -206,8 +207,15 @@ export function createTeardownDiscoverResourcesAction(options: {
         // never silently swept into a single-environment run.
         if (environment === 'all') exactTargets.add(c);
       }
+      // Cluster and platform namespaces are never even listed: a repo name such as `longhorn-system`, or a namespace annotation naming one,
+      // must not put it on the deletion list (the deletion action refuses it as well).
+      for (const target of [...exactTargets]) if (isProtectedNamespace(target)) exactTargets.delete(target);
       const namespaces = await listMatching(config, 'v1', 'Namespace', undefined, exactTargets);
       for (const hint of namespaceHints) {
+        if (isProtectedNamespace(hint)) {
+          lines.push(`Skipped protected namespace from a catalog annotation: ${hint}`);
+          continue;
+        }
         if (!namespaces.includes(hint)) {
           const exists = await namespaceExists(config, hint);
           if (exists) namespaces.push(hint);
@@ -323,7 +331,7 @@ export function createTeardownDiscoverResourcesAction(options: {
           { token },
         );
         for (const entity of allResources) {
-          const matches = [...nameCandidates].some(c => entity.metadata.name.includes(c));
+          const matches = [...nameCandidates].some(c => nameBelongsToApp(entity.metadata.name, c));
           if (!matches) continue;
           // eslint-disable-next-line no-await-in-loop
           await checkAwsResourceEntity(entity.metadata.namespace ?? 'default', entity.metadata.name);
@@ -339,7 +347,7 @@ export function createTeardownDiscoverResourcesAction(options: {
             // eslint-disable-next-line no-await-in-loop
             const repos = await searchReposByTopic(org, 'backstage-infra', githubTokenForTopics);
             for (const repoName of repos) {
-              const matches = [...nameCandidates].some(c => repoName.includes(c));
+              const matches = [...nameCandidates].some(c => nameBelongsToApp(repoName, c));
               if (!matches) continue;
               const repoSlug = `${org}/${repoName}`;
               if (seenAwsRepoSlugs.has(repoSlug)) continue;

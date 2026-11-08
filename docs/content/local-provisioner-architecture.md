@@ -81,7 +81,12 @@ already installed on developer machines.
 ```
 
 Every `/agent/poll` response also refreshes the agent's `last_seen` timestamp — there is no
-separate heartbeat call. An agent is considered online for 90s after its last poll.
+separate heartbeat call. An agent is shown as online while its last poll started within one poll
+length + 20 s (~45 s) and it hasn't been seen stopping (`agentLiveness.ts`, one rule for every view).
+Where a wrong "online" does damage — the first step of a lab template, `POST /tasks`, the lab
+form's Next — the portal does not trust that age: `AgentService.confirmAlive` wakes the agent's
+parked poll and requires a fresh poll within 8 s (a live agent re-polls in about a second); no
+answer means offline.
 
 **Key files along that path**
 
@@ -285,6 +290,66 @@ always sets it; this guards direct API calls). The only per-lab portal change is
 `resourceDocsLinks` / `resourceDocsUrls` entry keyed by the `labId` if the lab has
 documentation to link (config-only, then redeploy). Generic labs can't be prewarmed
 (`backstage-agent prewarm` only knows kafka/postgres/redis/mongodb).
+
+**Taking the user to their lab when the run succeeds.** Name the queue step `queue-task`, make it the
+**last** step, and link the template's output to it:
+
+```yaml
+output:
+  links:
+    - title: Your Lab
+      icon: dashboard
+      url: ${{ steps['queue-task'].output.taskUrl }}
+```
+
+The action outputs `taskUrl` as `/local-provisioner/tasks/<task id>`. When a run that the user just
+started (from the wizard's Create button, within 30 minutes) ends without an error, the run page
+(`CustomTaskPage`) finds that link and replaces itself with it; the run page also marks the arrival
+(`justCreatedState()`, navigation state), and the Local Provisioner page reads the task id from the
+URL, opens that lab's detail drawer and, seeing the mark, greets the new lab once: a toast whose link
+goes to the invitation page of the lab's repo (`config.githubRepoUrl` → `invitationUrl()`; a lab
+without a GitHub repo gets a short note instead). The mark is removed straight away, so a reload or a
+shared link never shows the toast again. A failed, cancelled or disconnected run, and
+a run opened from the task list or an old link, stay on the run page. The step must be last because a
+step after it could fail and leave a queued lab on a run that ends with an error (no link, no
+redirect). When the engineering-standards checkout is present next to this repo, `labTemplates.render.test.ts` fails a lab template that drops any of this; the URL format
+is defined once on the frontend in `plugins/local-provisioner/src/api/labTaskPath.ts` and pinned on
+the backend by `localProvision.output.test.ts`.
+
+**The wizard's first step (Overview).** Start the template's `parameters` with a page of its own
+that uses the `TemplateOverview` field. It shows what the template is and what pressing Create does,
+before any question. Nothing in it is specific to labs: any template can add it, and a template
+without it keeps its wizard as it is.
+
+```yaml
+parameters:
+  - title: Overview
+    properties:
+      overview:
+        type: string
+        ui:field: TemplateOverview
+        ui:options:                       # every option is optional
+          format: 5 days, solo
+          runsOn: Your laptop, on your own local MiniStack
+          gradedBy: Hidden checks, and by how you worked.
+          alsoNeed: Multipass (the agent shows how to install it if it is missing)
+          summary: One sentence, if the description is too long for the header.
+          listTitle: What you will build  # default: "What you get"
+          list: [Three environments from one module, A change request mid-week]
+          onCreate: [Your private repository is created on GitHub.]   # after "Your Backstage agent is checked."
+```
+
+Read from the template itself, so they cannot drift: the full `description` (shown when you write
+neither `summary` nor `list`), the `tags`, and **You need**: the agent version and Docker memory come
+from the template's own `stratpoint:local-agent-check` step, and "Your Backstage agent is checked."
+is added to *What happens when you press Create* when that step exists. Write only what you can
+check in the template (its steps, `repoVisibility`, `if:` conditions, the compose services).
+`labTemplates.render.test.ts` fails on a misspelt option, an Overview that is not the first page, or
+a lab whose first working page lost its `LocalAgentField`; the app's
+`CustomTemplateWizardPage.overview.test.tsx` renders every real template through the real wizard and
+fails if any lab template names a field `App.tsx` does not register. **Deploy order:** portal first, then
+merge the template change to engineering-standards `main`: a template that names `TemplateOverview`
+before the portal registers it shows a plain text box called "overview".
 
 The legacy per-lab types (`provision-kafka-training`, `provision-devops-capstone-training`,
 `provision-devsecops-capstone-training`) keep working unchanged for the existing templates. A

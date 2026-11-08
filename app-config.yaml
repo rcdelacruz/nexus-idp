@@ -194,8 +194,12 @@ catalog:
   import:
     entityFilename: catalog-info.yaml
     pullRequestBranchName: backstage-integration
+  # Kinds any discovered repo may declare. NOT Group and NOT User: a repo's catalog-info.yaml is writable by whoever can push to it
+  # (trainees can on their own repos), and the permission policy trusts group membership, so a Group or User from a repo would
+  # let that person grant themselves roles. Groups and Users come only from example-org/catalog-info.yaml (its own rule below,
+  # which also covers the files it points to) and from UserEntityProvider.
   rules:
-    - allow: [Component, System, API, Resource, Location, Group, User]
+    - allow: [Component, System, API, Resource, Location]
   # Orphan strategy: delete entities whose source repo no longer has catalog-info.yaml
   orphanStrategy: delete
   # providers:
@@ -270,17 +274,13 @@ catalog:
 
 proxy:
   endpoints:
-    # GitHub API proxy — used by GitHub Actions plugin (CI/CD tab)
-    # Injects server-side GITHUB_TOKEN so users don't need GitHub OAuth
-    '/github/api':
-      target: https://api.github.com
-      changeOrigin: true
-      headers:
-        Authorization: Bearer ${GITHUB_TOKEN}
-        Accept: application/vnd.github+json
+    # (There used to be a '/github/api' endpoint here that attached the portal's GITHUB_TOKEN to ANY request from any signed-in user.
+    # The CI/CD tab now uses the read-only, path-limited route in packages/backend/src/plugins/githubActionsApi.ts.)
 
     # ArgoCD API proxy — used by the ArgoCD history card on entity overview pages
     '/argocd/api':
+      # Read-only: the ArgoCD cards only read. Without this every signed-in user could send any method with the ArgoCD token.
+      allowedMethods: ['GET']
       # Fallback keeps the backend booting if ARGOCD_URL is ever missing (an unset target makes the
       # proxy plugin throw at startup) — see knowledge/patterns/proxy-target-env-var-crashes-boot.md.
       target: ${ARGOCD_URL:-http://argocd-not-configured.invalid}

@@ -32,3 +32,13 @@ describe('AgentList — agent version', () => {
     expect(screen.getByText('backstage-agent update')).toBeInTheDocument();
   });
 });
+
+describe('AgentList — requirements', () => {
+  it('reminds the trainee that Docker Desktop is needed, under the list of agents', async () => {
+    await renderInTestApp(<AgentList agents={[agent({})]} loading={false} />);
+    expect(screen.getByText('Before you start')).toBeInTheDocument();
+    expect(screen.getByText('Docker Desktop (recommended)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Get Docker Desktop/ })).toHaveAttribute('href', 'https://www.docker.com/products/docker-desktop/');
+    expect(screen.getByText(/Multipass \(Linux server labs only\)/)).toBeInTheDocument();
+  });
+});

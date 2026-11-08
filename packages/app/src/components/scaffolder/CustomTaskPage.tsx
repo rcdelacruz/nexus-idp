@@ -5,8 +5,8 @@
  *
  * Layout: two-column — vertical step sidebar on the left, main content on the right.
  */
-import React, { useState, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { Page, Header, Content, ErrorPanel } from '@backstage/core-components';
 import { Box, Button, Typography } from '@material-ui/core';
 import { makeStyles } from '@material-ui/core/styles';
@@ -17,6 +17,8 @@ import { parseEntityRef } from '@backstage/catalog-model';
 import { usePermission } from '@backstage/plugin-permission-react';
 import { taskCancelPermission, taskReadPermission } from '@backstage/plugin-scaffolder-common/alpha';
 import { useColors, semantic } from '@stratpoint/theme-utils';
+import { justCreatedState, labTaskPath, parseLabTaskPath } from '@internal/plugin-local-provisioner';
+import { isFreshRun } from './labRedirect';
 import { X as XIcon, FileText, Play, CheckCircle, Circle, Loader, AlertCircle, ExternalLink, LayoutGrid } from 'lucide-react';
 
 const useLogStyles = makeStyles(() => ({
@@ -72,6 +74,24 @@ export const CustomTaskPage = () => {
   const handleStartOver = useCallback(() => {
     navigate('/create');
   }, [navigate]);
+
+  // A run you just started, for a template that queues a lab (its output links to your lab in
+  // Local Provisioner): when it succeeds, go to the lab, whose drawer opens. A run that failed, was
+  // cancelled or lost its connection stays here, where the steps and the log are. `replace` keeps
+  // Back from returning to this finished run, which would only bounce forward again.
+  const location = useLocation();
+  const redirected = useRef(false);
+  useEffect(() => {
+    if (redirected.current || !isFreshRun(location.state)) return;
+    if (!taskStream.completed || taskStream.error || taskStream.cancelled) return;
+    if (steps.some(step => step.status === 'failed')) return;
+    const links = Array.isArray(taskStream.output?.links) ? (taskStream.output!.links as Array<{ url?: unknown }>) : [];
+    const labTaskId = links.map(link => parseLabTaskPath(link?.url)).find(Boolean);
+    if (!labTaskId) return;
+    redirected.current = true;
+    // The lab page greets the new lab once (a reminder to accept the GitHub invitation) when it sees this mark.
+    navigate(labTaskPath(labTaskId), { replace: true, state: justCreatedState() });
+  }, [location.state, taskStream.completed, taskStream.error, taskStream.cancelled, taskStream.output, steps, navigate]);
 
   const templateName = taskStream.task?.spec.templateInfo?.entity?.metadata?.name ?? 'template';
 

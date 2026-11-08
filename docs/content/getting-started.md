@@ -27,7 +27,7 @@ The sidebar on the left is your main navigation:
 | **Create** | Scaffolder — spin up new projects from templates |
 | **Docs** | Engineering Docs — standards, guides, golden paths |
 | **Search** | Search across the entire catalog |
-| **Tech Radar** | Technology adoption recommendations |
+| **Tech Radar** | The Thoughtworks Technology Radar: what is new and changing across the industry |
 | **Local Provisioner** | Spin up local dev resources (Kafka, Postgres, Redis) |
 | **FinOps** | AWS cost dashboard (admins and leads only) |
 

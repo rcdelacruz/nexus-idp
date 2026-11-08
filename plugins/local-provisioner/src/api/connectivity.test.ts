@@ -18,25 +18,28 @@ function agent(overrides: Partial<AgentRegistration> = {}): AgentRegistration {
 }
 
 describe('getConnectivity', () => {
-  it('is online when age is within 90s', () => {
-    expect(getConnectivity(agent({ lastSeenAgeSeconds: 0 }))).toBe('online');
-    expect(getConnectivity(agent({ lastSeenAgeSeconds: 90 }))).toBe('online');
+  it("is online exactly when the server says connected (one rule for the chip and the lab guardrail)", () => {
+    expect(getConnectivity(agent({ isConnected: true, lastSeenAgeSeconds: 0 }))).toBe('online');
+    // The server decides, however old the age looks: it is the same verdict the guardrail uses.
+    expect(getConnectivity(agent({ isConnected: true, lastSeenAgeSeconds: 40 }))).toBe('online');
   });
 
-  it('is degraded between 90s and 300s', () => {
-    expect(getConnectivity(agent({ lastSeenAgeSeconds: 91 }))).toBe('degraded');
-    expect(getConnectivity(agent({ lastSeenAgeSeconds: 300 }))).toBe('degraded');
+  it('is not online when the server says not connected, even if the agent was seen seconds ago', () => {
+    // The chip used to say "online" for 90 s after an agent stopped (age-only rule).
+    expect(getConnectivity(agent({ isConnected: false, lastSeenAgeSeconds: 50 }))).not.toBe('online');
   });
 
-  it('is offline beyond 300s', () => {
-    expect(getConnectivity(agent({ lastSeenAgeSeconds: 301 }))).toBe('offline');
-    expect(getConnectivity(agent({ lastSeenAgeSeconds: 99999 }))).toBe('offline');
+  it('shows reconnecting (degraded) for a little while after the last contact, then offline', () => {
+    expect(getConnectivity(agent({ isConnected: false, lastSeenAgeSeconds: 50 }))).toBe('degraded');
+    expect(getConnectivity(agent({ isConnected: false, lastSeenAgeSeconds: 120 }))).toBe('degraded');
+    expect(getConnectivity(agent({ isConnected: false, lastSeenAgeSeconds: 121 }))).toBe('offline');
+    expect(getConnectivity(agent({ isConnected: false, lastSeenAgeSeconds: 99999 }))).toBe('offline');
   });
 
   it('falls back to computing age from lastSeenAt when lastSeenAgeSeconds is absent', () => {
     const staleTimestamp = new Date(Date.now() - 400_000).toISOString(); // ~6.7 min ago
     expect(
-      getConnectivity(agent({ lastSeenAgeSeconds: null, lastSeenAt: staleTimestamp })),
+      getConnectivity(agent({ isConnected: false, lastSeenAgeSeconds: null, lastSeenAt: staleTimestamp })),
     ).toBe('offline');
   });
 
@@ -44,7 +47,7 @@ describe('getConnectivity', () => {
     // Backend sets explicitlyDisconnected the instant "Stop Agent" is delivered — age alone
     // would still read "online" here since the agent was seen a moment ago.
     expect(
-      getConnectivity(agent({ explicitlyDisconnected: true, lastSeenAgeSeconds: 1 })),
+      getConnectivity(agent({ isConnected: false, explicitlyDisconnected: true, lastSeenAgeSeconds: 1 })),
     ).toBe('offline');
   });
 
@@ -54,19 +57,10 @@ describe('getConnectivity', () => {
     // definitively-offline agent as 'degraded' once age crossed 90s. explicitlyDisconnected
     // must NOT decay with age — once true, always 'offline' until a real reconnect clears it.
     expect(
-      getConnectivity(agent({ explicitlyDisconnected: true, lastSeenAgeSeconds: 150 })),
+      getConnectivity(agent({ isConnected: false, explicitlyDisconnected: true, lastSeenAgeSeconds: 150 })),
     ).toBe('offline');
     expect(
-      getConnectivity(agent({ explicitlyDisconnected: true, lastSeenAgeSeconds: 99999 })),
-    ).toBe('offline');
-  });
-
-  it('still degrades gracefully on ordinary staleness (no explicit disconnect involved)', () => {
-    expect(
-      getConnectivity(agent({ explicitlyDisconnected: false, lastSeenAgeSeconds: 150 })),
-    ).toBe('degraded');
-    expect(
-      getConnectivity(agent({ explicitlyDisconnected: false, lastSeenAgeSeconds: 301 })),
+      getConnectivity(agent({ isConnected: false, explicitlyDisconnected: true, lastSeenAgeSeconds: 99999 })),
     ).toBe('offline');
   });
 });

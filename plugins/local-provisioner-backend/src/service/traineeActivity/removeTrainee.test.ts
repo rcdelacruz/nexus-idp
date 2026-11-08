@@ -6,18 +6,17 @@ import { ResourceState } from '../../types';
 
 // eslint-disable-next-line @backstage/no-relative-monorepo-imports
 const capstoneMigration = require('../../database/migrations/006-create-capstone-enrollments.js');
+const completionMigration = require('../../database/migrations/010-capstone-completion.js');
 
 const NOW = new Date('2026-10-31T12:00:00Z');
-const ORG = 'stratpoint-engineering';
+const ORG = 'example-org';
 const LAB_CREATED = new Date('2026-10-31T09:00:00Z');
 
 /** Task store fake: one lab history + the removals table. */
 function taskStore(labs: { agent: string; name: string; email: string; repoUrl?: string; state?: ResourceState }[]) {
   const removals: any[] = [];
-  return {
-    removals,
-    getTrainingResourceHistories: async () =>
-      labs.map(l => ({
+  const histories = () =>
+    labs.map(l => ({
         resource: {
           resource_name: l.name,
           resource_type: 'ministack',
@@ -30,8 +29,14 @@ function taskStore(labs: { agent: string; name: string; email: string; repoUrl?:
         },
         provision: { task_type: 'provision-training', created_at: LAB_CREATED, config: l.repoUrl ? { githubRepoUrl: l.repoUrl } : {} },
         events: [],
-      })),
+      }));
+  return {
+    removals,
+    getTrainingListData: async () => histories(),
+    getTrainingResourceHistory: async (agentId: string, resourceName: string) =>
+      histories().find(h => h.resource.agent_id === agentId && h.resource.resource_name === resourceName),
     getAgentById: async () => null,
+    getAgentsByIds: async () => new Map(),
     removedTraineeLabs: async () => new Set(removals.filter(r => r.agentId).map(r => `${r.agentId}::${r.resourceName}`)),
     recordTraineeRemoval: async (r: any) => {
       removals.push(r);
@@ -63,6 +68,33 @@ const lab = { agent: 'a1', name: 'ministack-training-ann-1761901200', email: 'an
 const labRepo = `https://github.com/${ORG}/training-${lab.name}`;
 
 describe('TraineeActivityService.removeTrainee', () => {
+  it("refuses a trainee's record that points at SOMEONE ELSE's fresh repo: it is not deleted and nothing is removed", async () => {
+    // A lab's name and repo URL are typed by the trainee (POST /tasks). Mallory names Ann's brand-new repo; every other check passes
+    // (our org, private, not a fork, created within two hours, repo name = the lab name she chose).
+    const store = taskStore([{ ...lab, email: 'mallory@example.com', repoUrl: labRepo }]);
+    const gh = github({ [`training-${lab.name}`]: { created_at: '2026-10-31T08:59:30Z' } });
+    const r = await service(store, gh).removeTrainee({ agentId: 'a1', resourceName: lab.name, deleteRepo: true }, 'teacher@example.com');
+    expect(r.status).toBe(409);
+    expect(r.error).toMatch(/was not created for mallory@example\.com/);
+    expect(gh.calls).toEqual([]);
+    expect(store.removals).toEqual([]);
+  });
+
+  it("refuses a capstone enrollment whose repo carries another person's name", async () => {
+    const db = knexFactory({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
+    await capstoneMigration.up(db);
+      await completionMigration.up(db);
+    const capstones = new CapstoneStore(db, () => new Date('2026-10-31T08:55:00Z'));
+    const { enrollment } = await capstones.enroll('nodejs', 'mallory@example.com', async () => ({ seedManifest: {}, credentials: 'c', answerKey: 'k' }));
+    await capstones.linkRepo(enrollment.id, 'mallory@example.com', `https://github.com/${ORG}/nodejs-capstone-bob-1761901000`);
+    const gh = github({ 'nodejs-capstone-bob-1761901000': { created_at: '2026-10-31T08:56:00Z' } });
+    const r = await service(taskStore([]), gh, capstones).removeTrainee({ enrollmentId: enrollment.id, deleteRepo: true }, 't@x');
+    expect(r.status).toBe(409);
+    expect(gh.calls).toEqual([]);
+    expect((await capstones.get(enrollment.id))?.status).toBe('active');
+    await db.destroy();
+  });
+
   it('deletes the lab repo, then hides the lab from the Trainees view', async () => {
     const store = taskStore([{ ...lab, repoUrl: labRepo }]);
     const gh = github({ [`training-${lab.name}`]: { created_at: '2026-10-31T08:59:30Z' } });
@@ -81,10 +113,10 @@ describe('TraineeActivityService.removeTrainee', () => {
   it.each([
     ['a company repo the trainee pointed their lab at (old creation date)', `https://github.com/${ORG}/training-${lab.name}`, { created_at: '2023-05-01T00:00:00Z' }, /not created with this trainee's lab/],
     ['a repo not named after the lab', `https://github.com/${ORG}/backstage-main`, { created_at: '2026-10-31T09:00:00Z' }, /not named after/],
-    ['a repo in another org', `https://github.com/someone-else/training-${lab.name}`, { created_at: '2026-10-31T09:00:00Z' }, /not in the stratpoint-engineering organization/],
+    ['a repo in another org', `https://github.com/someone-else/training-${lab.name}`, { created_at: '2026-10-31T09:00:00Z' }, /not in the example-org organization/],
     ['a public repo', labRepo, { created_at: '2026-10-31T09:00:00Z', private: false }, /is public/],
     ['a fork', labRepo, { created_at: '2026-10-31T09:00:00Z', fork: true }, /is a fork/],
-    ['a GitLab repo', 'https://gitlab.com/stratpoint-engineering/x', { created_at: '2026-10-31T09:00:00Z' }, /not a github.com repository/],
+    ['a GitLab repo', 'https://gitlab.com/example-org/x', { created_at: '2026-10-31T09:00:00Z' }, /not a github.com repository/],
   ])('refuses %s and removes nothing', async (_what, repoUrl, meta, reason) => {
     const store = taskStore([{ ...lab, repoUrl }]);
     const name = repoUrl.split('/').pop()!;
@@ -152,12 +184,13 @@ describe('TraineeActivityService.removeTrainee', () => {
     beforeEach(async () => {
       db = knexFactory({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true });
       await capstoneMigration.up(db);
+      await completionMigration.up(db);
       capstones = new CapstoneStore(db, () => new Date('2026-10-31T08:55:00Z'));
     });
     afterEach(() => db.destroy());
 
-    const enroll = async (email: string, repo: string) => {
-      const { enrollment } = await capstones.enroll('nodejs', email, async () => ({ seedManifest: {}, credentials: 'c', answerKey: 'k' }));
+    const enroll = async (email: string, repo: string, capstone = 'nodejs') => {
+      const { enrollment } = await capstones.enroll(capstone, email, async () => ({ seedManifest: {}, credentials: 'c', answerKey: 'k' }));
       await capstones.linkRepo(enrollment.id, email, `https://github.com/${ORG}/${repo}`);
       return enrollment;
     };
@@ -174,6 +207,33 @@ describe('TraineeActivityService.removeTrainee', () => {
       expect(r).toEqual({ status: 200, repoDeleted: `${ORG}/nodejs-capstone-bob-1761901000` });
       expect((await capstones.get(e.id))?.status).toBe('withdrawn');
       expect(await svc.listTrainees()).toEqual([]);
+    });
+
+    it.each([
+      ['linux-a', 'linux-capstone-a-jane-doe-20261103-1001'], // the A/B naming: <family>-capstone-<a|b>-<user>-<time>
+      ['terraform-b', 'terraform-capstone-b-jane-doe-20261103-0739'],
+      ['terraform-b', 'terraform-capstone-jane-doe-20261031-0005'], // before the A/B naming; migrated to -b
+    ])('deletes the repo of a %s enrollment named %s', async (capstone, repo) => {
+      // Sign-in jane.doe@… is the name jane-doe in every repo and lab name the platform makes for him.
+      const e = await enroll('jane.doe@example.com', repo, capstone);
+      const gh = github({ [repo]: { created_at: '2026-10-31T08:56:00Z' } });
+      const r = await service(taskStore([]), gh, capstones).removeTrainee({ enrollmentId: e.id, deleteRepo: true }, 't@x');
+      expect(r).toEqual({ status: 200, repoDeleted: `${ORG}/${repo}` });
+      expect((await capstones.get(e.id))?.status).toBe('withdrawn');
+    });
+
+    it.each([
+      ['linux-a', 'terraform-capstone-a-jane-1'], // another capstone's naming
+      ['linux-a', 'engineering-standards'],
+      ['terraform-b', 'linux-capstone-b-jane-1'],
+    ])("still refuses a %s enrollment whose repo is named %s", async (capstone, repo) => {
+      const e = await enroll('jane@example.com', repo, capstone);
+      const gh = github({ [repo]: { created_at: '2026-10-31T08:56:00Z' } });
+      const r = await service(taskStore([]), gh, capstones).removeTrainee({ enrollmentId: e.id, deleteRepo: true }, 't@x');
+      expect(r.status).toBe(409);
+      expect(r.error).toMatch(/is not named after this trainee's lab/);
+      expect(gh.calls).toEqual([]);
+      expect((await capstones.get(e.id))?.status).toBe('active');
     });
 
     it("refuses to delete a company repo linked as a capstone repo (name doesn't match the capstone)", async () => {

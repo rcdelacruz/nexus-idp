@@ -42,6 +42,8 @@ kubernetes:
 proxy:
   endpoints:
     '/grafana/api':
+      # Read-only: the Grafana cards only read. Without this every signed-in user could send any method with the Grafana token.
+      allowedMethods: ['GET']
       # Fallback keeps the backend booting if GRAFANA_URL is missing from backstage-secrets: an unset
       # target makes the proxy plugin throw at startup ("Proxy target ... must be a string"). With the
       # fallback, the Grafana cards just show a connection error until the secret is added.

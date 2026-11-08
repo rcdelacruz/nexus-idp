@@ -9,6 +9,15 @@ USER root
 # Fix /app directory permissions (base image has it as root:root 700)
 RUN chmod 755 /app
 
+# This image builds FROM the previous deploy's image, and unpacking the new bundle only adds and
+# overwrites files — anything a newer build dropped stayed forever (13 old frontend bundles by
+# 2026-10-31, plus deleted backend files). Clear exactly the build output the bundle replaces.
+# Must run before the migration COPYs below (one of them writes into project-registration's dist).
+RUN rm -rf /app/packages/app/dist /app/packages/backend/dist \
+    /app/plugins/dbaas-backend/dist /app/plugins/engineering-docs-backend/dist \
+    /app/plugins/finops-backend/dist /app/plugins/local-provisioner-backend/dist \
+    /app/plugins/project-registration-backend/dist /app/plugins/user-management-backend/dist
+
 # Create scripts directory with correct ownership
 RUN mkdir -p /app/scripts && chown node:node /app/scripts
 

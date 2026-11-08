@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.32]
+
+### Added
+- **`backstage-agent --uninstall`** (same as `backstage-agent uninstall`): removes the agent from this machine without the
+  portal. Installed with the installer: stops the agent, removes its link, its lines in the zsh/bash/fish startup files and
+  its folders. Installed with `npm install -g`: stops the agent and runs `npm uninstall -g` for that copy. Your login, logs
+  and labs are kept. A startup file whose agent lines were edited is left alone and reported.
+
+### Fixed
+- `backstage-agent stop` no longer signals a pid file that holds 0, 1, a negative number or junk (a negative pid would
+  have addressed a whole process group).
+
+## [0.1.31]
+
+### Added
+- **`install.sh`**, served by the portal: `curl -fsSL <portal>/api/local-provisioner/agent/install.sh | sh`.
+  Installs the agent into `~/.backstage-agent/npm`, writes a launcher that always runs the agent with the
+  Node that installed it, and adds the launcher to the PATH of every new terminal (zsh, bash, fish).
+  `backstage-agent` no longer disappears when you open a terminal whose Node version is a different one.
+  `--uninstall` removes it again and keeps your login and labs.
+- `backstage-agent start` and `login` check Docker first. When it is missing, closed, or not allowed for
+  your user, they say so and what to install (Docker Desktop is recommended) instead of "did not start,
+  see the logs". You stay signed in.
+
+### Fixed
+- The background process is started with the Node that is running `start`, not whatever `node` the PATH
+  of that terminal holds.
+- `backstage-agent update` runs the npm that belongs to the running Node, so it works in a terminal that
+  has no npm of its own.
+- Security (see the portal changelog): lifecycle task ids must be plain ids, image names never reach a
+  shell, `multipass.json` is validated, and the agent's state files are private (0600/0700).
+
 ## [Unreleased]
 
 ### Added

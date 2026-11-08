@@ -19,6 +19,7 @@ describe('isPublicAgentPath', () => {
       '/agent/device/token',
       '/agent/register',
       '/agent/poll',
+      '/agent/install.sh',
       '/agent/tasks/abc-123/status',
       '/agent/tasks/00000000-0000-0000-0000-000000000000/status',
     ])('treats %s as public', path => {

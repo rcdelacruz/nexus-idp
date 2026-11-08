@@ -12,7 +12,7 @@ When a new `@<yourdomain.com>` user signs in via Google or GitHub for the first 
 2. If not found, the user is issued a token with `general-engineers` membership
 3. The user is redirected to `/onboarding` where they complete their profile
 4. On onboarding completion, the user is written to the `user_management_users` database table
-5. The `UserEntityProvider` picks up the new record within ~30 seconds and creates a catalog entity
+5. The `UserEntityProvider` picks up the new record within ~60 seconds and creates a catalog entity
 
 ### Team Assignment
 
@@ -21,7 +21,7 @@ New users remain in `general-engineers` (limited access) until a platform admin 
 1. Admin opens **User Management** in the sidebar
 2. Finds the user (they appear after completing onboarding)
 3. Assigns them to one or more department teams
-4. The `UserEntityProvider` syncs within ~30 seconds — the user's catalog entity is updated
+4. The `UserEntityProvider` syncs within ~60 seconds — the user's catalog entity is updated
 5. On the user's next page load / token refresh, they get full engineer access
 
 ## Department Teams
@@ -57,6 +57,7 @@ Platform admins (`backstage-admins`) can perform the following in the **User Man
 | Assign team | Set one or more department teams for a user |
 | Promote to admin | Grant `backstage-admins` membership (adds to `backstage-admins` group in catalog) |
 | Demote from admin | Remove admin role (cannot self-demote) |
+| Make / revoke instructor | Grant or remove the `instructors` group (graduation-cap action). Independent of the department team; the person sees the Trainees page and capstone tools after their session refreshes or they sign in again. See [Permission System](permission-system.md#granting-instructor-access) |
 | Remove user | Revokes session + deletes from database (cannot self-delete) |
 
 ## Break-Glass Admin (users.yaml)
@@ -104,7 +105,7 @@ Then add `new-team` to the `DEPT_TEAMS` constant in:
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| User stuck on `/onboarding` after registering | `UserEntityProvider` hasn't synced yet | Wait ~30s; check `user-management-backend` logs |
+| User stuck on `/onboarding` after registering | `UserEntityProvider` hasn't synced yet | Wait ~60s; check `user-management-backend` logs |
 | User sees limited access after being assigned a team | Token not refreshed yet | User should sign out and sign back in |
 | "Only @<yourdomain.com> users may register" error | `organization.domain` config mismatch | Verify `app-config.yaml: organization.domain: <yourdomain.com>` |
 | Ghost row with `teams=[]` | User started onboarding but didn't finish | Admin can reassign or delete via User Management UI |

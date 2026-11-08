@@ -10,6 +10,7 @@
  */
 import { spawn } from 'child_process';
 import fs from 'fs';
+import { createHash } from 'crypto';
 import os from 'os';
 import path from 'path';
 import { ConfigManager } from '../config/ConfigManager';
@@ -77,6 +78,21 @@ export const runCmd: Run = (cmd, args, timeoutMs, onOutput) =>
 const NAME = /^[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 
 /**
+ * The agent's own record of a VM lab (multipass.json), checked before any `multipass` or key-file operation uses it: the instance must
+ * be a valid Multipass name, the login a plain user name, and the key a file inside the agent's keys folder. A record that fails is
+ * refused (audit 2026-11-07: the file was trusted as written, so a forged one made the agent run multipass with chosen arguments and
+ * delete chosen files).
+ */
+export function parseVmState(raw: string, keysDir: string): { instance: string; sshUser: string; keyPath: string } {
+  const s = JSON.parse(raw);
+  const insideKeys = typeof s?.keyPath === 'string' && (s.keyPath === '' || path.resolve(s.keyPath).startsWith(path.resolve(keysDir) + path.sep));
+  if (typeof s?.instance !== 'string' || !NAME.test(s.instance) || typeof s?.sshUser !== 'string' || !/^[a-z_][a-z0-9_-]{0,31}$/i.test(s.sshUser) || !insideKeys) {
+    throw new Error('The VM record of this lab is not valid');
+  }
+  return { instance: s.instance, sshUser: s.sshUser, keyPath: s.keyPath };
+}
+
+/**
  * Starts the seed DETACHED inside the VM and returns at once: its own session (setsid), output to
  * a log, exit code to a file. Running the seed on the `multipass exec` connection itself hung for
  * good on the Linux capstone — the course seed deliberately leaves programs running (a lock holder,
@@ -97,6 +113,10 @@ const SEED_EXIT = '/var/log/lab-seed.exit';
 /** How often the agent looks at a running seed, and how long it waits in total. */
 const SEED_POLL_MS = 5000;
 const SEED_MAX_MS = 60 * 60_000;
+/** Right after `launch` the VM's network can take a moment: wait this long for the first connection. */
+const VM_REACH_POLL_MS = 5000;
+const VM_REACH_MAX_MS = 2 * 60_000;
+const NETWORK_DOCS = 'https://documentation.ubuntu.com/multipass/latest/how-to-guides/troubleshoot/troubleshoot-networking/';
 
 export function validateVmSpec(v: any): string | undefined {
   if (!v || typeof v !== 'object') return 'vm must be an object';
@@ -112,10 +132,17 @@ export function validateVmSpec(v: any): string | undefined {
   return undefined;
 }
 
-/** Multipass instance name from the resource name (Multipass: letters, digits, hyphens). */
+/**
+ * Multipass instance name from the resource name (Multipass: letters, digits, hyphens, 63 at most).
+ * A name that is too long is cut and given a short hash of the whole name, so two long names that
+ * differ only at the end (the date and time of the run) never end up as the same VM.
+ */
 export function instanceName(resourceName: string): string {
-  const n = resourceName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 63).replace(/-$/, '');
-  return /^[a-z]/.test(n) ? n : `lab-${n}`.slice(0, 63);
+  const clean = resourceName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const base = /^[a-z]/.test(clean) ? clean : `lab-${clean}`;
+  if (base.length <= 63) return base.replace(/-$/, '');
+  const hash = createHash('sha1').update(base).digest('hex').slice(0, 8);
+  return `${base.slice(0, 54).replace(/-$/, '')}-${hash}`;
 }
 
 const INSTALL_STEPS =
@@ -168,13 +195,56 @@ export class MultipassExecutor {
     return { code: 124, output: `${output}\nThe server setup did not finish within ${SEED_MAX_MS / 60_000} minutes.` };
   }
 
+  /**
+   * Wait until the new VM accepts a connection (`multipass exec` goes over SSH to the VM's address). A
+   * VM that stays unreachable fails here with the reason, instead of at the first file copy.
+   */
+  private async waitForVm(instance: string, onProgress?: (phase: string, detail?: Record<string, unknown>) => void): Promise<void> {
+    const label = 'Waiting for the VM to accept connections';
+    onProgress?.(label);
+    const started = this.clock();
+    for (;;) {
+      const r = await this.mp(['exec', instance, '--', 'true'], 60_000);
+      if (r.code === 0) return;
+      const last = (r.stderr || r.stdout).trim().split('\n').pop() ?? '';
+      if (this.clock() - started >= VM_REACH_MAX_MS) {
+        throw new Error(
+          `${label} failed: ${last}. Multipass reaches the VM over the network; its troubleshooting guide lists VPN software and firewalls as causes (${NETWORK_DOCS})`,
+        );
+      }
+      onProgress?.(label, { output: `${last}\n(trying again)` });
+      await this.sleep(VM_REACH_POLL_MS);
+    }
+  }
+
+  /**
+   * Delete a VM this attempt created and could not finish, with its key and folder, so a failed lab
+   * never keeps a VM running and Retry starts clean. Returns a sentence for the error message.
+   */
+  private async discardUnfinished(instance: string, keyPath: string, taskDir: string): Promise<string> {
+    const r = await this.mp(['delete', '--purge', instance], 5 * 60_000);
+    if (r.code === 0 || /does not exist/i.test(r.stderr)) {
+      try {
+        if (keyPath) {
+          fs.rmSync(keyPath, { force: true });
+          fs.rmSync(`${keyPath}.pub`, { force: true });
+        }
+        fs.rmSync(taskDir, { recursive: true, force: true });
+      } catch {
+        // the VM is gone; a file that can't be removed must not hide why the lab failed
+      }
+      return 'The unfinished VM was deleted, so Retry starts clean.';
+    }
+    return `The unfinished VM "${instance}" could not be deleted (${(r.stderr || r.stdout).trim().split('\n').pop()}); remove it with: multipass delete --purge ${instance}`;
+  }
+
   /** True when this task's lab is a VM (lifecycle ops are routed here instead of Docker). */
   isVmTask(taskId: string): boolean {
     return fs.existsSync(path.join(this.configManager.getTaskDir(taskId), 'multipass.json'));
   }
 
   private state(taskId: string): { instance: string; sshUser: string; keyPath: string } {
-    return JSON.parse(fs.readFileSync(path.join(this.configManager.getTaskDir(taskId), 'multipass.json'), 'utf8'));
+    return parseVmState(fs.readFileSync(path.join(this.configManager.getTaskDir(taskId), 'multipass.json'), 'utf8'), this.keysDir);
   }
 
   private mp(args: string[], timeoutMs = 10 * 60_000, onOutput?: (chunk: string) => void) {
@@ -217,17 +287,27 @@ export class MultipassExecutor {
       return r;
     };
 
+    // True once the VM is known to be ours: it did not exist before this attempt's `launch`. Only then is it
+    // deleted if a later step fails. A VM that already existed is someone else's and is never touched here.
+    let launched = false;
+    let keyPath = '';
     try {
       // Dedicated SSH key for the trainee user the seed creates.
       fs.mkdirSync(this.keysDir, { recursive: true, mode: 0o700 });
-      const keyPath = path.join(this.keysDir, instance);
+      keyPath = path.join(this.keysDir, instance);
       if (!fs.existsSync(keyPath)) {
         const k = await this.run('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', `${spec.sshUser}@${instance}`, '-f', keyPath], 30_000);
         if (k.code !== 0) return { success: false, error: `ssh-keygen failed: ${k.stderr.trim()}` };
       }
       fs.writeFileSync(path.join(taskDir, 'multipass.json'), JSON.stringify({ instance, sshUser: spec.sshUser, keyPath }));
 
+      // Ours to delete if a step fails from here on: only a VM that did not exist before this attempt.
+      // Unless Multipass says plainly that it doesn't exist, assume somebody else's. A launch that errors
+      // after it created the VM (an initialisation timeout) is then cleaned up too.
+      launched = /does not exist/i.test((await this.mp(['info', instance], 60_000)).stderr);
       await step('Creating the VM', ['launch', spec.image, '--name', instance, '--cpus', String(spec.cpus), '--memory', `${spec.memoryGb}G`, '--disk', `${spec.diskGb}G`], 20 * 60_000, true);
+      launched = true;
+      await this.waitForVm(instance, onProgress);
 
       // Seed bundle (+ the trainee's public key) → /tmp/lab-seed inside the VM.
       const bundle = path.join(taskDir, 'seed');
@@ -264,7 +344,12 @@ export class MultipassExecutor {
         metadata: { vm: { instance, snapshot, keyPath, multipass: version.stdout.trim().split('\n')[0] } },
       };
     } catch (e: any) {
-      return { success: false, error: e.message, logs: logs.join('\n').slice(-64 * 1024) };
+      const note = launched ? await this.discardUnfinished(instance, keyPath, taskDir) : '';
+      return {
+        success: false,
+        error: note ? `${String(e.message).replace(/\.$/, '')}. ${note}` : e.message,
+        logs: logs.join('\n').slice(-64 * 1024),
+      };
     }
   }
 

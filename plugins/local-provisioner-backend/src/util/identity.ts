@@ -91,3 +91,12 @@ export function extractEmailFromEntityRef(entityRef: string): string {
   // Otherwise, append the configured org domain
   return `${username}@${emailDomain()}`;
 }
+
+/**
+ * Whether two `user_id` values (emails) are the same person. Emails are case-insensitive and both sides come from the same
+ * translation (`extractEmailFromEntityRef`), but a user whose catalog entry was created by a different sign-in path can differ in
+ * case, so compare lower-cased. Missing on either side is never "the same".
+ */
+export function sameUser(a: string | null | undefined, b: string | null | undefined): boolean {
+  return !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+}

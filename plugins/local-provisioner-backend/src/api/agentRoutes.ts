@@ -10,6 +10,7 @@ import { AgentCapabilities, AgentRegisterRequest, ResourceState } from '../types
 import { extractEmailFromEntityRef } from '../util/identity';
 import rateLimit from 'express-rate-limit';
 import { isOlderVersion, LatestAgentVersion } from '../service/latestAgentVersion';
+import { parseDeviceCodeBody } from './deviceCodeInput';
 
 /**
  * Rate limiter for POST /device/code
@@ -102,7 +103,7 @@ export function createAgentRoutes(
   taskQueueService?: TaskQueueService,
   latestAgent: LatestAgentVersion = new LatestAgentVersion(),
 ): Router {
-  const router = Router();
+  const router = Router({ caseSensitive: true }); // see service/router.ts
 
   /**
    * POST /agent/device/code
@@ -119,39 +120,12 @@ export function createAgentRoutes(
    */
   router.post('/device/code', deviceCodeLimiter, async (req, res) => {
     try {
-      // Extract machine info from request body (sent by CLI)
-      const { agent_id, hostname, platform, platform_version, agent_version } = req.body || {};
-
-      // DEBUG: Log what we received
-      logger.info('[DEBUG] /device/code request body', { body: req.body });
-      logger.info('[DEBUG] Extracted fields', { agent_id, hostname, platform, platform_version });
-
-      let machineInfo: {
-        agentId: string;
-        hostname: string;
-        platform: string;
-        platformVersion: string;
-        agentVersion?: string;
-      } | undefined;
-
-      if (agent_id && hostname && platform && platform_version) {
-        machineInfo = {
-          agentId: agent_id,
-          hostname,
-          platform,
-          platformVersion: platform_version,
-          agentVersion: validAgentVersion(agent_version),
-        };
-        logger.info('[DEBUG] Machine info created', { machineInfo });
-      } else {
-        logger.warn('[DEBUG] Machine info NOT created - missing fields', {
-          agent_id,
-          hostname,
-          platform,
-          platform_version,
-          body: req.body,
-        });
+      // The body comes from an unauthenticated client: validated, bounded, and never logged.
+      const parsed = parseDeviceCodeBody(req.body);
+      if (!parsed.ok) {
+        return res.status(400).json({ error: 'invalid_request', error_description: parsed.error });
       }
+      const machineInfo = parsed.machine;
 
       const deviceCodeResponse = await agentService.generateDeviceCode(machineInfo);
 
@@ -331,6 +305,29 @@ export function createAgentRoutes(
       // a dead response object until POLL_TIMEOUT_MS.
       const controller = new AbortController();
       req.on('close', () => controller.abort());
+      // The connection closed before we answered: the agent is gone (see markConnectionLost).
+      // `res` 'close' after a normal response has writableEnded = true and is ignored.
+      const pollStartedAt = Date.now();
+      res.on('close', () => {
+        if (res.writableEnded) return;
+        controller.abort();
+        // 'close' fires before longPoll's ownership check, so look the agent up here: only its
+        // owner's dropped connection may mark it gone (otherwise any holder of a service token
+        // could flag someone else's agent by polling its id and hanging up), and only the stored
+        // id is logged, never the raw query value.
+        agentService
+          .getAgentById(agentId)
+          .then(agent => {
+            if (!agent || agent.user_id !== userEmail) return;
+            agentService.markConnectionLost(agent.agent_id);
+            // Tells us whether the proxy in front of the portal passes a stopped agent's
+            // disconnect through: after `backstage-agent stop` this line should appear at once.
+            logger.info(
+              `Agent ${agent.agent_id}: poll connection closed before it was answered (open ${Math.round((Date.now() - pollStartedAt) / 1000)}s)`,
+            );
+          })
+          .catch(() => undefined);
+      });
 
       const { tasks, shouldShutdown } = await agentService.longPoll(
         agentId,
@@ -388,6 +385,13 @@ export function createAgentRoutes(
         return res.status(400).json({
           error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
         });
+      }
+
+      // The token proves WHO is calling, not that this task is theirs: without this check any agent token could rewrite any task's
+      // status, logs and result (404 for both "no such task" and "not yours": no existence leak, and a 4xx makes the agent drop it).
+      if (!(await agentService.isTaskOfAgentOwner(taskId, userEmail))) {
+        logger.warn(`Refused a status update for task ${taskId}: it is not a task of ${userEmail}'s agents`);
+        return res.status(404).json({ error: 'Task not found', taskId });
       }
 
       // Update task status via agent service (logs + connection details persisted for the UI)
@@ -460,6 +464,21 @@ export function createAgentRoutes(
       const userId = extractEmailFromEntityRef(userEntityRef);
       const agentRegistrations = await agentService.getAgentsForUser(userId);
 
+      // ?verify=1 — for a decision (the lab form's Next): don't trust the age, prove each
+      // apparently-online agent is alive right now (AgentService.confirmAlive; wakes its poll).
+      // The periodic status views leave it off.
+      const verify = req.query.verify === '1' || req.query.verify === 'true';
+      const confirmed = new Set<string>();
+      if (verify) {
+        await Promise.all(
+          agentRegistrations
+            .filter(a => agentService.isConnectedAt(a.agent_id, a.last_seen))
+            .map(async a => {
+              if (await agentService.confirmAlive(a.agent_id)) confirmed.add(a.agent_id);
+            }),
+        );
+      }
+
       // Add connection status + a SERVER-computed heartbeat age. Computing the age here (server
       // clock vs server-written last_seen) makes the UI immune to client clock skew — the chip
       // no longer subtracts a server timestamp from the browser's clock.
@@ -468,20 +487,20 @@ export function createAgentRoutes(
       const agentsWithStatus = agentRegistrations.map(agent => {
         const lastSeenMs = agent.last_seen ? new Date(agent.last_seen).getTime() : 0;
         const lastSeenAgeSeconds = lastSeenMs ? Math.floor((now - lastSeenMs) / 1000) : null;
-        // "Connected" = polled within the last 90s AND not explicitly told to shut down.
-        // The explicit check matters because last_seen is only written when a poll *starts* —
-        // it stays "fresh" for up to 90s after an agent has actually exited following a Stop
-        // Agent request, which is exactly the "still shows online" gap. See
-        // AgentService.isExplicitlyDisconnected().
+        // The one liveness rule (AgentService.isConnectedAt): not known to have stopped, and
+        // heard from within one poll + a little. After a verify, an agent that failed to answer
+        // is already flagged, so it reads offline here too.
         const explicitlyDisconnected = agentService.isExplicitlyDisconnected(agent.agent_id);
-        const isConnected =
-          lastSeenAgeSeconds !== null && lastSeenAgeSeconds <= 90 && !explicitlyDisconnected;
+        // When verifying, the probe's answer is the verdict (the row's age pre-dates it).
+        const isConnected = verify
+          ? confirmed.has(agent.agent_id)
+          : agentService.isConnectedAt(agent.agent_id, agent.last_seen);
         return {
           ...agent,
           is_connected: isConnected,
           last_seen_age_seconds: lastSeenAgeSeconds,
           // Surfaced separately from is_connected so the frontend can treat it as permanent
-          // (doesn't decay back to "degraded" as last_seen ages past 90s) rather than folding
+          // (doesn't decay back to "degraded" as last_seen ages past the limit) rather than folding
           // it into a single boolean that collapses "just stopped" and "silently went stale"
           // into the same signal (found 2026-07-26 — see connectivity.ts).
           explicitly_disconnected: explicitlyDisconnected,
@@ -491,9 +510,12 @@ export function createAgentRoutes(
         };
       });
 
+      // A status that can be a few seconds stale must never be served from a cache.
+      res.set('Cache-Control', 'no-store');
       return res.status(200).json({
         agents: agentsWithStatus,
         total: agentsWithStatus.length,
+        verified: verify,
       });
     } catch (error: any) {
       return res.status(500).json({

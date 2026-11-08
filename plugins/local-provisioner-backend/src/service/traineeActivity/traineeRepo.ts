@@ -15,16 +15,56 @@ const ghHeaders = (token: string) => ({
 /** How far a trainee repo's creation may be from its lab/enrollment record (same scaffolder run). */
 export const REPO_CREATED_WINDOW_MS = 2 * 60 * 60_000;
 
+/**
+ * The name the platform gives a person inside their repo and lab names: the part of their sign-in before the @, lower-cased, with
+ * everything but a-z, 0-9 and "-" turned into "-" (the same rule as the lab form's SuggestedResourceNameField, which builds
+ * `<template>-<name>-<date>-<time>` from the signed-in user's entity name).
+ */
+export function traineeNameFromEmail(email: string): string {
+  return email
+    .split('@')[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/** True when a repo name ends with `-<name>-<yyyymmdd>-<hhmm>` (current labs) or `-<name>-<epoch>` (older ones). */
+export function repoNameBelongsTo(repoName: string, traineeName: string): boolean {
+  if (!traineeName) return false;
+  const escaped = traineeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`-${escaped}-(\\d{8}-\\d{4}|\\d{9,13})$`).test(repoName.toLowerCase());
+}
+
 export interface TraineeRepoClaim {
   /** Repo URL from the stored record (never from the request). */
   repoUrl: string;
   /** Names the repo may have: a lab's resource name (+ `training-` form), or a capstone prefix. */
   names?: string[];
-  prefix?: string;
+  prefixes?: string[];
   /** When the lab/enrollment record was created; the repo must have been created near it. */
   recordCreatedAt: Date;
   /** The org trainee repos are created in (organization.githubOwner). Unset → never delete. */
   allowedOwner?: string;
+  /**
+   * The sign-in email of the trainee the record belongs to (set by the server from the signed-in user, never from a request).
+   * The repo name must carry that person's name: a lab's repo URL and name are typed by the trainee, so without this a trainee
+   * could point their own record at someone else's fresh repo.
+   */
+  traineeEmail?: string;
+}
+
+/**
+ * The name prefixes a capstone's trainee repos carry. The lab templates name a repo
+ * `<family>-capstone-<a|b>-<user>-<time>` (`linux-capstone-a-…`, `terraform-capstone-b-…`), the
+ * capstone ids are `<family>-<a|b>`, and before the A/B naming the brownfield repos were
+ * `<family>-capstone-<user>-…` (those enrollments are `-b` now), so all three forms are accepted.
+ */
+export function capstoneRepoPrefixes(capstoneId: string): string[] {
+  const m = /^([a-z0-9]+)-([ab])$/.exec(capstoneId);
+  if (!m) return [`${capstoneId}-capstone`];
+  const [, family, letter] = m;
+  return [`${family}-capstone-${letter}`, ...(letter === 'b' ? [`${family}-capstone`] : []), `${capstoneId}-capstone`];
 }
 
 /**
@@ -51,8 +91,11 @@ export async function checkTraineeRepo(
   const lower = repo.toLowerCase();
   const named =
     (claim.names ?? []).some(n => n && lower === n.toLowerCase()) ||
-    (!!claim.prefix && lower.startsWith(`${claim.prefix.toLowerCase()}-`));
+    (claim.prefixes ?? []).some(p => !!p && lower.startsWith(`${p.toLowerCase()}-`));
   if (!named) return { ok: false, reason: `${repo} is not named after this trainee's lab` };
+  if (claim.traineeEmail !== undefined && !repoNameBelongsTo(repo, traineeNameFromEmail(claim.traineeEmail))) {
+    return { ok: false, reason: `${repo} was not created for ${claim.traineeEmail} (its name must end with -${traineeNameFromEmail(claim.traineeEmail)}-<date>-<time>)` };
+  }
 
   const res = await fetchImpl(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
     headers: ghHeaders(token),

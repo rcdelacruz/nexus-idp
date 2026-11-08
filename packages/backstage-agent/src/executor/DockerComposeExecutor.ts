@@ -9,7 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec, spawn } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import Mustache from 'mustache';
 import {
@@ -19,13 +19,28 @@ import {
   ConnectionDetails,
 } from '../types';
 import { ConfigManager } from '../config/ConfigManager';
-import { GitRunner, runGit, repoDirName } from './workspaceClone';
+import { ensureWorkspace, GitRunner, runGit, repoDirName } from './workspaceClone';
 import { randomBytes } from 'crypto';
 import logger from '../utils/logger';
 import { findPortConflicts, parsePublishedPorts, portConflictMessage, portInUseFromDockerError, templateConnection } from './ports';
 import { ComposeProgress, OutputTail, ProgressReporter } from './progress';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Whether Docker already has `image`. The name comes from the lab's compose file, so it goes to docker as ONE argument, never through
+ * a shell (it used to be interpolated into a shell command, so an `image:` value containing a command substitution ran on the
+ * trainee's machine before anything was pulled; audit 2026-11-07).
+ */
+export async function dockerImageIsCached(
+  image: string,
+  run: (file: string, args: string[], opts: { timeout: number }) => Promise<{ stdout: string }> = (file, args, opts) => execFileAsync(file, args, opts),
+): Promise<boolean> {
+  if (!image || image.startsWith('-')) return false; // not an image name: treat as not cached, let compose report it
+  const { stdout } = await run('docker', ['images', '-q', image], { timeout: SHORT_TIMEOUT_MS });
+  return stdout.trim() !== '';
+}
 
 /** A slow image pull must never hang forever — bounded, but generous for large images on slow links. */
 const PULL_TIMEOUT_MS = 15 * 60 * 1000; // 15 min
@@ -52,6 +67,41 @@ export interface LabJob {
 }
 
 /** Validates a job from the portal before anything runs. Returns an error message, or undefined. */
+const WORKSPACE_WAIT_MS = 30 * 60_000;
+
+/**
+ * What the trainee sees while the lab waits for their repo: what to do, in order, with the
+ * invitation link as a button (`action`) in the portal's Activity panel. A "not found" on a brand
+ * new repo almost always means the GitHub invitation hasn't been accepted yet.
+ */
+export function waitingForAccess(repoUrl: string, hint: string, attempt: number): { output: string; action?: { label: string; url: string } } {
+  const m = /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/.exec(repoUrl);
+  const retry = `Checking again every 15 s (attempt ${attempt}); nothing to restart.`;
+  if (m && /not found/i.test(hint)) {
+    const invite = `https://github.com/${m[1]}/${m[2]}/invitations`;
+    return {
+      output: [
+        `Your repo ${m[1]}/${m[2]} isn't reachable from this machine yet.`,
+        `1. Accept the GitHub invitation (once): ${invite}`,
+        '   Sign in as the GitHub account linked in the portal (Onboarding → GitHub).',
+        '2. Make sure git here uses that same account: `gh auth status` (switch with `gh auth switch`).',
+        retry,
+      ].join('\n'),
+      action: { label: 'Accept the GitHub invitation', url: invite },
+    };
+  }
+  return { output: `${hint}\n${retry}` };
+}
+
+/**
+ * The lab's .env for a workspace mount (compose reads it from the lab folder): the clone's path
+ * with forward slashes (Docker Desktop on Windows takes C:/Users/...), and the host user so files
+ * the container writes in the clone stay the trainee's on Linux (0 where there is no uid).
+ */
+export function labEnvFile(workspace: string, uid = process.getuid?.() ?? 0, gid = process.getgid?.() ?? 0): string {
+  return `WORKSPACE_DIR=${workspace.split(path.sep).join('/')}\nLAB_UID=${uid}\nLAB_GID=${gid}\n`;
+}
+
 export function validateLabJob(job: any): string | undefined {
   if (!job || typeof job !== 'object') return 'job must be an object';
   if (typeof job.image !== 'string' || !/^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+$/.test(job.image)) return 'invalid image';
@@ -75,6 +125,8 @@ export class DockerComposeExecutor {
   private configManager: ConfigManager;
   /** Overridable in tests (maps https URLs to local repos). */
   gitRunner: GitRunner = runGit;
+  /** Overridable in tests: the wait between repo-access retries. */
+  sleep: (ms: number) => Promise<void> = ms => new Promise(r => setTimeout(r, ms));
   private templatesDir: string;
   // Resolved once: the Compose CLI available on this machine — v2 `docker compose` (modern,
   // shipped as a Docker plugin) or the legacy standalone `docker-compose` binary. Modern Docker
@@ -164,6 +216,17 @@ export class DockerComposeExecutor {
         this.writeSourceFiles(task.config.sourceFiles, taskDir);
       }
 
+      // Labs that work on the trainee's own repo (Node.js capstone) mount the clone: get it first,
+      // then tell compose where it is (WORKSPACE_DIR in the lab's .env).
+      if (task.config.workspaceMount === true) {
+        const ws = await this.waitForWorkspace(String(task.config.githubRepoUrl || task.config.gitlabRepoUrl || ''), onProgress);
+        if (!ws.path) {
+          fs.rmSync(taskDir, { recursive: true, force: true });
+          return { success: false, error: ws.error };
+        }
+        fs.writeFileSync(path.join(taskDir, '.env'), labEnvFile(ws.path));
+      }
+
       // Taken host ports fail now, before a long image pull, with the service and port named.
       const taken = await this.portConflicts(taskDir);
       if (taken.length) {
@@ -182,6 +245,26 @@ export class DockerComposeExecutor {
     } catch (error: any) {
       logger.error(`Task execution failed: ${error.message}`);
       return { success: false, error: error.message, logs: error.stack };
+    }
+  }
+
+  /**
+   * Clone (or reuse) the trainee's repo for a lab that mounts it. A brand-new repo is usually not
+   * reachable yet — the trainee hasn't accepted the GitHub invitation — so a "not found" or login
+   * failure is retried every 15 s for up to 30 min, shown as its own step with what to do.
+   */
+  private async waitForWorkspace(repoUrl: string, onProgress?: ProgressReporter): Promise<{ path?: string; error?: string }> {
+    const started = Date.now();
+    onProgress?.('Getting your repo');
+    for (let attempt = 1; ; attempt++) {
+      const r = await ensureWorkspace(repoUrl, { git: this.gitRunner });
+      if (r.path) return { path: r.path };
+      const waitable = r.status === 'failed' && /not found|isn't logged in/i.test(r.hint ?? '');
+      if (!waitable || Date.now() - started > WORKSPACE_WAIT_MS) {
+        return { error: `Could not get your repo (${repoUrl}): ${r.error ?? r.status}. ${r.hint ?? ''}`.trim() };
+      }
+      onProgress?.('Waiting for access to your repo', waitingForAccess(repoUrl, r.hint ?? '', attempt));
+      await this.sleep(15_000);
     }
   }
 
@@ -223,11 +306,7 @@ export class DockerComposeExecutor {
       const images = stdout.split('\n').map(s => s.trim()).filter(Boolean);
       if (images.length === 0) return false;
       for (const image of images) {
-        const { stdout: found } = await execAsync(
-          `docker images -q ${JSON.stringify(image)}`,
-          { timeout: SHORT_TIMEOUT_MS },
-        );
-        if (!found.trim()) return false;
+        if (!(await dockerImageIsCached(image))) return false;
       }
       return true;
     } catch {
@@ -432,6 +511,11 @@ export class DockerComposeExecutor {
       const destPath = path.resolve(taskDir, relPath);
       if (!destPath.startsWith(resolvedTaskDir + path.sep)) {
         logger.warn(`Refusing to write source file outside task dir: ${relPath}`);
+        continue;
+      }
+      // multipass.json is the agent's own record that this task is a VM lab (instance name, key path): a task must not be able to write it.
+      if (path.basename(destPath) === 'multipass.json') {
+        logger.warn(`Refusing to write reserved file: ${relPath}`);
         continue;
       }
       fs.mkdirSync(path.dirname(destPath), { recursive: true });

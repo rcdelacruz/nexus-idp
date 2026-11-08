@@ -58,7 +58,7 @@ export enum ResourceState {
   REMOVED = 'removed',
 }
 
-const PROVISION_TASK_TYPES: string[] = [
+export const PROVISION_TASK_TYPES: string[] = [
   TaskType.PROVISION_KAFKA,
   TaskType.PROVISION_KAFKA_TRAINING,
   TaskType.PROVISION_POSTGRES,
@@ -69,7 +69,7 @@ const PROVISION_TASK_TYPES: string[] = [
   TaskType.PROVISION_TRAINING,
 ];
 
-const TRAINING_TASK_TYPES: string[] = [
+export const TRAINING_TASK_TYPES: string[] = [
   TaskType.PROVISION_KAFKA_TRAINING,
   TaskType.PROVISION_DEVOPS_CAPSTONE_TRAINING,
   TaskType.PROVISION_DEVSECOPS_CAPSTONE_TRAINING,

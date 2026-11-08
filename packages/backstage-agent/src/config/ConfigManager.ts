@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { AgentConfig } from '../types';
 import logger from '../utils/logger';
+import { assertSafeTaskId, ensurePrivateDir, writePrivateFile } from '../utils/safeFiles';
 
 export class ConfigManager {
   private configDir: string;
@@ -23,10 +24,7 @@ export class ConfigManager {
    * Ensure config directory exists
    */
   private ensureConfigDir(): void {
-    if (!fs.existsSync(this.configDir)) {
-      fs.mkdirSync(this.configDir, { recursive: true });
-      logger.debug(`Created config directory: ${this.configDir}`);
-    }
+    ensurePrivateDir(this.configDir);
   }
 
   /**
@@ -35,11 +33,7 @@ export class ConfigManager {
   saveConfig(config: AgentConfig): void {
     try {
       this.ensureConfigDir();
-      fs.writeFileSync(
-        this.configPath,
-        JSON.stringify(config, null, 2),
-        'utf-8'
-      );
+      writePrivateFile(this.configPath, JSON.stringify(config, null, 2));
       logger.debug(`Configuration saved to ${this.configPath}`);
     } catch (error) {
       logger.error(`Failed to save configuration: ${error}`);
@@ -95,9 +89,10 @@ export class ConfigManager {
    * Get tasks directory for a specific task
    */
   getTaskDir(taskId: string): string {
-    const tasksDir = path.join(this.configDir, 'tasks', taskId);
+    // The id becomes a folder name and later a recursive delete: only plain id characters, never a path.
+    const tasksDir = path.join(this.configDir, 'tasks', assertSafeTaskId(taskId));
     if (!fs.existsSync(tasksDir)) {
-      fs.mkdirSync(tasksDir, { recursive: true });
+      ensurePrivateDir(tasksDir);
     }
     return tasksDir;
   }

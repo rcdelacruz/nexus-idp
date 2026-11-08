@@ -133,6 +133,8 @@ describe('CatalogPermissionPolicy — Local Provisioner Trainees view', () => {
     ['admin', ADMIN],
     ['instructor', ['group:default/instructors']],
     ['instructor who is also an engineer', ['group:default/web-team', 'group:default/instructors']],
+    // User Management lets an admin make a trainee (no department team yet) an instructor.
+    ['instructor who is only a trainee', ['group:default/general-engineers', 'group:default/instructors']],
   ])('allows an %s', async (_role, groups) => {
     expect(await decide(groups)).toBe(AuthorizeResult.ALLOW);
   });
@@ -156,6 +158,7 @@ describe('CatalogPermissionPolicy — capstones', () => {
   it.each([
     ['admin', ADMIN, AuthorizeResult.ALLOW],
     ['instructor', ['group:default/instructors'], AuthorizeResult.ALLOW],
+    ['instructor who is only a trainee', ['group:default/general-engineers', 'group:default/instructors'], AuthorizeResult.ALLOW],
     ['engineer', ENGINEER, AuthorizeResult.DENY],
     ['lead', LEAD, AuthorizeResult.DENY],
     ['new hire', UNASSIGNED, AuthorizeResult.DENY],
@@ -169,5 +172,162 @@ describe('CatalogPermissionPolicy — capstones', () => {
     ['new hire (trainee)', UNASSIGNED],
   ])('enroll yourself: allowed for a %s', async (_role, groups) => {
     expect(await decide(enroll, groups)).toBe(AuthorizeResult.ALLOW);
+  });
+});
+
+/**
+ * Security regressions (2026-11-07 audit): who counts as admin, and who may use the Kubernetes proxy.
+ */
+describe('CatalogPermissionPolicy — admin identity and the Kubernetes proxy', () => {
+  const policy = new CatalogPermissionPolicy();
+  const decide = async (name: string, groups: string[]) =>
+    (await policy.handle({ permission: createPermission({ name, attributes: {} }) }, user(groups))).result;
+
+  it('a group called "admins" does not make anyone an admin (only backstage-admins does)', async () => {
+    expect(await decide('catalog.entity.delete', ['group:default/admins'])).toBe(AuthorizeResult.DENY);
+    expect(await decide('kubernetes.proxy', ['group:default/admins'])).toBe(AuthorizeResult.DENY);
+    expect(await decide('catalog.entity.delete', ADMIN)).toBe(AuthorizeResult.ALLOW);
+  });
+
+  it.each([
+    ['engineer', ENGINEER],
+    ['lead', LEAD],
+    ['unassigned', UNASSIGNED],
+  ])('%s cannot use the Kubernetes proxy (it carries the portal pod\'s cluster-wide rights)', async (_r, groups) => {
+    expect(await decide('kubernetes.proxy', groups)).toBe(AuthorizeResult.DENY);
+  });
+
+  it('an admin can', async () => {
+    expect(await decide('kubernetes.proxy', ADMIN)).toBe(AuthorizeResult.ALLOW);
+  });
+
+  it('engineers still read clusters and workloads in the Kubernetes tab', async () => {
+    expect(await decide('kubernetes.clusters.read', ENGINEER)).toBe(AuthorizeResult.ALLOW);
+    expect(await decide('kubernetes.resources.read', ENGINEER)).toBe(AuthorizeResult.ALLOW);
+  });
+});
+
+describe('CatalogPermissionPolicy — scaffolder dry-run', () => {
+  const policy = new CatalogPermissionPolicy();
+  const decide = async (name: string, groups: string[]) => (await policy.handle({ permission: createPermission({ name, attributes: {} }) }, user(groups))).result;
+
+  it.each([
+    ['engineer', ENGINEER],
+    ['lead', LEAD],
+    ['unassigned', UNASSIGNED],
+  ])('%s cannot dry-run an inline template (it reads files with the portal\'s own credentials)', async (_r, groups) => {
+    expect(await decide('scaffolder.template.dry-run', groups)).toBe(AuthorizeResult.DENY);
+  });
+
+  it('an admin can', async () => {
+    expect(await decide('scaffolder.template.dry-run', ADMIN)).toBe(AuthorizeResult.ALLOW);
+  });
+
+  it('engineers and leads still run templates, and only leads manage them', async () => {
+    expect(await decide('scaffolder.task.create', ENGINEER)).toBe(AuthorizeResult.ALLOW);
+    expect(await decide('scaffolder.action.execute', LEAD)).toBe(AuthorizeResult.ALLOW);
+    expect(await decide('scaffolder.template.update', ENGINEER)).toBe(AuthorizeResult.DENY);
+    expect(await decide('scaffolder.template.update', LEAD)).toBe(AuthorizeResult.ALLOW);
+  });
+});
+
+/**
+ * Scaffolder tasks are visible and cancellable by their owner only (audit 2026-11-07): `.read` and `.cancel` used to be plain ALLOWs
+ * for everyone, so anyone could list everyone's tasks and any engineer could cancel a lead's running teardown.
+ */
+describe('CatalogPermissionPolicy — scaffolder task read and cancel', () => {
+  const policy = new CatalogPermissionPolicy();
+  const resourcePermission = (name: string, action: 'read' | 'update') => createPermission({ name, attributes: { action }, resourceType: 'scaffolder-task' });
+  const read = resourcePermission('scaffolder.task.read', 'read');
+  const cancel = resourcePermission('scaffolder.task.cancel', 'update');
+  const handle = (permission: any, groups: string[]) => policy.handle({ permission }, user(groups));
+
+  it.each([
+    ['unassigned', UNASSIGNED],
+    ['engineer', ENGINEER],
+    ['lead', LEAD],
+  ])('%s gets a conditional decision limited to their own user ref, for read and for cancel', async (_r, groups) => {
+    for (const permission of [read, cancel]) {
+      const decision: any = await handle(permission, groups);
+      expect(decision.result).toBe(AuthorizeResult.CONDITIONAL);
+      expect(decision.pluginId).toBe('scaffolder');
+      expect(decision.resourceType).toBe('scaffolder-task');
+      expect(decision.conditions).toEqual({ rule: 'IS_TASK_OWNER', resourceType: 'scaffolder-task', params: { createdBy: ['user:default/jane.doe'] } });
+    }
+  });
+
+  it('an admin sees and cancels every task', async () => {
+    expect((await handle(read, ADMIN)).result).toBe(AuthorizeResult.ALLOW);
+    expect((await handle(cancel, ADMIN)).result).toBe(AuthorizeResult.ALLOW);
+  });
+
+  it('is refused when the permission is not the scaffolder-task resource permission it claims to be', async () => {
+    const basic = createPermission({ name: 'scaffolder.task.read', attributes: { action: 'read' } });
+    expect((await handle(basic, ENGINEER)).result).toBe(AuthorizeResult.DENY);
+  });
+
+  it('creating and running tasks is unchanged', async () => {
+    expect((await handle(createPermission({ name: 'scaffolder.task.create', attributes: {} }), ENGINEER)).result).toBe(AuthorizeResult.ALLOW);
+    expect((await handle(createPermission({ name: 'scaffolder.action.execute', attributes: {} }), UNASSIGNED)).result).not.toBe(AuthorizeResult.CONDITIONAL);
+  });
+});
+
+
+/**
+ * A project manager's catalog visibility includes the teams of the projects they created. The registration API now only accepts
+ * the seven teams of its form; rows written before that check can hold any text, so the policy filters as well (audit 2026-11-07:
+ * a project with team_name `devops-team` let its project manager read everything devops-team owns).
+ */
+describe('project teams that grant a project manager catalog visibility', () => {
+  const { catalogEntityReadPermission } = jest.requireActual('@backstage/plugin-catalog-common/alpha');
+  const claimsOf = (decision: any): string[] => {
+    const found: string[] = [];
+    const walk = (n: any) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n.claims)) found.push(...n.claims);
+      Object.values(n).forEach(walk);
+    };
+    walk(decision.conditions);
+    return found;
+  };
+
+  /** Just enough of a query builder for `db(table).select().where().whereNotNull().where()`, applying the filters it is given. */
+  const fakeDb = (rows: Array<Record<string, any>>) => (_table: string) => {
+    const filters: Array<(r: Record<string, any>) => boolean> = [];
+    const q: any = {
+      select: () => q,
+      where: (column: string, value: unknown) => {
+        filters.push(r => r[column] === value);
+        return q;
+      },
+      whereNotNull: (column: string) => {
+        filters.push(r => r[column] !== null && r[column] !== undefined);
+        return q;
+      },
+      then: (resolve: (v: unknown) => void) => resolve(rows.filter(r => filters.every(f => f(r)))),
+    };
+    return q;
+  };
+
+  it('uses only the teams a project can have; any other stored text grants nothing', async () => {
+    const db = fakeDb([
+      { created_by: 'user:default/pm.one', team_name: 'web-team', status: 'active' },
+      { created_by: 'user:default/pm.one', team_name: 'devops-team', status: 'active' },
+      { created_by: 'user:default/pm.one', team_name: 'backstage-admins', status: 'active' },
+      { created_by: 'user:default/pm.one', team_name: 'sa-team', status: 'archived' },
+      { created_by: 'user:default/someone.else', team_name: 'qa-team', status: 'active' },
+    ]);
+    const policy = new CatalogPermissionPolicy({ getClient: async () => db } as any);
+    await new Promise(r => setTimeout(r, 20)); // the policy connects to the database in the background
+    const decision: any = await policy.handle(
+      { permission: catalogEntityReadPermission } as any,
+      { info: { userEntityRef: 'user:default/pm.one', ownershipEntityRefs: ['group:default/pm-team'] } } as any,
+    );
+    const claims = claimsOf(decision);
+    expect(claims).toContain('group:default/web-team');
+    expect(claims).not.toContain('group:default/devops-team');
+    expect(claims).not.toContain('group:default/backstage-admins');
+    expect(claims).not.toContain('group:default/sa-team'); // archived project
+    expect(claims).not.toContain('group:default/qa-team'); // someone else's project
   });
 });

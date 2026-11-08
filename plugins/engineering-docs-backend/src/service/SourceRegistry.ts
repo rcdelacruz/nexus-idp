@@ -21,6 +21,8 @@ const DEFAULT_SOURCE: DocSourceConfig & { id: string; label: string } = {
   contentBase: 'docs/content',
 };
 
+const MAX_AD_HOC_SERVICES = 200;
+
 export class SourceRegistry {
   private readonly sources = new Map<string, SourceInfo>();
   private readonly token: string;
@@ -79,6 +81,11 @@ export class SourceRegistry {
   getOrCreateAdHoc(sourceConfig: DocSourceConfig): GitHubDocsService {
     const key = `${sourceConfig.repoOwner}/${sourceConfig.repoName}@${sourceConfig.branch}:${sourceConfig.contentBase}`;
     if (!this.adHocCache.has(key)) {
+      // Bounded: every distinct repo/branch/base used to add a service (and its cache entries) for the life of the process.
+      if (this.adHocCache.size >= MAX_AD_HOC_SERVICES) {
+        const oldest = this.adHocCache.keys().next().value;
+        if (oldest !== undefined) this.adHocCache.delete(oldest);
+      }
       this.adHocCache.set(
         key,
         new GitHubDocsService(this.logger, this.token, sourceConfig, this.cache.withOptions({ defaultTtl: 30 * 60 * 1000 })),

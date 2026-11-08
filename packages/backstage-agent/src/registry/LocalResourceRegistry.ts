@@ -11,13 +11,14 @@ import * as path from 'path';
 import * as os from 'os';
 import { LocalResource } from '../types';
 import logger from '../utils/logger';
+import { ensurePrivateDir, writePrivateFile } from '../utils/safeFiles';
 
 export class LocalResourceRegistry {
   private readonly filePath: string;
 
   constructor() {
     const dir = path.join(os.homedir(), '.backstage-agent');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    ensurePrivateDir(dir);
     this.filePath = path.join(dir, 'resources.json');
   }
 
@@ -38,7 +39,7 @@ export class LocalResourceRegistry {
   }
 
   private write(resources: LocalResource[]): void {
-    fs.writeFileSync(this.filePath, JSON.stringify(resources, null, 2), 'utf-8');
+    writePrivateFile(this.filePath, JSON.stringify(resources, null, 2));
   }
 
   /** Insert or update a resource (keyed by resourceName). */

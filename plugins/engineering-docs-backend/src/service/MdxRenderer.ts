@@ -1,5 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { remarkNoExecution } from './mdxSafety';
 
 // ─── Slugify (must match frontend DocTOC.slugify) ────────────────────────────
 
@@ -222,9 +223,10 @@ export async function compileMdxToHtml(mdxContent: string): Promise<string> {
   const { jsx, jsxs, Fragment } = await import('react/jsx-runtime') as any;
   const { default: remarkGfm } = await import('remark-gfm') as any;
 
+  // remarkNoExecution runs last: it removes expressions, ESM, scripts and unsafe URLs before anything is compiled and run.
   const compiled = await compile(mdxContent, {
     outputFormat: 'function-body',
-    remarkPlugins: [remarkGfm],
+    remarkPlugins: [remarkGfm, remarkNoExecution],
   });
 
   const { default: MDXContent } = await run(compiled, { jsx, jsxs, Fragment } as any);

@@ -23,6 +23,7 @@ import {
   isLifecycleTask,
 } from '../types';
 import logger from '../utils/logger';
+import { isSafeTaskId } from '../utils/safeFiles';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 import { AGENT_VERSION } from '../utils/version';
@@ -150,7 +151,7 @@ export class Agent {
     // Check Docker availability
     const dockerAvailable = await this.executor.checkDockerAvailable();
     if (!dockerAvailable) {
-      logger.error('Docker is not available. Please install Docker and ensure it is running.');
+      logger.error('Docker is not available. Please install Docker and ensure it is running. Docker Desktop is recommended: https://www.docker.com/products/docker-desktop/');
       this.removePidFile();
       process.exit(1);
     }
@@ -336,6 +337,10 @@ export class Agent {
     if (isLifecycleTask(taskType)) {
       if (!targetTaskId) {
         return { success: false, error: `${taskType} requires config.targetTaskId` };
+      }
+      // Becomes a folder name and, for a teardown, a recursive delete: a path such as `../..` must never reach the executors.
+      if (!isSafeTaskId(targetTaskId)) {
+        return { success: false, error: `${taskType} refused: config.targetTaskId is not a task id` };
       }
       if (this.vm.isVmTask(targetTaskId)) {
         switch (taskType) {

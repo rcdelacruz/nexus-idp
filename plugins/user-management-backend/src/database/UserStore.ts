@@ -8,6 +8,8 @@ export interface UserRecord {
   teams: string[];
   is_lead: boolean;
   is_admin: boolean;
+  /** Trainer: member of the `instructors` group (Local Provisioner Trainees view, capstone management). */
+  is_instructor: boolean;
   github_username: string | null;
   gitlab_username: string | null;
   onboarding_catalog_tour: boolean;
@@ -47,6 +49,7 @@ export class UserStore {
         table.specificType('teams', 'text[]').notNullable().defaultTo('{}');
         table.boolean('is_lead').notNullable().defaultTo(false);
         table.boolean('is_admin').notNullable().defaultTo(false);
+        table.boolean('is_instructor').notNullable().defaultTo(false);
         table.string('github_username').nullable();
         table.string('gitlab_username').nullable();
         table.boolean('onboarding_catalog_tour').notNullable().defaultTo(false);
@@ -75,6 +78,13 @@ export class UserStore {
       if (!hasGitlabUsername) {
         await db.schema.alterTable(TABLE, (table: any) => {
           table.string('gitlab_username').nullable();
+        });
+      }
+      // Add is_instructor column (migration)
+      const hasIsInstructor = await db.schema.hasColumn(TABLE, 'is_instructor');
+      if (!hasIsInstructor) {
+        await db.schema.alterTable(TABLE, (table: any) => {
+          table.boolean('is_instructor').notNullable().defaultTo(false);
         });
       }
     }
@@ -163,6 +173,12 @@ export class UserStore {
     await this.db(TABLE)
       .where({ name })
       .update({ is_admin: isAdmin, updated_at: new Date() });
+  }
+
+  async setInstructor(name: string, isInstructor: boolean): Promise<void> {
+    await this.db(TABLE)
+      .where({ name })
+      .update({ is_instructor: isInstructor, updated_at: new Date() });
   }
 
   async updateOnboardingStep(name: string, step: 'catalog_tour' | 'engineering_docs', done: boolean): Promise<void> {

@@ -14,12 +14,58 @@ export interface RouterOptions {
   cache: CacheService;
 }
 
+const NAME = /^[A-Za-z0-9_.-]{1,100}$/;
+const PATH_LIKE = /^[A-Za-z0-9_./-]{0,200}$/;
+
+/** The organizations the portal manages: `organization.githubOwner` and every `catalog.providers.github.*.organization`. */
+export function managedOwners(config: Config): string[] {
+  const owners = new Set<string>();
+  const primary = config.getOptionalString('organization.githubOwner');
+  if (primary) owners.add(primary);
+  const providers = config.getOptionalConfig('catalog.providers.github');
+  for (const key of providers?.keys() ?? []) {
+    const org = providers!.getOptionalString(`${key}.organization`);
+    if (org) owners.add(org);
+  }
+  return [...owners];
+}
+
+/**
+ * The repo, branch and base of an entity's inline docs, or the reason to refuse. The shared GitHub token reads whatever it is pointed
+ * at, and any signed-in user may send these values (audit 2026-11-07: `repo=<owner>/<private capstone repo>` returned its
+ * instructor markdown, the answer keys), so: only the organizations the portal manages (not the capstone organization), real names
+ * only, no path steps. Repositories in other organizations are served only as configured sources (`engineeringDocs.sources`).
+ */
+export function parseAdHocSource(
+  query: { repo?: unknown; branch?: unknown; base?: unknown },
+  owners: string[],
+): { ok: true; source: DocSourceConfig } | { ok: false; status: number; error: string } {
+  const repo = typeof query.repo === 'string' ? query.repo : '';
+  const branch = query.branch === undefined ? 'main' : query.branch;
+  const base = query.base === undefined ? 'docs' : query.base;
+  const parts = repo.split('/');
+  if (parts.length !== 2 || !NAME.test(parts[0]) || !NAME.test(parts[1]) || /^\.+$/.test(parts[0]) || /^\.+$/.test(parts[1])) {
+    return { ok: false, status: 400, error: 'Missing or invalid ?repo=owner/repo query param' };
+  }
+  if (typeof branch !== 'string' || !PATH_LIKE.test(branch) || branch === '' || branch.split('/').some(s => s === '..' || s === '.')) {
+    return { ok: false, status: 400, error: 'Invalid ?branch query param' };
+  }
+  if (typeof base !== 'string' || !PATH_LIKE.test(base) || base.split('/').some(s => s === '..')) {
+    return { ok: false, status: 400, error: 'Invalid ?base query param' };
+  }
+  if (!owners.some(o => o.toLowerCase() === parts[0].toLowerCase())) {
+    return { ok: false, status: 403, error: 'This repository is not available as entity documentation' };
+  }
+  return { ok: true, source: { repoOwner: parts[0], repoName: parts[1], branch, contentBase: base } };
+}
+
 export async function createRouter(options: RouterOptions): Promise<Router> {
   const { logger, config, httpAuth, cache } = options;
   const cacheClient = cache.withOptions({ defaultTtl: 30 * 60 * 1000 }); // 30 minutes
   const registry = new SourceRegistry(logger, config, cacheClient);
+  const owners = managedOwners(config);
 
-  const router = Router();
+  const router = Router({ caseSensitive: true });
   router.use(express.json());
 
   router.use(async (req, res, next) => {
@@ -53,16 +99,12 @@ export async function createRouter(options: RouterOptions): Promise<Router> {
 
   // Entity inline-repo routes: /docs/entity/nav|content?repo=owner/repo&branch=main&base=docs
   router.use('/docs/entity', (req: any, res, next) => {
-    const repo = (req.query.repo as string) ?? '';
-    const branch = (req.query.branch as string) ?? 'main';
-    const contentBase = (req.query.base as string) ?? 'docs';
-    const [repoOwner, repoName] = repo.split('/');
-    if (!repoOwner || !repoName) {
-      res.status(400).json({ error: 'Missing or invalid ?repo=owner/repo query param' });
+    const parsed = parseAdHocSource(req.query, owners);
+    if (!parsed.ok) {
+      res.status(parsed.status).json({ error: parsed.error });
       return;
     }
-    const sourceConfig: DocSourceConfig = { repoOwner, repoName, branch, contentBase };
-    req.docsService = registry.getOrCreateAdHoc(sourceConfig);
+    req.docsService = registry.getOrCreateAdHoc(parsed.source);
     next();
   }, createDocsRoutes(logger));
 

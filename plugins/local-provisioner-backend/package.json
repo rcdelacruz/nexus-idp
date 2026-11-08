@@ -24,7 +24,8 @@
     "test": "backstage-cli package test",
     "clean": "backstage-cli package clean",
     "prepack": "backstage-cli package prepack",
-    "postpack": "backstage-cli package postpack"
+    "postpack": "backstage-cli package postpack",
+    "gen:install": "node scripts/generate-install-script.js"
   },
   "dependencies": {
     "@backstage/backend-common": "^0.25.0",
@@ -44,6 +45,7 @@
     "express-rate-limit": "^8.3.1",
     "knex": "^3.0.0",
     "node-fetch": "^2.6.7",
+    "yaml": "^2.0.0",
     "yn": "^4.0.0"
   },
   "devDependencies": {

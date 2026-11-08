@@ -76,8 +76,11 @@ backend:
       - X-Requested-With
     exposedHeaders:
       - Set-Cookie
-  proxy:
-    trustProxy: true
+  # Behind the Cloudflare tunnel: trust exactly ONE proxy hop. Then req.ip is the client address Cloudflare appended (the LAST
+  # X-Forwarded-For entry), which a visitor cannot choose; `true` would take the FIRST entry, which the visitor writes. Without
+  # this every visitor looked like the proxy and shared one rate-limit bucket (10 agent-login codes per 15 minutes for everybody).
+  # The key is backend.trustProxy: it was backend.proxy.trustProxy, which nothing reads.
+  trustProxy: 1
   # Database configuration (supports both Coolify and Fly.io Postgres)
   database:
     client: pg
@@ -146,7 +149,9 @@ catalog:
     # - type: url
     #   target: https://github.com/your-org/engineering-standards/blob/main/templates/projects/catalog-info.yaml
     #   rules:
-    #     - allow: [Template, Location, Component, System, Domain, Group]
+    #     # No Group: a Group's members become memberOf relations and the policy trusts `*-lead` and team groups, so anyone with push to
+    #     # this repo's main could make themselves a lead. Groups and Users come only from your org's root catalog-info.yaml.
+    #     - allow: [Template, Location, Component, System, Domain]
 
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:

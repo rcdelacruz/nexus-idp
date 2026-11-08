@@ -28,3 +28,33 @@ export function installedVersion(root: string = PACKAGE_ROOT): string | undefine
     return undefined;
   }
 }
+
+/**
+ * The npm that belongs to the Node running this agent, and an environment with that Node's folder first on the PATH.
+ * `update` runs npm by name; in a terminal that has no node or npm of its own (nvm not loaded, an agent started through
+ * the installer's launcher) that fails with "command not found" even though the agent itself is running fine.
+ * Windows keeps node on the system PATH, so it is left alone there.
+ */
+export function npmForThisNode(
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath,
+  exists: (p: string) => boolean = fs.existsSync,
+  env: NodeJS.ProcessEnv = process.env,
+): { command: string; env: NodeJS.ProcessEnv } {
+  if (platform === 'win32') return { command: 'npm', env };
+  const dir = path.dirname(execPath);
+  const npm = path.join(dir, 'npm');
+  return {
+    command: exists(npm) ? npm : 'npm',
+    env: { ...env, PATH: [dir, env.PATH].filter(Boolean).join(':') },
+  };
+}
+
+/**
+ * The npm command for installing a version into this copy's own prefix: `shown` is what to tell a person to type,
+ * `run` is what the agent executes (the npm that belongs to the running Node, quoted).
+ */
+export function npmInstallCommand(prefix: string | undefined, spec: string, npmCommand: string): { shown: string; run: string } {
+  const args = `install -g ${prefix ? `--prefix "${prefix}" ` : ''}${spec}`;
+  return { shown: `npm ${args}`, run: `"${npmCommand}" ${args}` };
+}

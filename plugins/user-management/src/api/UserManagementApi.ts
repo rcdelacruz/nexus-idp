@@ -21,7 +21,7 @@ export class UserManagementApi {
 
   async getMe(): Promise<{
     name: string; display_name: string; email: string;
-    teams: string[]; is_lead: boolean; is_admin: boolean; github_username: string | null;
+    teams: string[]; is_lead: boolean; is_admin: boolean; is_instructor?: boolean; github_username: string | null;
     gitlab_username: string | null;
   } | null> {
     const res = await this.requestRaw('GET', '/me');
@@ -32,7 +32,7 @@ export class UserManagementApi {
 
   async listUsers(): Promise<Array<{
     name: string; display_name: string; email: string;
-    teams: string[]; is_lead: boolean; is_admin: boolean; github_username: string | null;
+    teams: string[]; is_lead: boolean; is_admin: boolean; is_instructor?: boolean; github_username: string | null;
     onboarding_catalog_tour: boolean; onboarding_engineering_docs: boolean;
   }>> {
     const res = await this.requestRaw('GET', '/users');
@@ -73,6 +73,11 @@ export class UserManagementApi {
 
   promote(args: { userName: string; isAdmin: boolean }) {
     return this.request('POST', '/promote', args);
+  }
+
+  /** Admin-only: grant or revoke the instructor role (the `instructors` group). */
+  setInstructor(args: { userName: string; isInstructor: boolean }) {
+    return this.request('POST', '/instructor', args);
   }
 
   deleteUser(userName: string) {
