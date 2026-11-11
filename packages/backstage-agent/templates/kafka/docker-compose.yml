@@ -1,6 +1,6 @@
 services:
   {{resourceName}}:
-    image: bitnami/kafka:3.7
+    image: soldevelo/kafka:3.7
     container_name: {{resourceName}}
     ports:
       - "{{port}}:9092"
